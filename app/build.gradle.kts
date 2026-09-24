@@ -30,8 +30,10 @@ android {
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
-        versionCode = 48804  // Kom-BYDMate: upstream versionCode * 100 + kom build
-        versionName = "3.18.0-kom.4"
+        versionCode = 48805  // Kom-BYDMate: upstream versionCode * 100 + kom build
+        versionName = "3.18.0-kom.5"
+        // Kom-BYDMate: միայն ru (լռելյայն) և en․ գրադարանների մյուս թարգմանությունները APK-ում չեն
+        resourceConfigurations += listOf("ru", "en")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

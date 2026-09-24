@@ -553,7 +553,7 @@ private fun TopBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "BYDMate",
+            text = "MyBYD",  // Kom-BYDMate
             color = TextPrimary,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
