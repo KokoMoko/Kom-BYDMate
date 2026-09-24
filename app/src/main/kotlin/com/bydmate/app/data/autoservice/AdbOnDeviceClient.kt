@@ -50,6 +50,13 @@ interface AdbOnDeviceClient {
     suspend fun grantWriteSecureSettings(packageName: String): Boolean
 
     /**
+     * Kom-BYDMate: lets our own package bind app widgets (`appwidget grantbind`) — DiLink has no
+     * «allow widgets» dialog, and the Главная widget slots cannot host AccuWeather / Yandex Music
+     * without it. Same own-package-only whitelist as the grants above. Returns true on success.
+     */
+    suspend fun grantWidgetBind(packageName: String): Boolean = false
+
+    /**
      * Spawns the helper daemon under shell uid via app_process, using the app's
      * own signed base.apk as CLASSPATH (no dex push — integrity comes from the
      * APK signature). The daemon registers itself as the `bydmate_helper` binder
@@ -189,6 +196,25 @@ class AdbOnDeviceClientImpl @Inject constructor(
         }
     }
 
+    override suspend fun grantWidgetBind(packageName: String): Boolean = withContext(Dispatchers.IO) {
+        require(packageName.matches(PACKAGE_NAME_REGEX)) {
+            "grantWidgetBind: refused package $packageName"
+        }
+        val p = protocol ?: run {
+            if (connect().isFailure) return@withContext false
+            protocol ?: return@withContext false
+        }
+        try {
+            // appwidget prints nothing on success; any output is an error.
+            val out = p.exec("appwidget grantbind --package $packageName") ?: return@withContext false
+            if (out.isNotBlank()) Log.w(TAG, "grantWidgetBind: ${out.trim().take(300)}")
+            out.isBlank()
+        } catch (e: Exception) {
+            Log.w(TAG, "grantWidgetBind failed: ${e.message}")
+            false
+        }
+    }
+
     override suspend fun spawnHelper(token: String): Boolean = withContext(Dispatchers.IO) {
         // The token is interpolated into a shell command line — nothing but [A-Za-z0-9] may
         // reach it. Callers build it themselves (HelperBootstrap), so this is a programming
@@ -296,8 +322,10 @@ class AdbOnDeviceClientImpl @Inject constructor(
         // Rejects tx=6 (setInt), tx=8 (setBuffer), and arbitrary shell.
         private val WRITE_BARRIER_REGEX = Regex("""^service call autoservice [579] i32 \d+ i32 -?\d+$""")
 
-        // Narrow whitelist for the two self-grants — only our own package.
-        private val PACKAGE_NAME_REGEX = Regex("""^com\.bydmate\.app$""")
+        // Narrow whitelist for the self-grants — only our own package.
+        // Kom-BYDMate: follows applicationId (kom.bydmate), not the upstream com.bydmate.app.
+        private val PACKAGE_NAME_REGEX =
+            Regex("^" + Regex.escape(com.bydmate.app.BuildConfig.APPLICATION_ID) + "$")
 
         // Spawn token shape — alphanumeric only, so it can never break out of the spawn
         // command line. HelperBootstrap generates 32 hex characters.

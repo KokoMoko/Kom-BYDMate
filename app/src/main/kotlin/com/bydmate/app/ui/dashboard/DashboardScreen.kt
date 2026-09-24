@@ -314,76 +314,13 @@ fun DashboardScreen(
                             borderColor = insightColor,
                             onClick = { viewModel.toggleInsightExpanded() }
                         )
-                        // Battery card — 3 значения: SoH | темп. батареи | бортовая сеть
-                        val sohStatus = when {
-                            (state.currentSoh ?: 100f) < 80f -> "critical"
-                            (state.currentSoh ?: 100f) < 90f -> "warning"
-                            else -> "ok"
-                        }
-                        val sohColor = when (sohStatus) {
-                            "critical" -> SocRed; "warning" -> SocYellow; else -> AccentGreen
-                        }
-                        val tempColor = when (state.batteryHealthStatus) {
-                            "critical" -> SocRed; "warning" -> SocYellow; else -> AccentGreen
-                        }
-                        val voltageColor = when (state.voltage12vStatus) {
-                            "critical" -> SocRed; "warning" -> SocYellow; else -> AccentGreen
-                        }
-                        // МОм: ≥1 healthy, 0.5-1 watch, <0.5 the pack is leaking to the body.
-                        val insulationMohm = state.insulationKohm?.let { it / 1000.0 }
-                        val insulationStatus = when {
-                            insulationMohm == null -> "ok"
-                            insulationMohm >= 1.0 -> "ok"
-                            insulationMohm >= 0.5 -> "warning"
-                            else -> "critical"
-                        }
-                        val insulationColor = when (insulationStatus) {
-                            "critical" -> SocRed; "warning" -> SocYellow
-                            else -> if (insulationMohm == null) TextPrimary else AccentGreen
-                        }
-                        // batteryHealthStatus already folds in the cell delta (same 50/90 mV
-                        // thresholds as the cell colour), so the border only gains insulation here.
-                        val worstColor = when {
-                            sohStatus == "critical" ||
-                                state.batteryHealthStatus == "critical" ||
-                                state.voltage12vStatus == "critical" ||
-                                insulationStatus == "critical" -> SocRed
-                            sohStatus == "warning" ||
-                                state.batteryHealthStatus == "warning" ||
-                                state.voltage12vStatus == "warning" ||
-                                insulationStatus == "warning" -> SocYellow
-                            else -> AccentGreen
-                        }
-                        BatteryCompactCard(
-                            sohText = state.currentSoh?.let { "%.0f%%".format(it) } ?: "—",
-                            sohColor = sohColor,
-                            tempText = state.avgBatTemp?.let { "${it}°" } ?: "—",
-                            tempColor = tempColor,
-                            voltageText = state.voltage12v?.let { stringResource(R.string.dashboard_voltage_value, it) } ?: "—",
-                            voltageColor = voltageColor,
-                            cellDeltaText = state.cellVoltageDelta
-                                ?.let { stringResource(R.string.tech_value_mv, Math.round(it * 1000.0).toInt()) } ?: "—",
-                            cellDeltaColor = com.bydmate.app.ui.tech.cellDeltaColor(state.cellVoltageDelta, state.soc),
-                            insulationText = insulationMohm
-                                ?.let { stringResource(R.string.tech_value_mohm, it) } ?: "—",
-                            insulationColor = insulationColor,
-                            borderColor = worstColor,
-                            onClick = onOpenTechPanel
+                        // Kom-BYDMate: A — widget-ի սլոտ (օր․ Yandex Music)՝ SoH/12V և TRIP 1/2-ի փոխարեն
+                        DashboardWidgetSlot(
+                            slot = DashboardWidgets.SLOT_LEFT,
+                            emptyHint = "Добавить виджет (напр. Яндекс Музыка)",
+                            requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
+                            modifier = Modifier.fillMaxWidth().height(190.dp),
                         )
-                        // TRIP 1 / TRIP 2 resettable counters row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            TripCounterButton(stringResource(R.string.dashboard_trip1_label), state.trip1,
-                                Modifier.weight(1f),
-                                onClick = { viewModel.toggleTripExpanded(1) },
-                                onLongClick = { viewModel.resetTripCounter(1) })
-                            TripCounterButton(stringResource(R.string.dashboard_trip2_label), state.trip2,
-                                Modifier.weight(1f),
-                                onClick = { viewModel.toggleTripExpanded(2) },
-                                onLongClick = { viewModel.resetTripCounter(2) })
-                        }
                     }
 
                     // Pop-up dialogs
@@ -503,57 +440,18 @@ fun DashboardScreen(
                 }
             }
 
-            // RIGHT COLUMN — period filter + 4 cards + recent trips
+            // Kom-BYDMate RIGHT COLUMN — B (իրավիճակային քարտ) + widget (օր․ AccuWeather)
             Column(
                 modifier = Modifier.weight(0.6f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Period chips
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DashboardPeriodChip(stringResource(R.string.dashboard_period_day), state.period == DashboardPeriod.TODAY) { viewModel.setPeriod(DashboardPeriod.TODAY) }
-                    DashboardPeriodChip(stringResource(R.string.dashboard_period_week), state.period == DashboardPeriod.WEEK) { viewModel.setPeriod(DashboardPeriod.WEEK) }
-                    DashboardPeriodChip(stringResource(R.string.dashboard_period_month), state.period == DashboardPeriod.MONTH) { viewModel.setPeriod(DashboardPeriod.MONTH) }
-                    DashboardPeriodChip(stringResource(R.string.dashboard_period_year), state.period == DashboardPeriod.YEAR) { viewModel.setPeriod(DashboardPeriod.YEAR) }
-                    DashboardPeriodChip(stringResource(R.string.dashboard_period_all), state.period == DashboardPeriod.ALL) { viewModel.setPeriod(DashboardPeriod.ALL) }
-                }
-
-                // 4 stat cards
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    StatCard(stringResource(R.string.dashboard_stat_distance), stringResource(R.string.dashboard_stat_km_value, state.totalKm), stringResource(R.string.dashboard_trip_count, state.tripCount), Color.White, Modifier.weight(1f))
-                    StatCard(stringResource(R.string.dashboard_stat_energy), stringResource(R.string.dashboard_stat_kwh_value, state.totalKwh), null, AccentBlue, Modifier.weight(1f))
-                    val consColor = if (state.avgConsumption > 0) consumptionColor(state.avgConsumption) else TextSecondary
-                    StatCard(stringResource(R.string.dashboard_stat_consumption), if (state.avgConsumption > 0) "%.1f/100".format(state.avgConsumption) else "—", null, consColor, Modifier.weight(1f))
-                    StatCard(stringResource(R.string.dashboard_stat_cost), "%.2f %s".format(state.totalCost, state.currencySymbol), null, AccentGreen, Modifier.weight(1f))
-                }
-
-                SectionHeader(text = stringResource(R.string.dashboard_recent_trips_title))
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(stringResource(R.string.dashboard_col_time), color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(2.5f))
-                    Text(stringResource(R.string.dashboard_col_duration), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-                    Text(stringResource(R.string.dashboard_unit_km), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-                    Text(stringResource(R.string.dashboard_unit_kwh), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-                    Text(stringResource(R.string.dashboard_col_per100), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-                    Text(state.currencySymbol, color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-                }
-                if (state.recentTrips.isNotEmpty()) {
-                    WholeRowsColumn(rowSpacing = 4.dp, modifier = Modifier.weight(1f)) {
-                        state.recentTrips.forEach { trip ->
-                            TripCard(
-                                trip = trip,
-                                onClick = { },
-                                currencySymbol = state.currencySymbol
-                            )
-                        }
-                    }
-                } else {
-                    PlaceholderText(text = stringResource(R.string.dashboard_empty_no_trips))
-                }
+                DashboardContextCard(state = state, modifier = Modifier.fillMaxWidth().weight(0.36f))
+                DashboardWidgetSlot(
+                    slot = DashboardWidgets.SLOT_RIGHT,
+                    emptyHint = "Добавить виджет (напр. AccuWeather)",
+                    requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
+                    modifier = Modifier.fillMaxWidth().weight(0.64f),
+                )
             }
         }
     }

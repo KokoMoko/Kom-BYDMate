@@ -113,10 +113,21 @@ class DashboardViewModel @Inject constructor(
     private val batteryStateRepository: BatteryStateRepository,
     private val adbVerdictMonitor: AdbVerdictMonitor,
     private val tripCounterResets: TripCounterResets,
+    private val adbOnDeviceClient: com.bydmate.app.data.autoservice.AdbOnDeviceClient,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
+
+    /** Kom-BYDMate: self-grant widget binding over on-device ADB (DiLink lacks the system dialog). */
+    fun grantWidgetBind(onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val ok = runCatching {
+                adbOnDeviceClient.grantWidgetBind(com.bydmate.app.BuildConfig.APPLICATION_ID)
+            }.getOrDefault(false)
+            onDone(ok)
+        }
+    }
 
     init {
         cleanupBadIdleDrainData()
