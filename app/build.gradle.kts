@@ -24,14 +24,14 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.bydmate.app"
+        applicationId = "kom.bydmate"  // Kom-BYDMate (namespace/code stays com.bydmate.app)
         minSdk = 29
         // targetSdk 29 matches TripInfo — grants full legacy file access
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
         versionCode = 488
-        versionName = "3.18.0"
+        versionName = "3.18.0-kom.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -65,7 +65,7 @@ android {
         val variant = this
         variant.outputs.all {
             val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            output.outputFileName = "BYDMate-v${variant.versionName}.apk"
+            output.outputFileName = "Kom-BYDMate-v${variant.versionName}.apk"
         }
     }
 

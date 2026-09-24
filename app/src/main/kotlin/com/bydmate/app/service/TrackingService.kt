@@ -1746,7 +1746,7 @@ class TrackingService : Service(), LocationListener {
         serviceScope.launch {
             try {
                 if (adbOnDeviceClient.connect().isSuccess) {
-                    val granted = adbOnDeviceClient.grantUsageStatsAppop("com.bydmate.app")
+                    val granted = adbOnDeviceClient.grantUsageStatsAppop(BuildConfig.APPLICATION_ID)
                     Log.i(TAG, "GET_USAGE_STATS appop grant: $granted")
                     // Self-grant while the classic port still answers, regardless of the restore
                     // toggle: on firmwares that close the port at every reboot this is the last
@@ -1759,7 +1759,7 @@ class TrackingService : Service(), LocationListener {
                     if (alreadyHeld) {
                         Log.i(TAG, "WRITE_SECURE_SETTINGS grant: skipped, already held")
                     } else {
-                        val secureSettings = adbOnDeviceClient.grantWriteSecureSettings("com.bydmate.app")
+                        val secureSettings = adbOnDeviceClient.grantWriteSecureSettings(BuildConfig.APPLICATION_ID)
                         val held = checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) ==
                             PackageManager.PERMISSION_GRANTED
                         Log.i(TAG, "WRITE_SECURE_SETTINGS grant: $secureSettings held=$held")

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BYDMate</string>
+    <string name="app_name">Kom-BYDMate</string>
     <string name="cluster_a11y_description">Przechwytywanie przycisków kierownicy do projekcji nawigacji na zestaw wskaźników. Włączane ręcznie, działa tylko przy włączonej funkcji.</string>
     <string name="settings_language_title">Język</string>
     <string name="settings_font_scale_title">Rozmiar tekstu</string>
@@ -651,7 +651,7 @@
     <string name="welcome_autostart_dilink_hint">Jeśli autostart nie zadziałał, dodaj w Di+:</string>
     <string name="welcome_autostart_dilink_instruction">Di+ → Predefined → Startup tasks</string>
     <string name="welcome_autostart_command_copied_toast">Skopiowano!</string>
-    <string name="welcome_autostart_command_explanation">打开应用 = „otwórz aplikację” + nazwa pakietu.\nDla dwóch aplikacji przez średnik:\n打开应用ru.yandex.yandexnavi;打开应用com.bydmate.app</string>
+    <string name="welcome_autostart_command_explanation">打开应用 = „otwórz aplikację” + nazwa pakietu.\nDla dwóch aplikacji przez średnik:\n打开应用ru.yandex.yandexnavi;打开应用kom.bydmate</string>
     <string name="welcome_system_settings_section_title">Ustawienia systemowe</string>
     <string name="welcome_autostart_open_settings_button">Otwórz ustawienia autostartu</string>
     <string name="welcome_autostart_open_settings_error">Nie udało się otworzyć ustawień autostartu DiLink. Otwarto ustawienia aplikacji.</string>

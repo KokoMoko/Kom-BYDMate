@@ -1,3 +1,8 @@
+> **Kom-BYDMate** — [BYDMate](https://github.com/AndyShaman/BYDMate)-ի անձնական, ոչ կոմերցիոն տարբերակ
+> (փաթեթ՝ `kom.bydmate`)։ Լիցենզիա՝ PolyForm Noncommercial 1.0.0 (տես `LICENSE`)։
+>
+> Required Notice: Copyright AndyShaman (https://github.com/AndyShaman/BYDMate)
+
 <div align="center">
 
 <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="120" alt="BYDMate icon">

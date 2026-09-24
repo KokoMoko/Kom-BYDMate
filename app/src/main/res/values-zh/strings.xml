@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BYDMate</string>
+    <string name="app_name">Kom-BYDMate</string>
     <string name="cluster_a11y_description">拦截方向盘按键用于导航投射到仪表盘。手动启用，仅在功能开启时工作。</string>
     <string name="settings_language_title">语言</string>
     <string name="settings_font_scale_title">文字大小</string>
@@ -529,7 +529,7 @@
     <string name="welcome_autostart_dilink_hint">如果自启动未生效，请在 Di+ 中添加：</string>
     <string name="welcome_autostart_dilink_instruction">Di+ → Predefined → Startup tasks</string>
     <string name="welcome_autostart_command_copied_toast">已复制！</string>
-    <string name="welcome_autostart_command_explanation">打开应用 = "open app" + 包名。\n两个应用用分号分隔：\n打开应用ru.yandex.yandexnavi;打开应用com.bydmate.app</string>
+    <string name="welcome_autostart_command_explanation">打开应用 = "open app" + 包名。\n两个应用用分号分隔：\n打开应用ru.yandex.yandexnavi;打开应用kom.bydmate</string>
     <string name="welcome_system_settings_section_title">系统设置</string>
     <string name="welcome_autostart_open_settings_button">打开自启动设置</string>
     <string name="welcome_autostart_open_settings_error">无法打开 DiLink 自启动设置。已打开应用设置。</string>

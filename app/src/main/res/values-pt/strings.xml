@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BYDMate</string>
+    <string name="app_name">Kom-BYDMate</string>
     <string name="settings_language_title">Idioma</string>
     <string name="settings_font_scale_title">Tamanho do texto</string>
     <string name="settings_font_scale_desc">Aplica-se às telas do aplicativo e às janelas do agente de voz. O widget e o painel não mudam.</string>
@@ -563,7 +563,7 @@
     <string name="welcome_autostart_dilink_hint">Se a inicialização automática não funcionar, adicione isto no Di+:</string>
     <string name="welcome_autostart_dilink_instruction">Di+ -&gt; Predefinidos -&gt; Tarefas de inicialização</string>
     <string name="welcome_autostart_command_copied_toast">Copiado!</string>
-    <string name="welcome_autostart_command_explanation">打开应用 = \"abrir aplicativo\" + nome do pacote.\nPara dois aplicativos separados por ponto e vírgula:\n打开应用ru.yandex.yandexnavi;打开应用com.bydmate.app</string>
+    <string name="welcome_autostart_command_explanation">打开应用 = \"abrir aplicativo\" + nome do pacote.\nPara dois aplicativos separados por ponto e vírgula:\n打开应用ru.yandex.yandexnavi;打开应用kom.bydmate</string>
     <string name="welcome_system_settings_section_title">Configurações do sistema</string>
     <string name="welcome_autostart_open_settings_button">Abrir configurações de inicialização automática</string>
     <string name="welcome_autostart_open_settings_error">Não foi possível abrir as configurações de inicialização automática do DiLink. As configurações do aplicativo foram abertas.</string>

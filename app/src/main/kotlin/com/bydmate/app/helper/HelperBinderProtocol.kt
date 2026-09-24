@@ -483,7 +483,7 @@ object HelperBinderProtocol {
     const val PANE_TYPE_RECENTS = 3
 
     /** Our own package — target of the narrow grantOverlayPermission appops call. */
-    const val APP_PACKAGE = "com.bydmate.app"
+    const val APP_PACKAGE = com.bydmate.app.BuildConfig.APPLICATION_ID  // Kom-BYDMate: kom.bydmate
 
     /**
      * Flattened ComponentName of our steering-wheel accessibility service — appended
@@ -491,7 +491,7 @@ object HelperBinderProtocol {
      * by the narrow enableAccessibilityService daemon op, since DiLink has no a11y settings UI.
      */
     const val ACCESSIBILITY_SERVICE_COMPONENT =
-        "com.bydmate.app/com.bydmate.app.cluster.SteeringWheelKeyService"
+        "$APP_PACKAGE/com.bydmate.app.cluster.SteeringWheelKeyService"
 
     /**
      * Flattened ComponentName of our notification-listener stub — granted by the narrow
@@ -501,5 +501,5 @@ object HelperBinderProtocol {
      * Grants MediaSessionManager.getActiveSessions() access to our process for Yandex Music.
      */
     const val NOTIFICATION_LISTENER_COMPONENT =
-        "com.bydmate.app/com.bydmate.app.media.MediaSessionListenerService"
+        "$APP_PACKAGE/com.bydmate.app.media.MediaSessionListenerService"
 }

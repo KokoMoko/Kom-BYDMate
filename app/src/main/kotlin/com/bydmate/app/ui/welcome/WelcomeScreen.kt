@@ -406,7 +406,7 @@ private fun AutoStartStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(stringResource(R.string.welcome_autostart_dilink_instruction), color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 Spacer(modifier = Modifier.height(2.dp))
-                val dilinkCommand = "打开应用com.bydmate.app"
+                val dilinkCommand = "打开应用${com.bydmate.app.BuildConfig.APPLICATION_ID}"
                 val copiedToast = stringResource(R.string.welcome_autostart_command_copied_toast)
                 Text(
                     dilinkCommand,

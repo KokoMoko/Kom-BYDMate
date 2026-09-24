@@ -1,9 +1,8 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  # Kom-BYDMate: upstream-ի lint/detekt CI-ը գործարկվում է միայն ձեռքով (APK-ն կառուցում է build.yml-ը)
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}

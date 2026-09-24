@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BYDMate</string>
+    <string name="app_name">Kom-BYDMate</string>
     <string name="cluster_a11y_description">Перехват кнопок руля для проекции навигации на приборную панель. Включается вручную, работает только при включённой функции.</string>
     <string name="settings_language_title">Язык</string>
     <string name="settings_font_scale_title">Размер текста</string>
@@ -651,7 +651,7 @@
     <string name="welcome_autostart_dilink_hint">Если автозапуск не сработал, добавьте в Di+:</string>
     <string name="welcome_autostart_dilink_instruction">Di+ → Predefined → Startup tasks</string>
     <string name="welcome_autostart_command_copied_toast">Скопировано!</string>
-    <string name="welcome_autostart_command_explanation">打开应用 = «открыть приложение» + имя пакета.\nДля двух приложений через точку с запятой:\n打开应用ru.yandex.yandexnavi;打开应用com.bydmate.app</string>
+    <string name="welcome_autostart_command_explanation">打开应用 = «открыть приложение» + имя пакета.\nДля двух приложений через точку с запятой:\n打开应用ru.yandex.yandexnavi;打开应用kom.bydmate</string>
     <string name="welcome_system_settings_section_title">Системные настройки</string>
     <string name="welcome_autostart_open_settings_button">Открыть настройки автозапуска</string>
     <string name="welcome_autostart_open_settings_error">Не удалось открыть настройки автозапуска DiLink. Открыты настройки приложения.</string>

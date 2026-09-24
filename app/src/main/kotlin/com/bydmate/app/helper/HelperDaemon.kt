@@ -2069,11 +2069,11 @@ private fun logA11yFrameworkState(reassertOk: Boolean) {
     }.take(12)
     android.util.Log.i(tag, "a11y state after reassert ok=$reassertOk: sdk=${android.os.Build.VERSION.SDK_INT} lines=${a11y.size}")
     keep.forEach { android.util.Log.i(tag, "a11y: " + it.trim().take(300)) }
-    val pid = shExecBounded("pidof com.bydmate.app")
-    val stopped = shExecBounded("dumpsys package com.bydmate.app").lines()
+    val pid = shExecBounded("pidof ${HelperBinderProtocol.APP_PACKAGE}")
+    val stopped = shExecBounded("dumpsys package ${HelperBinderProtocol.APP_PACKAGE}").lines()
         .firstOrNull { it.contains("stopped=", ignoreCase = true) }?.trim()?.take(200)
     android.util.Log.i(tag, "pkg: pid=${pid.ifEmpty { "none" }} $stopped")
-    val am = shExecBounded("dumpsys activity services com.bydmate.app").lines()
+    val am = shExecBounded("dumpsys activity services ${HelperBinderProtocol.APP_PACKAGE}").lines()
     val start = am.indexOfFirst { it.contains("SteeringWheelKeyService") }
     if (start < 0) {
         android.util.Log.i(tag, "am: no ServiceRecord for SteeringWheelKeyService (lines=${am.size})")
