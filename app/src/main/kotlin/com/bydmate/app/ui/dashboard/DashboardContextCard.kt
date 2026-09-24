@@ -25,6 +25,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bydmate.app.R
+import androidx.compose.ui.res.stringResource
 import com.bydmate.app.ui.theme.AccentBlue
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardBorder
@@ -64,7 +66,7 @@ fun DashboardContextCard(state: DashboardUiState, modifier: Modifier = Modifier)
 private fun ChargingContent(state: DashboardUiState) {
     val soc = state.soc ?: 0
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("🔌 Зарядка", color = AccentGreen, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.kom_ctx_charging), color = AccentGreen, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("$soc%", color = TextPrimary, fontSize = 36.sp, fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace)
@@ -86,7 +88,7 @@ private fun ChargingContent(state: DashboardUiState) {
             }
         }
         state.estimatedRangeKm?.let {
-            Text("≈ ${"%.0f".format(it)} км запаса", color = TextSecondary, fontSize = 14.sp)
+            Text(stringResource(R.string.kom_ctx_range_left, "%.0f".format(it)), color = TextSecondary, fontSize = 14.sp)
         }
     }
 }
@@ -105,16 +107,19 @@ private fun DrivingContent(state: DashboardUiState) {
             Text("${state.speed ?: 0}", color = TextPrimary, fontSize = 56.sp, fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace)
             Spacer(Modifier.width(6.dp))
-            Text("км/ч", color = TextSecondary, fontSize = 18.sp, modifier = Modifier.padding(bottom = 10.dp))
+            Text(stringResource(R.string.kom_ctx_speed_unit), color = TextSecondary, fontSize = 18.sp, modifier = Modifier.padding(bottom = 10.dp))
         }
         Spacer(Modifier.width(32.dp))
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Stat("🚗 Поездка", buildString {
-                append(state.tripDistanceKm?.let { "%.1f км".format(it) } ?: "— км")
-                append(" · ")
-                append(if (minutes >= 60) "${minutes / 60} ч ${minutes % 60} мин" else "$minutes мин")
-            })
-            Stat("⚡ Расход", state.consumption?.let { "%.1f кВт·ч/100".format(it) } ?: "—",
+            val km = stringResource(R.string.kom_ctx_km, state.tripDistanceKm?.let { "%.1f".format(it) } ?: "—")
+            val time = if (minutes >= 60) {
+                stringResource(R.string.kom_ctx_hours_min, (minutes / 60).toInt(), (minutes % 60).toInt())
+            } else {
+                stringResource(R.string.kom_ctx_min, minutes.toInt())
+            }
+            Stat(stringResource(R.string.kom_ctx_trip), "$km · $time")
+            val cons = state.consumption?.let { stringResource(R.string.kom_ctx_kwh100, "%.1f".format(it)) } ?: "—"
+            Stat(stringResource(R.string.kom_ctx_consumption), cons,
                 color = state.consumption?.let { consumptionTint(it) } ?: TextMuted)
         }
     }
@@ -123,12 +128,12 @@ private fun DrivingContent(state: DashboardUiState) {
 @Composable
 private fun ParkedContent(state: DashboardUiState) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("🅿️ Стоянка", color = AccentBlue, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.kom_ctx_parked), color = AccentBlue, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         Row(verticalAlignment = Alignment.Bottom) {
             Text(state.estimatedRangeKm?.let { "~${"%.0f".format(it)}" } ?: "—", color = AccentGreen,
                 fontSize = 36.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
             Spacer(Modifier.width(6.dp))
-            Text("км запаса · ${state.soc ?: "—"}%", color = TextSecondary, fontSize = 16.sp,
+            Text(stringResource(R.string.kom_ctx_range_soc, state.soc?.toString() ?: "—"), color = TextSecondary, fontSize = 16.sp,
                 modifier = Modifier.padding(bottom = 6.dp))
         }
     }

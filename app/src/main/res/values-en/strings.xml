@@ -1648,4 +1648,24 @@
     <string name="automation_import_nav_maps">in Yandex Maps</string>
     <string name="automation_import_minimize">then minimize</string>
     <string name="help_badge_content_description">Hint</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_widget_hint_music">Add a widget (e.g. Yandex Music)</string>
+    <string name="kom_widget_hint_weather">Add a widget (e.g. AccuWeather)</string>
+    <string name="kom_widget_no_permission">No permission to host widgets. Run on a computer:\n\n%1$s</string>
+    <string name="kom_widget_pick_title">Choose a widget</string>
+    <string name="kom_widget_menu_title">Widget</string>
+    <string name="kom_widget_change">Change widget</string>
+    <string name="kom_widget_remove">Remove widget</string>
+    <string name="kom_cancel">Cancel</string>
+    <string name="kom_ctx_charging">🔌 Charging</string>
+    <string name="kom_ctx_range_left">≈ %1$s km range</string>
+    <string name="kom_ctx_speed_unit">km/h</string>
+    <string name="kom_ctx_trip">🚗 Trip</string>
+    <string name="kom_ctx_consumption">⚡ Consumption</string>
+    <string name="kom_ctx_km">%1$s km</string>
+    <string name="kom_ctx_hours_min">%1$d h %2$d min</string>
+    <string name="kom_ctx_min">%1$d min</string>
+    <string name="kom_ctx_kwh100">%1$s kWh/100</string>
+    <string name="kom_ctx_parked">🅿️ Parked</string>
+    <string name="kom_ctx_range_soc">km range · %1$s%%</string>
 </resources>

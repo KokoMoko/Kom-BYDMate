@@ -317,7 +317,7 @@ fun DashboardScreen(
                         // Kom-BYDMate: A — widget-ի սլոտ (օր․ Yandex Music)՝ SoH/12V և TRIP 1/2-ի փոխարեն
                         DashboardWidgetSlot(
                             slot = DashboardWidgets.SLOT_LEFT,
-                            emptyHint = "Добавить виджет (напр. Яндекс Музыка)",
+                            emptyHint = stringResource(R.string.kom_widget_hint_music),
                             requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
                             modifier = Modifier.fillMaxWidth().height(190.dp),
                         )
@@ -448,7 +448,7 @@ fun DashboardScreen(
                 DashboardContextCard(state = state, modifier = Modifier.fillMaxWidth().weight(0.36f))
                 DashboardWidgetSlot(
                     slot = DashboardWidgets.SLOT_RIGHT,
-                    emptyHint = "Добавить виджет (напр. AccuWeather)",
+                    emptyHint = stringResource(R.string.kom_widget_hint_weather),
                     requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
                     modifier = Modifier.fillMaxWidth().weight(0.64f),
                 )

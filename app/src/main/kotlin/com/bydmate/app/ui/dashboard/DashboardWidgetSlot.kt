@@ -43,6 +43,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bydmate.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardBorder
@@ -152,8 +154,10 @@ fun DashboardWidgetSlot(
         if (r.resultCode == Activity.RESULT_OK) configureOrFinish(id) else abort(id)
     }
 
-    val noPermissionText = "Нет разрешения на виджеты. Выполните на компьютере:\n\n" +
-        "adb shell appwidget grantbind --package ${context.packageName}"
+    val noPermissionText = stringResource(
+        R.string.kom_widget_no_permission,
+        "adb shell appwidget grantbind --package ${context.packageName}",
+    )
 
     fun bind(p: AppWidgetProviderInfo) {
         val id = host.allocateAppWidgetId()
@@ -225,7 +229,7 @@ fun DashboardWidgetSlot(
         }
         AlertDialog(
             onDismissRequest = { showPicker = false },
-            title = { Text("Выберите виджет", color = TextPrimary) },
+            title = { Text(stringResource(R.string.kom_widget_pick_title), color = TextPrimary) },
             text = {
                 LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
                     items(providers) { p ->
@@ -244,7 +248,7 @@ fun DashboardWidgetSlot(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showPicker = false }) { Text("Отмена") } },
+            confirmButton = { TextButton(onClick = { showPicker = false }) { Text(stringResource(R.string.kom_cancel)) } },
             containerColor = CardSurface,
         )
     }
@@ -252,18 +256,18 @@ fun DashboardWidgetSlot(
     if (showMenu) {
         AlertDialog(
             onDismissRequest = { showMenu = false },
-            title = { Text("Виджет", color = TextPrimary) },
+            title = { Text(stringResource(R.string.kom_widget_menu_title), color = TextPrimary) },
             text = {
                 Column {
-                    Text("Сменить виджет", color = AccentGreen, fontSize = 16.sp,
+                    Text(stringResource(R.string.kom_widget_change), color = AccentGreen, fontSize = 16.sp,
                         modifier = Modifier.fillMaxWidth().clickable { showMenu = false; showPicker = true }.padding(vertical = 12.dp))
-                    Text("Убрать виджет", color = TextSecondary, fontSize = 16.sp,
+                    Text(stringResource(R.string.kom_widget_remove), color = TextSecondary, fontSize = 16.sp,
                         modifier = Modifier.fillMaxWidth().clickable {
                             showMenu = false; DashboardWidgets.clear(context, slot); widgetId = -1
                         }.padding(vertical = 12.dp))
                 }
             },
-            confirmButton = { TextButton(onClick = { showMenu = false }) { Text("Отмена") } },
+            confirmButton = { TextButton(onClick = { showMenu = false }) { Text(stringResource(R.string.kom_cancel)) } },
             containerColor = CardSurface,
         )
     }

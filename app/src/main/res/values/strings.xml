@@ -1815,4 +1815,24 @@
     <string name="automation_import_nav_maps">в Яндекс Картах</string>
     <string name="automation_import_minimize">затем свернуть</string>
     <string name="help_badge_content_description">Подсказка</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_widget_hint_music">Добавить виджет (напр. Яндекс Музыка)</string>
+    <string name="kom_widget_hint_weather">Добавить виджет (напр. AccuWeather)</string>
+    <string name="kom_widget_no_permission">Нет разрешения на виджеты. Выполните на компьютере:\n\n%1$s</string>
+    <string name="kom_widget_pick_title">Выберите виджет</string>
+    <string name="kom_widget_menu_title">Виджет</string>
+    <string name="kom_widget_change">Сменить виджет</string>
+    <string name="kom_widget_remove">Убрать виджет</string>
+    <string name="kom_cancel">Отмена</string>
+    <string name="kom_ctx_charging">🔌 Зарядка</string>
+    <string name="kom_ctx_range_left">≈ %1$s км запаса</string>
+    <string name="kom_ctx_speed_unit">км/ч</string>
+    <string name="kom_ctx_trip">🚗 Поездка</string>
+    <string name="kom_ctx_consumption">⚡ Расход</string>
+    <string name="kom_ctx_km">%1$s км</string>
+    <string name="kom_ctx_hours_min">%1$d ч %2$d мин</string>
+    <string name="kom_ctx_min">%1$d мин</string>
+    <string name="kom_ctx_kwh100">%1$s кВт·ч/100</string>
+    <string name="kom_ctx_parked">🅿️ Стоянка</string>
+    <string name="kom_ctx_range_soc">км запаса · %1$s%%</string>
 </resources>
