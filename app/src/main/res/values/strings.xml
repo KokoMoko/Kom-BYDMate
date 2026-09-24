@@ -1835,4 +1835,6 @@
     <string name="kom_ctx_kwh100">%1$s кВт·ч/100</string>
     <string name="kom_ctx_parked">🅿️ Стоянка</string>
     <string name="kom_ctx_range_soc">км запаса · %1$s%%</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_widget_configure">Настроить виджет</string>
 </resources>

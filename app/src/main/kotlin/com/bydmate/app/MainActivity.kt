@@ -62,6 +62,17 @@ class MainActivity : AppCompatActivity() {
         super.attachBaseContext(newBase.createConfigurationContext(cfg))
     }
 
+    // Kom-BYDMate: Главная-ի widget-ի կարգավորման արդյունքը (AppWidgetHost-ի պաշտոնական API-ն
+    // արդյունքը տալիս է միայն Activity-ի onActivityResult-ով)
+    @Deprecated("Needed for AppWidgetHost.startAppWidgetConfigureActivityForResult")
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == com.bydmate.app.ui.dashboard.DashboardWidgets.REQ_CONFIGURE) {
+            com.bydmate.app.ui.dashboard.DashboardWidgets.configureResults.tryEmit(resultCode)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

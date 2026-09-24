@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -63,6 +64,13 @@ object DashboardWidgets {
     const val SLOT_LEFT = "left"    // A՝ ձախ ներքև (Yandex Music)
     const val SLOT_RIGHT = "right"  // աջ ներքև (եղանակ)
     private const val PREFS = "kom_dashboard_widgets"
+
+    /**
+     * Widget-ի կարգավորման էկրանը բացվում է AppWidgetHost-ի պաշտոնական API-ով (AccuWeather-ի նման
+     * widget-ների configure activity-ն exported չէ)․ արդյունքը գալիս է MainActivity.onActivityResult-ով։
+     */
+    const val REQ_CONFIGURE = 7301
+    val configureResults = kotlinx.coroutines.flow.MutableSharedFlow<Int>(extraBufferCapacity = 4)
 
     @Volatile private var host: AppWidgetHost? = null
 
@@ -105,6 +113,10 @@ fun DashboardWidgetSlot(
     var showPicker by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    // Սպասում ենք host API-ով բացված կարգավորման արդյունքին․ նոր widget (pendingId) կամ վերակարգավորում
+    var awaitingHostConfig by remember { mutableStateOf(false) }
+    var reconfigId by remember { mutableIntStateOf(-1) }
+    var viewKey by remember { mutableIntStateOf(0) }
 
     DisposableEffect(host) {
         runCatching { host.startListening() }
@@ -130,10 +142,33 @@ fun DashboardWidgetSlot(
         if (r.resultCode == Activity.RESULT_OK) finishAdd(id) else abort(id)
     }
 
+    LaunchedEffect(Unit) {
+        DashboardWidgets.configureResults.collect { rc ->
+            val id = pendingId
+            if (awaitingHostConfig && id != -1) {
+                awaitingHostConfig = false
+                if (rc == Activity.RESULT_OK) finishAdd(id) else abort(id)
+            } else if (reconfigId != -1) {
+                reconfigId = -1
+                viewKey++  // նոր view՝ թարմ կարգավորումով
+            }
+        }
+    }
+
+    /** Բացում է widget-ի կարգավորումը պաշտոնական API-ով․ false, եթե չստացվեց։ */
+    fun startHostConfigure(id: Int): Boolean {
+        val activity = context.findActivity() ?: return false
+        return runCatching {
+            host.startAppWidgetConfigureActivityForResult(activity, id, 0, DashboardWidgets.REQ_CONFIGURE, null)
+        }.isSuccess
+    }
+
     val configureOrFinish: (Int) -> Unit = { id ->
         val info = awm.getAppWidgetInfo(id)
         if (info?.configure == null) {
             finishAdd(id)
+        } else if (startHostConfigure(id)) {
+            awaitingHostConfig = true
         } else {
             try {
                 configureLauncher.launch(
@@ -187,7 +222,7 @@ fun DashboardWidgetSlot(
     ) {
         val info = if (widgetId != -1) awm.getAppWidgetInfo(widgetId) else null
         if (info != null) {
-            key(widgetId) {
+            key(widgetId, viewKey) {
                 var hostView by remember { mutableStateOf<AppWidgetHostView?>(null) }
                 AndroidView(
                     factory = { host.createView(context.applicationContext, widgetId, info).also { hostView = it } },
@@ -259,6 +294,13 @@ fun DashboardWidgetSlot(
             title = { Text(stringResource(R.string.kom_widget_menu_title), color = TextPrimary) },
             text = {
                 Column {
+                    if (awm.getAppWidgetInfo(widgetId)?.configure != null) {
+                        Text(stringResource(R.string.kom_widget_configure), color = AccentGreen, fontSize = 16.sp,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                showMenu = false
+                                if (startHostConfigure(widgetId)) reconfigId = widgetId
+                            }.padding(vertical = 12.dp))
+                    }
                     Text(stringResource(R.string.kom_widget_change), color = AccentGreen, fontSize = 16.sp,
                         modifier = Modifier.fillMaxWidth().clickable { showMenu = false; showPicker = true }.padding(vertical = 12.dp))
                     Text(stringResource(R.string.kom_widget_remove), color = TextSecondary, fontSize = 16.sp,
@@ -280,4 +322,10 @@ fun DashboardWidgetSlot(
             containerColor = CardSurface,
         )
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

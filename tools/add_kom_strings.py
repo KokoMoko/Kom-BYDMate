@@ -15,6 +15,7 @@ STRINGS = {
     "kom_widget_menu_title": ("Виджет", "Widget"),
     "kom_widget_change": ("Сменить виджет", "Change widget"),
     "kom_widget_remove": ("Убрать виджет", "Remove widget"),
+    "kom_widget_configure": ("Настроить виджет", "Configure widget"),
     "kom_cancel": ("Отмена", "Cancel"),
     "kom_ctx_charging": ("🔌 Зарядка", "🔌 Charging"),
     "kom_ctx_range_left": ("≈ %1$s км запаса", "≈ %1$s km range"),
