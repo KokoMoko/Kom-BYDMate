@@ -58,6 +58,9 @@ class UpdateChecker @Inject constructor(
     )
 
     suspend fun checkForUpdate(context: Context, forceCheck: Boolean = false): UpdateInfo? = withContext(Dispatchers.IO) {
+        // Kom-BYDMate: upstream-ի release-ները պաշտոնական BYDMate-ն են (com.bydmate.app)․
+        // դրանք տեղադրելը կդներ երկրորդ, կոնֆլիկտային հավելված։ Թարմացումները գալիս են մեր GitHub Actions-ից։
+        if (true) return@withContext null
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val lastCheck = prefs.getLong(KEY_LAST_CHECK, 0)
         val now = System.currentTimeMillis()
