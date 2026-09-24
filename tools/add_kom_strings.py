@@ -16,6 +16,12 @@ STRINGS = {
     "kom_widget_change": ("Сменить виджет", "Change widget"),
     "kom_widget_remove": ("Убрать виджет", "Remove widget"),
     "kom_widget_configure": ("Настроить виджет", "Configure widget"),
+    "kom_widget_size": ("Размер виджета", "Widget size"),
+    "kom_widget_size_hint": (
+        "Меньше — виджет покажет больше информации мелким шрифтом. Больше — крупнее.",
+        "Smaller — the widget shows more content in smaller text. Larger — bigger text.",
+    ),
+    "kom_done": ("Готово", "Done"),
     "kom_cancel": ("Отмена", "Cancel"),
     "kom_ctx_charging": ("🔌 Зарядка", "🔌 Charging"),
     "kom_ctx_range_left": ("≈ %1$s км запаса", "≈ %1$s km range"),

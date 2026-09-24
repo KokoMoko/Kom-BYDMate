@@ -24,7 +24,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -85,6 +87,13 @@ object DashboardWidgets {
     fun set(ctx: Context, slot: String, id: Int) =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(slot, id).apply()
 
+    /** Widget-ի մասշտաբը տոկոսներով (100 = գոտու իրական չափը)։ */
+    fun getScale(ctx: Context, slot: String): Int =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("${slot}_scale", 100)
+
+    fun setScale(ctx: Context, slot: String, pct: Int) =
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt("${slot}_scale", pct).apply()
+
     fun clear(ctx: Context, slot: String) {
         val id = get(ctx, slot)
         if (id != -1) runCatching { host(ctx).deleteAppWidgetId(id) }
@@ -117,6 +126,8 @@ fun DashboardWidgetSlot(
     var awaitingHostConfig by remember { mutableStateOf(false) }
     var reconfigId by remember { mutableIntStateOf(-1) }
     var viewKey by remember { mutableIntStateOf(0) }
+    var scalePct by remember { mutableIntStateOf(DashboardWidgets.getScale(context, slot)) }
+    var showSize by remember { mutableStateOf(false) }
 
     DisposableEffect(host) {
         runCatching { host.startListening() }
@@ -223,17 +234,34 @@ fun DashboardWidgetSlot(
         val info = if (widgetId != -1) awm.getAppWidgetInfo(widgetId) else null
         if (info != null) {
             key(widgetId, viewKey) {
-                var hostView by remember { mutableStateOf<AppWidgetHostView?>(null) }
-                AndroidView(
-                    factory = { host.createView(context.applicationContext, widgetId, info).also { hostView = it } },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .onSizeChanged { px ->
-                            val w = with(density) { px.width.toDp().value.toInt() }
-                            val h = with(density) { px.height.toDp().value.toInt() }
-                            runCatching { hostView?.updateAppWidgetSize(null, w, h, w, h) }
+                // Մասշտաբ․ widget-ին տալիս ենք «վիրտուալ» չափ (գոտի / s) և View-ն փոքրացնում/մեծացնում ենք s-ով։
+                // Փոքր s → widget-ը կարծում է, որ տեղը մեծ է, և ցույց է տալիս ավելի շատ բովանդակություն։
+                // Scale-ը դրված է հենց View-ի վրա, որ Android-ը ճիշտ փոխակերպի հպումները։
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val s = scalePct / 100f
+                    val vwPx = with(density) { (maxWidth.toPx() / s).toInt() }
+                    val vhPx = with(density) { (maxHeight.toPx() / s).toInt() }
+                    val vwDp = with(density) { vwPx.toDp().value.toInt() }
+                    val vhDp = with(density) { vhPx.toDp().value.toInt() }
+                    AndroidView(
+                        factory = { ctx ->
+                            android.widget.FrameLayout(ctx).apply {
+                                clipChildren = true
+                                addView(host.createView(context.applicationContext, widgetId, info))
+                            }
                         },
-                )
+                        update = { frame ->
+                            val hv = frame.getChildAt(0) as? AppWidgetHostView ?: return@AndroidView
+                            hv.layoutParams = android.widget.FrameLayout.LayoutParams(vwPx, vhPx)
+                            hv.pivotX = 0f
+                            hv.pivotY = 0f
+                            hv.scaleX = s
+                            hv.scaleY = s
+                            runCatching { hv.updateAppWidgetSize(null, vwDp, vhDp, vwDp, vhDp) }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
             Box(
                 modifier = Modifier
@@ -301,6 +329,9 @@ fun DashboardWidgetSlot(
                                 if (startHostConfigure(widgetId)) reconfigId = widgetId
                             }.padding(vertical = 12.dp))
                     }
+                    Text(stringResource(R.string.kom_widget_size), color = AccentGreen, fontSize = 16.sp,
+                        modifier = Modifier.fillMaxWidth().clickable { showMenu = false; showSize = true }
+                            .padding(vertical = 12.dp))
                     Text(stringResource(R.string.kom_widget_change), color = AccentGreen, fontSize = 16.sp,
                         modifier = Modifier.fillMaxWidth().clickable { showMenu = false; showPicker = true }.padding(vertical = 12.dp))
                     Text(stringResource(R.string.kom_widget_remove), color = TextSecondary, fontSize = 16.sp,
@@ -310,6 +341,35 @@ fun DashboardWidgetSlot(
                 }
             },
             confirmButton = { TextButton(onClick = { showMenu = false }) { Text(stringResource(R.string.kom_cancel)) } },
+            containerColor = CardSurface,
+        )
+    }
+
+    if (showSize) {
+        AlertDialog(
+            onDismissRequest = { showSize = false },
+            title = { Text(stringResource(R.string.kom_widget_size), color = TextPrimary) },
+            text = {
+                Column {
+                    Text("$scalePct%", color = AccentGreen, fontSize = 22.sp)
+                    // Փոփոխությունը երևում է անմիջապես՝ widget-ի վրա
+                    Slider(
+                        value = scalePct.toFloat(),
+                        onValueChange = { scalePct = (it / 5).toInt() * 5 },
+                        onValueChangeFinished = { DashboardWidgets.setScale(context, slot, scalePct) },
+                        valueRange = 60f..150f,
+                    )
+                    Text(stringResource(R.string.kom_widget_size_hint), color = TextMuted, fontSize = 13.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { DashboardWidgets.setScale(context, slot, scalePct); showSize = false }) {
+                    Text(stringResource(R.string.kom_done))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { scalePct = 100; DashboardWidgets.setScale(context, slot, 100) }) { Text("100%") }
+            },
             containerColor = CardSurface,
         )
     }

@@ -1837,4 +1837,8 @@
     <string name="kom_ctx_range_soc">км запаса · %1$s%%</string>
     <!-- Kom-BYDMate -->
     <string name="kom_widget_configure">Настроить виджет</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_widget_size">Размер виджета</string>
+    <string name="kom_widget_size_hint">Меньше — виджет покажет больше информации мелким шрифтом. Больше — крупнее.</string>
+    <string name="kom_done">Готово</string>
 </resources>

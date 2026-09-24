@@ -1670,4 +1670,8 @@
     <string name="kom_ctx_range_soc">km range · %1$s%%</string>
     <!-- Kom-BYDMate -->
     <string name="kom_widget_configure">Configure widget</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_widget_size">Widget size</string>
+    <string name="kom_widget_size_hint">Smaller — the widget shows more content in smaller text. Larger — bigger text.</string>
+    <string name="kom_done">Done</string>
 </resources>
