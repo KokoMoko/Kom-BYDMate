@@ -1915,4 +1915,17 @@
     <string name="dispatch_agent_query_cooldown">запрос агенту не чаще раза в %1$d секунд</string>
     <string name="dispatch_agent_timeout">агент не ответил вовремя</string>
     <string name="dispatch_agent_off">агент выключен в настройках</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_speedo_linear">Линейный</string>
+    <string name="kom_speedo_speed_label">Скорость</string>
+    <string name="kom_speedo_settings">Спидометр</string>
+    <string name="kom_speedo_max_speed">Макс. скорость: %1$d км/ч</string>
+    <string name="kom_speedo_tolerance">Допуск: %1$d%% (до %2$d км/ч)</string>
+    <string name="kom_speedo_nav_hint">Если навигатор знает ограничение, используется оно. Стиль меняется свайпом влево/вправо.</string>
+    <string name="kom_widget_hint_phone">Добавить виджет (напр. Телефон)</string>
+    <string name="kom_ctx_route">📍 Маршрут</string>
+    <string name="kom_ctx_arrival">🕒 Прибытие</string>
+    <string name="kom_ctx_arrival_soc">🔋 При прибытии</string>
+    <string name="kom_ctx_odometer">🛣 Пробег</string>
+    <string name="kom_ctx_today">📅 Сегодня</string>
 </resources>

@@ -47,7 +47,7 @@ data class DashboardUiState(
     val soc: Int? = null,
     val odometer: Double? = null,
     val speed: Int? = null,
-    val period: DashboardPeriod = DashboardPeriod.WEEK,
+    val period: DashboardPeriod = DashboardPeriod.TODAY,  // Kom-BYDMate: «այսօրվա կմ»-ի համար (ժամանակահատվածի կոճակները հեռացված են)
     val totalKm: Double = 0.0,
     val totalKwh: Double = 0.0,
     val avgConsumption: Double = 0.0,

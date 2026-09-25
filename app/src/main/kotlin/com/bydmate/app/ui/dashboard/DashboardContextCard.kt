@@ -38,6 +38,7 @@ import com.bydmate.app.ui.theme.SocYellow
 import com.bydmate.app.ui.theme.TextMuted
 import com.bydmate.app.ui.theme.TextPrimary
 import com.bydmate.app.ui.theme.TextSecondary
+import com.bydmate.app.navdata.NavGuidanceHub
 import kotlinx.coroutines.delay
 
 /**
@@ -103,12 +104,10 @@ private fun DrivingContent(state: DashboardUiState) {
         }
     }
     Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-        // Ձախ՝ սպիդոմետր (ոճը ընտրվում է ⋮-ով), աջ՝ ուղևորության տվյալներ
-        DashboardSpeedometer(speed = state.speed ?: 0, modifier = Modifier.weight(0.58f).fillMaxHeight())
-        Spacer(Modifier.width(12.dp))
-        Box(Modifier.width(1.dp).fillMaxHeight(0.7f).background(CardBorder))
-        Spacer(Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(0.42f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Սպիդոմետր (swipe՝ ոճեր, ⋮՝ կարգավորումներ) | ուղևորություն | երթուղի կամ վազք
+        DashboardSpeedometer(speed = state.speed ?: 0, modifier = Modifier.weight(0.5f).fillMaxHeight())
+        ColumnDivider()
+        Column(modifier = Modifier.weight(0.25f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val km = stringResource(R.string.kom_ctx_km, state.tripDistanceKm?.let { "%.1f".format(it) } ?: "—")
             val time = if (minutes >= 60) {
                 stringResource(R.string.kom_ctx_hours_min, (minutes / 60).toInt(), (minutes % 60).toInt())
@@ -119,6 +118,59 @@ private fun DrivingContent(state: DashboardUiState) {
             val cons = state.consumption?.let { stringResource(R.string.kom_ctx_kwh100, "%.1f".format(it)) } ?: "—"
             Stat(stringResource(R.string.kom_ctx_consumption), cons,
                 color = state.consumption?.let { consumptionTint(it) } ?: TextMuted)
+        }
+        ColumnDivider()
+        RouteOrOdometer(state, Modifier.weight(0.25f))
+    }
+}
+
+@Composable
+private fun ColumnDivider() {
+    Spacer(Modifier.width(12.dp))
+    Box(Modifier.width(1.dp).fillMaxHeight(0.7f).background(CardBorder))
+    Spacer(Modifier.width(14.dp))
+}
+
+/**
+ * Navigator-ում երթուղի լինելիս՝ մնացած կմ/ժամանակ, ժամանման ժամ և ժամանման պահի լիցքը
+ * (SOC-ից և պաշարից)։ Առանց երթուղու՝ վազք և այսօրվա կմ։
+ */
+@Composable
+private fun RouteOrOdometer(state: DashboardUiState, modifier: Modifier) {
+    val nav by produceState(initialValue = NavGuidanceHub.Snapshot()) {
+        while (true) {
+            value = runCatching { NavGuidanceHub.snapshot() }.getOrDefault(NavGuidanceHub.Snapshot())
+            delay(2_000L)
+        }
+    }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (nav.active && nav.totalDistMeters > 0) {
+            val km = nav.totalDistMeters / 1000.0
+            val min = nav.etaSeconds / 60
+            val dur = if (min >= 60) stringResource(R.string.kom_ctx_hours_min, min / 60, min % 60)
+            else stringResource(R.string.kom_ctx_min, min)
+            Stat(stringResource(R.string.kom_ctx_route), stringResource(R.string.kom_ctx_km, "%.1f".format(km)) + " · " + dur)
+            if (nav.etaSeconds > 0) {
+                val arrival = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(System.currentTimeMillis() + nav.etaSeconds * 1000L))
+                Stat(stringResource(R.string.kom_ctx_arrival), arrival)
+            }
+            val soc = state.soc
+            val range = state.estimatedRangeKm
+            if (soc != null && range != null && range > 0) {
+                val arrivalSoc = (soc * (1 - km / range)).toInt()
+                val col = when {
+                    arrivalSoc < 10 -> SocRed
+                    arrivalSoc < 20 -> SocYellow
+                    else -> AccentGreen
+                }
+                Stat(stringResource(R.string.kom_ctx_arrival_soc), if (arrivalSoc < 0) "✕" else "≈ $arrivalSoc%", color = col)
+            }
+        } else {
+            val odo = state.odometer?.let { String.format(java.util.Locale.US, "%,.1f", it).replace(',', ' ') } ?: "—"
+            Stat(stringResource(R.string.kom_ctx_odometer), stringResource(R.string.kom_ctx_km, odo))
+            val today = state.totalKmToday + (state.tripDistanceKm ?: 0.0)
+            Stat(stringResource(R.string.kom_ctx_today), stringResource(R.string.kom_ctx_km, "%.1f".format(today)))
         }
     }
 }

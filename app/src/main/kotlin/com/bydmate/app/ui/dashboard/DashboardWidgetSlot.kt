@@ -65,6 +65,7 @@ object DashboardWidgets {
     const val HOST_ID = 7300
     const val SLOT_LEFT = "left"    // A՝ ձախ ներքև (Yandex Music)
     const val SLOT_RIGHT = "right"  // աջ ներքև (եղանակ)
+    const val SLOT_PHONE = "phone"  // ձախ՝ կոմպակտ տողի տակ (օր․ Bluetooth Phone)
     private const val PREFS = "kom_dashboard_widgets"
 
     /**

@@ -1748,4 +1748,17 @@
     <string name="dispatch_agent_query_cooldown">the agent can be asked at most once every %1$d seconds</string>
     <string name="dispatch_agent_timeout">the agent did not answer in time</string>
     <string name="dispatch_agent_off">the agent is off in settings</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_speedo_linear">Linear</string>
+    <string name="kom_speedo_speed_label">Speed</string>
+    <string name="kom_speedo_settings">Speedometer</string>
+    <string name="kom_speedo_max_speed">Max speed: %1$d km/h</string>
+    <string name="kom_speedo_tolerance">Tolerance: %1$d%% (up to %2$d km/h)</string>
+    <string name="kom_speedo_nav_hint">When the navigator knows the limit, it is used instead. Swipe left/right to change the style.</string>
+    <string name="kom_widget_hint_phone">Add a widget (e.g. Phone)</string>
+    <string name="kom_ctx_route">📍 Route</string>
+    <string name="kom_ctx_arrival">🕒 Arrival</string>
+    <string name="kom_ctx_arrival_soc">🔋 On arrival</string>
+    <string name="kom_ctx_odometer">🛣 Odometer</string>
+    <string name="kom_ctx_today">📅 Today</string>
 </resources>

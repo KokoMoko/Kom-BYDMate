@@ -166,144 +166,25 @@ fun DashboardScreen(
                     contentScale = ContentScale.Fit,
                     alignment = Alignment.Center
                 )
-                GaugeYieldingColumn(
-                    gaugeMinSize = rememberSocGaugeMinSize(state.isCharging),
+                // Kom-BYDMate: կոմպակտ տող (SOC | պաշար | ջերմաստիճան) + Phone widget + ինսայթ + Music widget
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .layout { measurable, c ->
-                            val p = measurable.measure(c.copy(maxHeight = c.maxHeight + glowRoomPx))
-                            layout(p.width, c.constrainHeight(p.height - glowRoomPx)) { p.place(0, -glowRoomPx) }
-                        }
+                        .fillMaxSize()
                         .verticalScroll(scrollState)
-                        .heightIn(min = contentMinHeight)
-                        .padding(top = GaugeGlowRoom + 4.dp, bottom = 4.dp),
+                        .padding(vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    // TOP: SOC gauge + 4 widget-style stats around it (mirrors FloatingWidgetView).
-                    // Two symmetric rows wrap the gauge:
-                    //   row mid    — duration | odometer | inside temp
-                    //   row bottom — trip km | range km + label | consumption + trend
-                    SocGauge(
-                        soc = state.soc ?: 0,
-                        isCharging = state.isCharging,
-                    )
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Live-ticking duration text (refresh every 15s, like in widget).
-                        val durationText by produceState(
-                            initialValue = formatDurationShort(context, state.sessionStartedAt),
-                            state.sessionStartedAt
-                        ) {
-                            while (true) {
-                                value = formatDurationShort(context, state.sessionStartedAt)
-                                delay(15_000L)
-                            }
-                        }
-
-                        // Row mid: schedule | odometer | inside temp
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                                CornerStat(
-                                    icon = Icons.Outlined.Schedule,
-                                    text = durationText,
-                                )
-                            }
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = if (state.odometer != null) "%.1f km".format(state.odometer) else "— km",
-                                    color = TextSecondary,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                                CornerStat(
-                                    icon = Icons.Outlined.DirectionsCar,
-                                    text = formatCabinOutside(state.insideTemp, state.exteriorTemp),
-                                    iconLast = true,
-                                )
-                            }
-                        }
-
-                        // Row bottom: trip km | range km + label | consumption + trend
-                        // Trend logic mirrors widget: suppress arrow within first 300m of session.
-                        val effectiveTrend = if (
-                            state.sessionStartedAt != null &&
-                            (state.tripDistanceKm ?: 0.0) < TRIP_DISTANCE_TREND_THRESHOLD_KM
-                        ) Trend.NONE else state.consumptionTrend
-                        val trendColor = when (effectiveTrend) {
-                            Trend.DOWN -> AccentGreen
-                            Trend.UP -> SocYellow
-                            Trend.FLAT -> TextPrimary
-                            Trend.NONE -> TextMuted
-                        }
-                        val rangeText = state.estimatedRangeKm?.let { "~${"%.0f".format(it)}" } ?: "—"
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                                CornerStat(
-                                    icon = Icons.Outlined.Route,
-                                    text = formatTripKm(context, state.tripDistanceKm),
-                                )
-                            }
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                Row(verticalAlignment = Alignment.Bottom) {
-                                    Text(rangeText, color = AccentGreen, fontSize = 32.sp, fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(stringResource(R.string.dashboard_unit_km), color = AccentGreen.copy(alpha = 0.7f), fontSize = 18.sp,
-                                        fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 4.dp))
-                                }
-                                Text(stringResource(R.string.dashboard_range_label), color = TextMuted, fontSize = 12.sp)
-                            }
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (effectiveTrend != Trend.NONE) {
-                                        Icon(
-                                            imageVector = when (effectiveTrend) {
-                                                Trend.DOWN -> Icons.Outlined.TrendingDown
-                                                Trend.UP -> Icons.Outlined.TrendingUp
-                                                else -> Icons.Outlined.TrendingFlat
-                                            },
-                                            contentDescription = null,
-                                            tint = trendColor,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                        Spacer(Modifier.width(4.dp))
-                                    }
-                                    Text(
-                                        text = state.consumption?.let { "%.1f".format(it) } ?: "—",
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontFamily = FontFamily.Monospace,
-                                        // Number colour is decoupled from the trend: it always reflects
-                                        // the consumption magnitude (consumptionColor). Trend direction is
-                                        // conveyed solely by the arrow above, which hides on Trend.NONE.
-                                        // Fixes the mid-trip "grey number" report where a momentary
-                                        // Trend.NONE greyed out a number that was still updating.
-                                        color = state.consumption?.let { consumptionColor(it) } ?: TextMuted,
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // 3 compact cards: insight, battery, idle drain
+                    DashboardTopRow(state = state)
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        // AI Insight card
+                        DashboardWidgetSlot(
+                            slot = DashboardWidgets.SLOT_PHONE,
+                            emptyHint = stringResource(R.string.kom_widget_hint_phone),
+                            requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
+                            modifier = Modifier.fillMaxWidth().height(84.dp),
+                        )
                         val insightColor = when (state.effectiveInsightTone) {
                             "critical" -> SocRed
                             "warning" -> SocYellow
@@ -315,7 +196,6 @@ fun DashboardScreen(
                             borderColor = insightColor,
                             onClick = { viewModel.toggleInsightExpanded() }
                         )
-                        // Kom-BYDMate: A — widget-ի սլոտ (օր․ Yandex Music)՝ SoH/12V և TRIP 1/2-ի փոխարեն
                         DashboardWidgetSlot(
                             slot = DashboardWidgets.SLOT_LEFT,
                             emptyHint = stringResource(R.string.kom_widget_hint_music),
