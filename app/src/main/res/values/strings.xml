@@ -113,7 +113,7 @@
     <string name="adb_dialog_no_access_title">Нет доступа к ADB</string>
     <string name="adb_dialog_no_access_body">Подтвердите запрос на экране или подключите ADB заново, затем нажмите «Проверить».</string>
     <string name="adb_dialog_helper_down_title">Помощник BYDMate не запустился</string>
-    <string name="adb_dialog_helper_down_body">ADB работает, но помощник не отвечает. Отправьте дамп диагностики из настроек.</string>
+    <string name="adb_dialog_helper_down_body">ADB работает, но помощник не отвечает. Включите запись логов (Настройки, «Сервис и данные», «Запись логов»), подождите минуту, остановите и отправьте файл разработчику.</string>
     <string name="adb_dialog_close">Закрыть</string>
     <string name="adb_dialog_check">Проверить</string>
     <string name="adb_dialog_enable_restore">Включить восстановление</string>
@@ -339,7 +339,6 @@
     <!-- TripDetailDialog -->
     <string name="trip_detail_title_trip">Поездка</string>
     <string name="trip_detail_title_stop">Стоянка</string>
-    <string name="trip_detail_stats_header">Статистика</string>
     <string name="trip_detail_gps_unavailable">GPS-данные недоступны</string>
     <string name="trip_detail_distance_label">Дистанция</string>
     <string name="trip_detail_distance_value">%1$.1f км</string>
@@ -350,8 +349,23 @@
     <string name="trip_detail_consumption_label">Потребление</string>
     <string name="trip_detail_consumption_value">%1$.1f кВт·ч</string>
     <string name="trip_detail_efficiency_label">Расход</string>
+    <string name="trip_detail_efficiency_value">%1$.1f кВт·ч/100</string>
     <string name="trip_detail_cost_label">Стоимость</string>
-    <string name="trip_detail_temp_label">Темп.</string>
+    <string name="trip_detail_date_pattern">EEEE, d MMMM</string>
+    <string name="trip_detail_close">Закрыть</string>
+    <string name="trip_detail_group_distance">Пробег</string>
+    <string name="trip_detail_group_time">Время</string>
+    <string name="trip_detail_group_energy">Энергия</string>
+    <string name="trip_detail_group_money">Деньги</string>
+    <string name="trip_detail_group_weather">Погода</string>
+    <string name="trip_detail_odometer_start_label">Одометр на старте</string>
+    <string name="trip_detail_odometer_end_label">Одометр на финише</string>
+    <string name="trip_detail_odometer_label">Одометр</string>
+    <string name="trip_detail_odometer_value">%1$,.1f км</string>
+    <string name="trip_detail_moving_label">В движении</string>
+    <string name="trip_detail_cost_per_100_label">На 100 км</string>
+    <string name="trip_detail_soc_label">Заряд</string>
+    <string name="trip_detail_ext_temp_label">За бортом</string>
 
     <!-- Charges screen -->
     <string name="charges_filter_all">Все</string>
@@ -1772,6 +1786,8 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Импорт</string>
     <string name="automation_share_button">Поделиться</string>
+    <string name="automation_view_list">Списком</string>
+    <string name="automation_view_grid">Карточками</string>
     <string name="automation_share_note">Из файла удалены номера телефонов, имена контактов и привязки к вашим местам. Из ссылок удаляются логин с паролем и параметры, похожие на ключи; сам адрес проверьте перед отправкой. Тексты уведомлений и фраз, запросы агенту и точки маршрутов остаются, их тоже стоит проверить.</string>
     <string name="automation_share_error">Не удалось сохранить файл: %1$s</string>
     <string name="automation_test_run_button">Тестовый запуск</string>
