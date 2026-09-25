@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -101,16 +102,13 @@ private fun DrivingContent(state: DashboardUiState) {
             delay(15_000L)
         }
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        // Արագություն՝ մեծ թվերով
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text("${state.speed ?: 0}", color = TextPrimary, fontSize = 56.sp, fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace)
-            Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.kom_ctx_speed_unit), color = TextSecondary, fontSize = 18.sp, modifier = Modifier.padding(bottom = 10.dp))
-        }
-        Spacer(Modifier.width(32.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+        // Ձախ՝ սպիդոմետր (ոճը ընտրվում է ⋮-ով), աջ՝ ուղևորության տվյալներ
+        DashboardSpeedometer(speed = state.speed ?: 0, modifier = Modifier.weight(0.58f).fillMaxHeight())
+        Spacer(Modifier.width(12.dp))
+        Box(Modifier.width(1.dp).fillMaxHeight(0.7f).background(CardBorder))
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(0.42f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val km = stringResource(R.string.kom_ctx_km, state.tripDistanceKm?.let { "%.1f".format(it) } ?: "—")
             val time = if (minutes >= 60) {
                 stringResource(R.string.kom_ctx_hours_min, (minutes / 60).toInt(), (minutes % 60).toInt())
@@ -141,9 +139,10 @@ private fun ParkedContent(state: DashboardUiState) {
 
 @Composable
 private fun Stat(label: String, value: String, color: Color = TextPrimary) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = TextMuted, fontSize = 14.sp, modifier = Modifier.width(110.dp))
-        Text(value, color = color, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+    // Պիտակը վերևում, արժեքը տակը՝ նեղ աջ սյունակում տեղավորվելու համար
+    Column {
+        Text(label, color = TextMuted, fontSize = 13.sp)
+        Text(value, color = color, fontSize = 17.sp, fontWeight = FontWeight.Medium)
     }
 }
 

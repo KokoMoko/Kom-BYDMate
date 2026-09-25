@@ -1690,4 +1690,10 @@
     <string name="kom_widget_size">Widget size</string>
     <string name="kom_widget_size_hint">Smaller — the widget shows more content in smaller text. Larger — bigger text.</string>
     <string name="kom_done">Done</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_speedo_style">Speedometer style</string>
+    <string name="kom_speedo_modern">Modern arc</string>
+    <string name="kom_speedo_classic">Classic</string>
+    <string name="kom_speedo_digital">Digital + LED</string>
+    <string name="kom_speedo_minimal">Minimal ring</string>
 </resources>

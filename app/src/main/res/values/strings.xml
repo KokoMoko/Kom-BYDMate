@@ -1857,4 +1857,10 @@
     <string name="kom_widget_size">Размер виджета</string>
     <string name="kom_widget_size_hint">Меньше — виджет покажет больше информации мелким шрифтом. Больше — крупнее.</string>
     <string name="kom_done">Готово</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_speedo_style">Стиль спидометра</string>
+    <string name="kom_speedo_modern">Современная дуга</string>
+    <string name="kom_speedo_classic">Классический</string>
+    <string name="kom_speedo_digital">Цифровой + LED</string>
+    <string name="kom_speedo_minimal">Минималистичное кольцо</string>
 </resources>

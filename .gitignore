@@ -57,3 +57,4 @@ docs/superpowers/**/handoff-*
 # Kotlin 2.x compiler daemon working dir (sessions markers, error logs)
 .kotlin/
 tools/icon-preview.png
+tools/speedo-preview.png
