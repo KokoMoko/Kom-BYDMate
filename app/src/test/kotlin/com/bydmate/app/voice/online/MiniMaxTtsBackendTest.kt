@@ -1,18 +1,35 @@
 package com.bydmate.app.voice.online
 
+import android.util.Log
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.voice.TtsGender
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import io.mockk.verify
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import okio.Buffer
 import org.json.JSONObject
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -21,6 +38,10 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.thread
 
 class MiniMaxTtsBackendTest {
 
@@ -126,6 +147,32 @@ class MiniMaxTtsBackendTest {
 
         assertEquals(24_000, pcm.sampleRate)
         assertEquals(2, pcm.samples.size)
+    }
+
+    @Test
+    fun `official transport boosts Russian for Cyrillic text and leaves other text as before`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(MockResponse().setBody(officialSuccessBody()))
+        official.enqueue(MockResponse().setBody(officialSuccessBody()))
+
+        backend.synthesize("Заряд 80 процентов", TtsGender.MALE)
+        backend.synthesize("Battery at 80 percent", TtsGender.MALE)
+
+        assertEquals("Russian", JSONObject(official.takeRequest().body.readUtf8()).getString("language_boost"))
+        assertFalse(JSONObject(official.takeRequest().body.readUtf8()).has("language_boost"))
+    }
+
+    @Test
+    fun `official transport sends no language_boost for Belarusian or Ukrainian Cyrillic`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(MockResponse().setBody(officialSuccessBody()))
+        official.enqueue(MockResponse().setBody(officialSuccessBody()))
+
+        backend.synthesize("Зарад восемдзесят працэнтаў", TtsGender.MALE)
+        backend.synthesize("Заряд вісімдесят відсотків", TtsGender.MALE)
+
+        assertFalse(JSONObject(official.takeRequest().body.readUtf8()).has("language_boost"))
+        assertFalse(JSONObject(official.takeRequest().body.readUtf8()).has("language_boost"))
     }
 
     @Test
@@ -303,5 +350,222 @@ class MiniMaxTtsBackendTest {
 
         assertEquals(0, official.requestCount)
         assertEquals(0, replicate.requestCount)
+    }
+
+    // --- official streaming (SSE) ---
+
+    private fun pcm16(vararg values: Int): ByteArray =
+        ByteBuffer.allocate(values.size * 2).order(ByteOrder.LITTLE_ENDIAN)
+            .apply { values.forEach { putShort(it.toShort()) } }.array()
+
+    private fun sseEvent(audioHex: String, status: Int = 1, statusCode: Int = 0, statusMsg: String = "") =
+        "data: " + JSONObject().apply {
+            put("data", JSONObject().put("audio", audioHex).put("status", status))
+            put("base_resp", JSONObject().put("status_code", statusCode).put("status_msg", statusMsg))
+        } + "\n\n"
+
+    private fun sse(vararg events: String) =
+        MockResponse().setHeader("Content-Type", "text/event-stream").setBody(events.joinToString(""))
+
+    private suspend fun collectStream(text: String = "привет"): List<FloatArray> {
+        val chunks = mutableListOf<FloatArray>()
+        backend.synthesizeStream(text, TtsGender.MALE) { chunks += it }
+        return chunks
+    }
+
+    @Test
+    fun `stream request carries stream, exclude_aggregated_audio and language_boost`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(sse(sseEvent(hex(pcm16(1000))), sseEvent("", status = 2)))
+
+        collectStream("Заряд 80 процентов")
+
+        val req = official.takeRequest()
+        assertEquals("/v1/t2a_v2", req.path)
+        assertEquals("Bearer mm-test-key", req.getHeader("Authorization"))
+        val sent = JSONObject(req.body.readUtf8())
+        assertTrue(sent.getBoolean("stream"))
+        assertTrue(sent.getJSONObject("stream_options").getBoolean("exclude_aggregated_audio"))
+        assertEquals("Russian", sent.getString("language_boost"))
+        assertEquals("speech-2.8-turbo", sent.getString("model"))
+        assertEquals("pcm", sent.getJSONObject("audio_setting").getString("format"))
+    }
+
+    @Test
+    fun `stream delivers decoded chunks in order and never the final aggregated audio`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(
+            sse(
+                sseEvent(hex(pcm16(1000, -1000))),
+                sseEvent(hex(pcm16(2000))),
+                sseEvent(hex(pcm16(1000, -1000, 2000)), status = 2), // whole sentence again
+            ),
+        )
+
+        val chunks = collectStream()
+
+        assertEquals(2, chunks.size)
+        assertArrayEquals(floatArrayOf(1000 / 32_768f, -1000 / 32_768f), chunks[0], 0f)
+        assertArrayEquals(floatArrayOf(2000 / 32_768f), chunks[1], 0f)
+    }
+
+    @Test
+    fun `stream carries an odd trailing byte over so a split sample decodes intact`() = runTest {
+        stubSettings(provider = "official")
+        val bytes = pcm16(1000, -1000, 3000)
+        official.enqueue(
+            sse(
+                sseEvent(hex(bytes.copyOfRange(0, 3))),
+                sseEvent(hex(bytes.copyOfRange(3, 6))),
+                sseEvent("", status = 2),
+            ),
+        )
+
+        val samples = collectStream().flatMap { it.toList() }
+
+        assertEquals(listOf(1000 / 32_768f, -1000 / 32_768f, 3000 / 32_768f), samples)
+    }
+
+    @Test
+    fun `stream throws on a base_resp error event`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(sse(sseEvent("", statusCode = 1002, statusMsg = "rate limited")))
+        try {
+            collectStream()
+            fail("expected synthesizeStream to throw")
+        } catch (e: IOException) {
+            assertTrue(e.message!!.contains("rate limited"))
+        }
+    }
+
+    @Test
+    fun `stream throws on a plain JSON error body`() = runTest {
+        stubSettings(provider = "official")
+        val body = JSONObject().put(
+            "base_resp",
+            JSONObject().put("status_code", 1004).put("status_msg", "authorization failed"),
+        )
+        official.enqueue(MockResponse().setBody(body.toString()))
+        try {
+            collectStream()
+            fail("expected synthesizeStream to throw")
+        } catch (e: IOException) {
+            assertTrue(e.message!!.contains("authorization failed"))
+        }
+    }
+
+    @Test
+    fun `stream throws when it ends without a single chunk`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(sse(sseEvent(hex(pcm16(1000, 2000)), status = 2)))
+        try {
+            collectStream()
+            fail("expected synthesizeStream to throw")
+        } catch (e: IOException) {
+            assertTrue(e.message!!.contains("without audio"))
+        }
+    }
+
+    @Test
+    fun `stream closed after audio without a status 2 event is a failure`() = runTest {
+        stubSettings(provider = "official")
+        official.enqueue(sse(sseEvent(hex(pcm16(1000, -1000)))))
+        val chunks = mutableListOf<FloatArray>()
+        try {
+            backend.synthesizeStream("привет", TtsGender.MALE) { chunks += it }
+            fail("expected synthesizeStream to throw")
+        } catch (e: IOException) {
+            assertTrue(e.message!!.contains("before synthesis completed"))
+        }
+        assertEquals(1, chunks.size) // the audio that did arrive was still delivered
+    }
+
+    @Test
+    fun `an odd trailing byte at the end is dropped with a warning and the sentence still succeeds`() = runTest {
+        stubSettings(provider = "official")
+        val bytes = pcm16(1000, -1000)
+        official.enqueue(sse(sseEvent(hex(bytes + byteArrayOf(0x11))), sseEvent("", status = 2)))
+        mockkStatic(Log::class)
+        try {
+            every { Log.w(any(), any<String>()) } returns 0
+            val samples = collectStream().flatMap { it.toList() }
+            assertEquals(listOf(1000 / 32_768f, -1000 / 32_768f), samples)
+            verify { Log.w(any(), match<String> { it.contains("unpaired PCM byte") }) }
+        } finally {
+            unmockkStatic(Log::class)
+        }
+    }
+
+    @Test
+    fun `a cancellation landing before the watcher is dispatched still cancels the blocking call`() {
+        stubSettings(provider = "official")
+        // The job is cancelled while synthesizeStream is already inside its IO block, before the
+        // watcher is launched; the server never answers, so only call.cancel() can unblock execute().
+        coEvery { settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_KEY, "") } coAnswers {
+            currentCoroutineContext().job.cancel()
+            "mm-test-key"
+        }
+        official.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        val slowBackend = MiniMaxTtsBackend(
+            http = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build(),
+            settingsRepository = settingsRepository,
+            officialBaseUrl = official.url("/").toString().trimEnd('/'),
+        )
+        val finished = CountDownLatch(1)
+        thread {
+            runCatching { runBlocking { slowBackend.synthesizeStream("привет", TtsGender.MALE) {} } }
+            finished.countDown()
+        }
+        assertTrue("execute() stayed blocked after cancellation", finished.await(10, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun `cancelling the whole-sentence synthesize after the request lands surfaces as a cancellation`() {
+        stubSettings(provider = "official")
+        // Unlike the streaming test above, the job is cancelled only once MockWebServer confirms
+        // the request went out, so execute() is genuinely blocked on the watcher's normal path --
+        // this is what actually happens on barge-in or a router timeout mid-call, and it's the
+        // path that must surface as CancellationException, not a plain IOException.
+        official.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        val slowBackend = MiniMaxTtsBackend(
+            http = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build(),
+            settingsRepository = settingsRepository,
+            officialBaseUrl = official.url("/").toString().trimEnd('/'),
+        )
+        val job = Job()
+        val failure = AtomicReference<Throwable?>()
+        val finished = CountDownLatch(1)
+        CoroutineScope(Dispatchers.IO + job).launch {
+            try {
+                slowBackend.synthesize("привет", TtsGender.MALE)
+            } catch (e: Throwable) {
+                failure.set(e)
+            } finally {
+                finished.countDown()
+            }
+        }
+        assertNotNull("MockWebServer never received the request", official.takeRequest(5, TimeUnit.SECONDS))
+        val start = System.nanoTime()
+        job.cancel()
+        assertTrue("execute() stayed blocked after cancellation", finished.await(5, TimeUnit.SECONDS))
+        val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
+        assertTrue("cancellation took ${elapsedMs}ms, expected well under the 60s read timeout", elapsedMs < 5_000)
+        assertTrue("expected CancellationException, got ${failure.get()}", failure.get() is CancellationException)
+    }
+
+    @Test
+    fun `streamSampleRate is 24000 for official, unset and unknown providers, null for fal and replicate`() = runTest {
+        stubSettings(provider = "official")
+        assertEquals(24_000, backend.streamSampleRate())
+        stubSettings(provider = "something-new")
+        assertEquals(24_000, backend.streamSampleRate())
+        stubSettings(provider = "fal")
+        assertNull(backend.streamSampleRate())
+        stubSettings(provider = "replicate")
+        assertNull(backend.streamSampleRate())
+        coEvery {
+            settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_PROVIDER, any())
+        } answers { secondArg() }
+        assertEquals(24_000, backend.streamSampleRate())
     }
 }

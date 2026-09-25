@@ -1604,9 +1604,9 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
 
     companion object {
         private const val TAG = "SettingsViewModel"
-        /** Slug verified in the live OpenRouter catalog (2026-09-14); the fastest Flash of
-         *  the current line, which is what the voice path is tuned for. */
-        internal const val DEFAULT_OPENROUTER_MODEL = "google/gemini-3.8-flash"
+        /** Default for new users only (decision Andy 2026-09-25): the Lite tier, cheapest and
+         *  fastest of the current line, which is what the voice path is tuned for. */
+        internal const val DEFAULT_OPENROUTER_MODEL = "google/gemini-3.5-flash-lite"
         /** Voice sessions printed in the dump's agent section (newest first). */
         private const val AGENT_DUMP_ENTRIES = 20
         private const val AGENT_DUMP_ANSWER_CHARS = 200
@@ -1862,6 +1862,17 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 appendLine("connection: ${conn?.id ?: "(not configured)"} model=${conn?.model ?: "-"}")
             } catch (e: Exception) {
                 appendLine("(failed to gather agent connection: ${e.message})")
+            }
+            // Voice speed wave: which TTS source speaks the replies (online latency depends on it).
+            try {
+                val voicePrefs = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                val source = voicePrefs.getString("tts_source", TtsRouter.OFFLINE) ?: TtsRouter.OFFLINE
+                val minimaxProvider = settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_PROVIDER, "official")
+                val voice = voicePrefs.getString("tts_voice", TtsModelManager.DEFAULT_VOICE_ID)
+                val gender = voicePrefs.getString("agent_gender", "m")
+                appendLine("tts: source=$source minimax_provider=$minimaxProvider offline_voice=$voice gender=$gender")
+            } catch (e: Exception) {
+                appendLine("(failed to gather tts source: ${e.message})")
             }
             // Voice sessions, persisted across restarts: what ASR heard, what it became (command,
             // automation, agent) and why not, with the agent's tools and answer. The only place a

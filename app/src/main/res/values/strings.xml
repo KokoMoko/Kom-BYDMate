@@ -87,7 +87,7 @@
     <string name="settings_adb_restore_title">Восстанавливать ADB после перезагрузки</string>
     <string name="settings_adb_restore_desc">Для прошивок, где ADB выключается при каждой перезагрузке. Нужен включённый Wi-Fi.</string>
     <string name="settings_adb_restore_help_title">Как работает восстановление ADB</string>
-    <string name="settings_adb_restore_help_body">На новых прошивках DiLink (с лета 2026) порт ADB закрывается при каждой перезагрузке, и BYDMate теряет доступ к функциям управления машиной.\n\nПриложение умеет поднимать ADB заново через встроенную в Android беспроводную отладку. Для этого:\n\n1. Wi-Fi в машине должен быть включён и подключён к сети: домашней, к раздаче с телефона или любой другой. Без Wi-Fi Android не даёт включить беспроводную отладку, это ограничение системы.\n\n2. При первом включении на каждой новой сети на экране появится системный диалог «Allow wireless debugging on this network?». Отметьте «Always allow on this network» и нажмите ALLOW. Дальше на этой сети всё будет происходить без вопросов, поэтому удобно использовать одну и ту же сеть.\n\n3. Один раз, пока ADB ещё работает, приложение выдаёт себе нужное системное разрешение. Если строка состояния показывает «Нужна активация», подключите ADB обычным способом и перезапустите приложение.\n\nЕсли ADB на вашей прошивке и так работает после перезагрузки, включать не нужно: строка состояния покажет «Не требуется».</string>
+    <string name="settings_adb_restore_help_body">На новых прошивках DiLink (с лета 2026) порт ADB закрывается при каждой перезагрузке, и BYDMate теряет доступ к функциям управления машиной.\n\nПриложение умеет поднимать ADB заново через встроенную в Android беспроводную отладку. Для этого:\n\n1. Wi-Fi в машине должен быть включён и подключён к сети: домашней, к раздаче с телефона или любой другой. Без Wi-Fi Android не даёт включить беспроводную отладку, это ограничение системы.\n\n2. При первом включении на каждой новой сети на экране появится системный диалог «Allow wireless debugging on this network?». Когда восстановление включено, BYDMate подтверждает его сам через свою службу специальных возможностей. Если она выключена, отметьте «Always allow on this network» и нажмите ALLOW.\n\n3. Один раз, пока ADB ещё работает, приложение выдаёт себе нужное системное разрешение. Если строка состояния показывает «Нужна активация», подключите ADB обычным способом и перезапустите приложение.\n\nЕсли ADB на вашей прошивке и так работает после перезагрузки, включать не нужно: строка состояния покажет «Не требуется».</string>
     <string name="settings_adb_restore_status_not_needed">Не требуется: ADB уже работает</string>
     <string name="settings_adb_restore_status_needs_activation">Нужна активация: подключите ADB один раз и перезапустите приложение</string>
     <string name="settings_adb_restore_status_waiting_wifi">Ожидание Wi-Fi</string>
@@ -104,10 +104,9 @@
     <string name="adb_verdict_link_how">Как включить</string>
     <string name="adb_verdict_link_more">Подробнее</string>
     <string name="adb_dialog_not_enabled_title">ADB не включён</string>
-    <string name="adb_dialog_not_enabled_body">Управление машиной, разделение экрана, приборка и кнопка руля не работают. Данные о батарее и поездках читаются.</string>
-    <string name="adb_enable_step_1">1. Настройки DiLink → О системе → семь раз нажмите на номер сборки</string>
-    <string name="adb_enable_step_2">2. Для разработчиков → включите «Отладка по Wi-Fi»</string>
-    <string name="adb_enable_step_3">3. Вернитесь в BYDMate и нажмите «Проверить»</string>
+    <string name="adb_dialog_not_enabled_body">Без ADB не работают живые данные, управление машиной, разделение экрана, приборка и кнопка руля. История поездок доступна.</string>
+    <string name="adb_enable_step_1">1. Включите ADB по инструкции: GitHub BYDMate, раздел «Активация ADB»</string>
+    <string name="adb_enable_step_2">2. Вернитесь в BYDMate и нажмите «Проверить»</string>
     <string name="adb_dialog_off_after_reboot_title">ADB отключился после перезагрузки</string>
     <string name="adb_dialog_off_after_reboot_body">На этой прошивке ADB выключается при каждой перезагрузке. BYDMate умеет включать его сам, нужен Wi-Fi.</string>
     <string name="adb_dialog_no_access_title">Нет доступа к ADB</string>
@@ -119,10 +118,8 @@
     <string name="adb_dialog_enable_restore">Включить восстановление</string>
     <string name="adb_dialog_open_diagnostics">Открыть диагностику</string>
     <string name="welcome_adb_title">Доступ к машине через ADB</string>
-    <string name="welcome_adb_intro">Без ADB приложение только читает данные. Чтобы управлять машиной, включите отладку один раз:</string>
+    <string name="welcome_adb_intro">Без ADB приложение показывает только историю поездок. Включите ADB один раз:</string>
     <string name="welcome_adb_gives">Что даёт ADB: управление окнами и климатом, разделение экрана, приборка, кнопка руля.</string>
-    <string name="welcome_adb_no_dev_title">Если пункта «Для разработчиков» нет</string>
-    <string name="welcome_adb_no_dev_body">На части прошивок отладка включается через приложение с QR-кодом. Инструкция по кнопке справа.</string>
     <string name="welcome_adb_check_title">Проверка</string>
     <string name="welcome_adb_state_not_checked">Ещё не проверяли</string>
     <string name="welcome_adb_state_failed">ADB не включён</string>
@@ -132,8 +129,8 @@
     <string name="welcome_adb_check_again_button">Проверить ещё раз</string>
     <string name="welcome_adb_checking">Проверяем…</string>
     <string name="welcome_adb_check_hint">Проверка занимает пару секунд.</string>
-    <string name="welcome_adb_instruction_title">Инструкция</string>
-    <string name="welcome_adb_instruction_button">Открыть подробную инструкцию</string>
+    <string name="welcome_adb_instruction_title">ADB пропадает после перезагрузки?</string>
+    <string name="welcome_adb_instruction_button">Как работает восстановление</string>
     <!-- Car system section: BYD head unit settings, not app settings -->
     <string name="settings_car_system_header">Система машины</string>
     <string name="settings_car_language_title">Язык интерфейса машины</string>
@@ -297,7 +294,7 @@
 
     <!-- Settings: Autoservice status -->
     <string name="settings_autoservice_disconnected_title">не подключено</string>
-    <string name="settings_autoservice_disconnected_detail">перезапусти приложение, если ADB включён в Настройках разработчика</string>
+    <string name="settings_autoservice_disconnected_detail">перезапустите приложение, если ADB уже включён</string>
     <string name="settings_autoservice_sentinel_title">подключено, но данные не читаются</string>
     <string name="settings_autoservice_sentinel_detail">возможно функция работает только на Leopard 3</string>
     <string name="settings_autoservice_connected_title">подключено</string>
@@ -353,11 +350,6 @@
     <string name="trip_detail_cost_label">Стоимость</string>
     <string name="trip_detail_date_pattern">EEEE, d MMMM</string>
     <string name="trip_detail_close">Закрыть</string>
-    <string name="trip_detail_group_distance">Пробег</string>
-    <string name="trip_detail_group_time">Время</string>
-    <string name="trip_detail_group_energy">Энергия</string>
-    <string name="trip_detail_group_money">Деньги</string>
-    <string name="trip_detail_group_weather">Погода</string>
     <string name="trip_detail_odometer_start_label">Одометр на старте</string>
     <string name="trip_detail_odometer_end_label">Одометр на финише</string>
     <string name="trip_detail_odometer_label">Одометр</string>
@@ -1863,4 +1855,64 @@
     <string name="kom_speedo_classic">Классический</string>
     <string name="kom_speedo_digital">Цифровой + LED</string>
     <string name="kom_speedo_minimal">Минималистичное кольцо</string>
+
+    <!-- Automation step failure reasons (ActionDispatcher, window readback) -->
+    <string name="dispatch_sentry_invalid_state">Некорректное состояние охранного режима</string>
+    <string name="dispatch_sentry_failed">Не удалось переключить охранный режим</string>
+    <string name="dispatch_hotspot_invalid_state">Некорректное состояние точки доступа Wi-Fi</string>
+    <string name="dispatch_hotspot_failed">Не удалось переключить точку доступа Wi-Fi</string>
+    <string name="dispatch_cluster_invalid_state">Некорректное состояние проекции на приборку</string>
+    <string name="dispatch_cluster_daemon_restarting">служебный процесс перезапускается</string>
+    <string name="dispatch_cluster_not_on">проекция на приборку не включилась</string>
+    <string name="dispatch_cluster_not_off">проекция с приборки не убралась</string>
+    <string name="dispatch_speak_text_missing">не задан текст</string>
+    <string name="dispatch_agent_query_prompt_missing">не задан запрос</string>
+    <string name="dispatch_payload_missing">payload не задан</string>
+    <string name="dispatch_split_narrow_missing">narrow не задан</string>
+    <string name="dispatch_split_wide_missing">wide не задан</string>
+    <string name="dispatch_split_invalid_side">неверная сторона</string>
+    <string name="dispatch_split_pair_not_saved">пара для разделения экрана не сохранена</string>
+    <string name="dispatch_delay_missing">Длительность паузы не задана</string>
+    <string name="dispatch_delay_out_of_range">Длительность паузы вне диапазона (0..%1$d мс)</string>
+    <string name="dispatch_volume_missing">Уровень громкости не задан</string>
+    <string name="dispatch_audio_unavailable">AudioManager недоступен</string>
+    <string name="dispatch_volume_invalid">Некорректный уровень громкости: %1$s</string>
+    <string name="dispatch_package_missing">packageName не задан</string>
+    <string name="dispatch_app_not_installed">Приложение не установлено: %1$s</string>
+    <string name="dispatch_phone_missing">phone не задан</string>
+    <string name="dispatch_dgis_fallback">2ГИС не установлен, открыт Яндекс Навигатор</string>
+    <string name="dispatch_maps_fallback">Яндекс Карты не установлены, открыт Яндекс Навигатор</string>
+    <string name="dispatch_shortcut_unknown">неизвестный shortcut: %1$s</string>
+    <string name="dispatch_coords_missing">lat/lon не заданы</string>
+    <string name="dispatch_url_missing">url не задан</string>
+    <string name="dispatch_query_missing">query не задан</string>
+    <string name="dispatch_yandex_music_mode_unknown">Неизвестный режим Я.Музыки: %1$s</string>
+    <string name="dispatch_youtube_not_installed">Приложение YouTube не установлено</string>
+    <string name="dispatch_youtube_mode_unknown">Неизвестный режим YouTube: %1$s</string>
+    <string name="dispatch_no_handler_app">Нет приложения для обработки: %1$s</string>
+    <string name="dispatch_no_permission">Нет разрешения: %1$s</string>
+    <string name="window_pane_driver">окно водителя</string>
+    <string name="window_pane_passenger">окно пассажира</string>
+    <string name="window_pane_rear_left">заднее левое окно</string>
+    <string name="window_pane_rear_right">заднее правое окно</string>
+    <string name="window_pane_other">стекло</string>
+    <string name="window_stuck_one">%1$s не сдвинулось с места, команда не сработала</string>
+    <string name="window_stuck_many">не сдвинулись с места: %1$s</string>
+    <string name="dispatch_navigate_split_not_restored">сплит не восстановлен: %1$s</string>
+    <string name="dispatch_navigate_split_restored">%1$s, сплит восстановлен</string>
+    <string name="dispatch_navigate_route_built">маршрут построен, сплит восстановлен</string>
+    <string name="dispatch_navigate_a11y_off">не удалось проверить маршрут: служба специальных возможностей выключена</string>
+    <string name="dispatch_navigate_stale_route">на экране уже был маршрут, новый не отличить: нажмите Поехали сами</string>
+    <string name="dispatch_navigate_go_not_found">кнопка Поехали не найдена за %1$d с</string>
+    <string name="dispatch_navigate_go_click_failed">не получилось нажать Поехали</string>
+    <string name="dispatch_navigate_go_no_guidance">нажал Поехали, но ведение не началось</string>
+    <string name="dispatch_voice_assistant_off">голосовой помощник выключен в настройках</string>
+    <string name="dispatch_voice_tts_off">озвучка ответов выключена в настройках</string>
+    <string name="dispatch_voice_session_active">идёт голосовая сессия, действие пропущено</string>
+    <string name="dispatch_voice_busy">другое голосовое действие ещё выполняется</string>
+    <string name="dispatch_voice_speak_timeout">озвучка прервана по таймауту</string>
+    <string name="dispatch_voice_speak_failed">озвучка не запустилась</string>
+    <string name="dispatch_agent_query_cooldown">запрос агенту не чаще раза в %1$d секунд</string>
+    <string name="dispatch_agent_timeout">агент не ответил вовремя</string>
+    <string name="dispatch_agent_off">агент выключен в настройках</string>
 </resources>

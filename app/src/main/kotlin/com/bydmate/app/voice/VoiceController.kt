@@ -257,6 +257,10 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         // idempotent (volume already at the duck target returns null), so the inner call becomes
         // a no-op and this early saved volume is the one restored at session teardown.
         val earlyDuck = runCatching { audioCapture.duckMusic() }.getOrNull()
+        // Warm the model and online-voice connections while the driver is still speaking: a cold
+        // turn otherwise pays DNS + TLS on both hosts inside the reply latency.
+        runCatching { if (gate.ttsEnabled()) ttsEngine.prewarmNetwork() }
+        scope.launch { runCatching { agentOrchestrator.prewarm() } }
         sessionJob = scope.launch {
             val session = coroutineContext[Job]
             runCatching { showListeningOverlay(appStrings.get(R.string.voice_listening)) }
@@ -699,6 +703,11 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         val queue = if (gate.ttsEnabled()) runCatching { ttsEngine.startQueue() }.getOrNull() else null
         val streamed = StringBuilder()
         var queuedAny = false
+        // Whether the filler alone reached the TTS queue. Audible, but not an answer sentence:
+        // must not suppress the earcon+legacy-speak fallback below (queuedAny gates that), or the
+        // driver hears only the filler when the real answer fails to enqueue. Still counts toward
+        // "something was said aloud" for the dialog dwell timer (didSpeak below).
+        var fillerQueued = false
         var r: AgentResult? = null
         coroutineScope {
             // LAZY so the body cannot run before askJob is assigned: the callback below gates
@@ -707,7 +716,23 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             // which would un-mute late callbacks from this already-hard-stopped turn.
             lateinit var askJob: Job
             askJob = launch(start = CoroutineStart.LAZY) {
-                r = agentOrchestrator.ask(transcript) { sentence ->
+                r = agentOrchestrator.ask(
+                    transcript,
+                    // The filler is speech only: queued for TTS, never shown in the orb's answer
+                    // row. With TTS off (no queue) there is no filler at all.
+                    onFiller = queue?.let { q ->
+                        { phrase ->
+                            // Same hard stop gate as the sentence callback below.
+                            if (!stopRequested.get() && !askJob.isCancelled &&
+                                runCatching { q.enqueue(phrase) }.getOrDefault(false)
+                            ) {
+                                echoFilter.noteSpoken(phrase)
+                                fillerQueued = true
+                                lastSpeakingSeenMs = System.currentTimeMillis()
+                            }
+                        }
+                    },
+                ) { sentence ->
                     // Hard stop gate: the SSE loop can emit one more sentence between the ask
                     // job's cancellation and its next suspension point; this callback is
                     // non-suspend, so it must check for itself (the TTS queue is already
@@ -769,7 +794,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
                     detail = withDecodeMs(result.text + toolsNote, decodeMs), outcome = VoiceJournalEntry.Outcome.OK,
                     tools = result.tools, answer = result.text, refusal = why, asrMs = decodeMs),
                     "Agent answered: transcript=\"$transcript\" tools=${result.tools.size}")
-                var didSpeak = queuedAny
+                var didSpeak = queuedAny || fillerQueued
                 if (!queuedAny && gate.ttsEnabled()) {
                     // See announce() for why this is stamped at call time, not only per-frame,
                     // and only when speak() actually enqueued playback.

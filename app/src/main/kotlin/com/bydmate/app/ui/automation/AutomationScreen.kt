@@ -17,6 +17,30 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.gestures.ScrollableState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.unit.toOffset
+import androidx.compose.ui.unit.toSize
+import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
@@ -215,7 +239,8 @@ fun AutomationScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        // Rule list: compact rows or a 3-column grid of cards, chosen in the header.
+        // Rule list: compact rows or a 3-column grid of cards, chosen in the header. A long press
+        // lifts a rule, dragging moves it, letting go saves the new order.
         val actionsFor: @Composable (RuleEntity) -> List<RuleAction> = { rule ->
             ruleActions(
                 onEdit = { viewModel.openEditRule(rule) },
@@ -235,17 +260,21 @@ fun AutomationScreen(
                     labeledActionsWidth = (ROW_BUTTON_CHROME + labelWidth) * 4 + ROW_ACTION_SPACING * 3,
                     minTextWidth = with(LocalDensity.current) { MIN_ROW_TEXT.toDp() },
                 )
+                val listState = rememberLazyListState()
+                val drag = rememberRuleDrag(remember(listState) { ListCells(listState) }, filtered, viewModel::moveRule)
                 LazyColumn(
+                    state = listState,
                     verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize().ruleDrag(drag)
                 ) {
-                    items(filtered, key = { it.id }) { rule ->
+                    items(drag.shown(filtered), key = { it.id }) { rule ->
                         RuleListRow(
                             rule = rule,
                             actions = actionsFor(rule),
                             mode = mode,
                             onToggle = { viewModel.toggleEnabled(rule) },
                             onClick = { viewModel.openEditRule(rule) },
+                            modifier = Modifier.liftedWhen(drag, rule.id),
                         )
                     }
                 }
@@ -256,19 +285,23 @@ fun AutomationScreen(
                 val columns = gridColumns(maxWidth)
                 val labelWidth = maxLabelWidth(ruleActions({}, {}, {}, true, {}).map { it.label }, FOOT_LABEL_STYLE)
                 val showLabels = labelWidth <= footCellWidth(maxWidth, columns) - FOOT_CELL_PADDING * 2
+                val gridState = rememberLazyGridState()
+                val drag = rememberRuleDrag(remember(gridState) { GridCells(gridState) }, filtered, viewModel::moveRule)
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
+                    state = gridState,
                     horizontalArrangement = Arrangement.spacedBy(GRID_SPACING),
                     verticalArrangement = Arrangement.spacedBy(GRID_SPACING),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize().ruleDrag(drag)
                 ) {
-                    items(filtered, key = { it.id }) { rule ->
+                    items(drag.shown(filtered), key = { it.id }) { rule ->
                         RuleGridCard(
                             rule = rule,
                             actions = actionsFor(rule),
                             showLabels = showLabels,
                             onToggle = { viewModel.toggleEnabled(rule) },
                             onClick = { viewModel.openEditRule(rule) },
+                            modifier = Modifier.liftedWhen(drag, rule.id),
                         )
                     }
                 }
@@ -373,6 +406,7 @@ fun AutomationScreen(
 // --- Rule list: rows and cards ---
 
 private val FOOT_CELL_PADDING = 4.dp
+private val RULE_CARD_SHAPE = RoundedCornerShape(12.dp)
 private val FOOT_LABEL_STYLE = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
 private val ROW_LABEL_STYLE = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
 /** Labeled list button without its label: 12 + 14 padding, 24 icon, 8 gap. */
@@ -477,16 +511,17 @@ private fun RuleSwitch(enabled: Boolean, onToggle: () -> Unit) {
 private fun RuleContainer(
     rule: RuleEntity,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable { onClick() },
         colors = CardDefaults.cardColors(
             containerColor = if (rule.enabled) CardSurface else CardSurface.copy(alpha = 0.55f)
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = RULE_CARD_SHAPE,
         border = androidx.compose.foundation.BorderStroke(
             1.5.dp,
             if (rule.enabled) AccentGreen.copy(alpha = 0.25f) else CardBorder
@@ -506,9 +541,10 @@ private fun RuleListRow(
     mode: ListActionMode,
     onToggle: () -> Unit,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val padding = Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)
-    RuleContainer(rule, onClick) {
+    RuleContainer(rule, onClick, modifier) {
         when (mode) {
             ListActionMode.LABELED, ListActionMode.ICONS -> Row(
                 modifier = padding,
@@ -666,8 +702,9 @@ private fun RuleGridCard(
     showLabels: Boolean,
     onToggle: () -> Unit,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    RuleContainer(rule, onClick) {
+    RuleContainer(rule, onClick, modifier) {
         Column(
             modifier = Modifier.padding(start = 14.dp, end = 4.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -821,6 +858,307 @@ private fun androidx.compose.ui.text.AnnotatedString.Builder.appendTriggerSummar
         }
     }
 }
+
+// --- Drag to reorder (#249) ---
+
+/** How much a held rule grows, so the driver sees which one they picked up (as on «Техника»). */
+private const val LIFT_SCALE = 1.03f
+
+/**
+ * The band along the top and bottom edge of the list: a held rule dragged into it scrolls the
+ * list, faster the deeper it goes, at full speed once it reaches the edge.
+ */
+private val AUTO_SCROLL_EDGE = 64.dp
+
+/** Full auto-scroll speed, per frame. */
+private val AUTO_SCROLL_STEP = 16.dp
+
+/** A rule on screen: its id, its index in the list as last laid out, and its bounds, px. */
+internal class RuleCell(val id: Long, val index: Int, val rect: Rect)
+
+/** What the drag needs of the LazyColumn or the LazyVerticalGrid it runs in. */
+internal interface RuleCells {
+    val scroll: ScrollableState
+    /** List rows only move up and down; grid cards follow the finger both ways. */
+    val vertical: Boolean
+    val viewportHeight: Int
+    fun visible(): List<RuleCell>
+    /**
+     * Keeps the first row on screen where it is across the next re-order: a lazy layout holds
+     * on to its first item's key, so it would scroll along with a rule moved off the top.
+     */
+    fun pin()
+}
+
+private class ListCells(private val state: LazyListState) : RuleCells {
+    override val scroll: ScrollableState get() = state
+    override val vertical = true
+    override val viewportHeight: Int get() = state.layoutInfo.viewportSize.height
+    // Read afresh on every call: a small scroll moves the items of the same layout info object
+    // in place, so anything cached by that object would hand back stale offsets.
+    override fun visible(): List<RuleCell> {
+        val info = state.layoutInfo
+        val width = info.viewportSize.width.toFloat()
+        return info.visibleItemsInfo.mapNotNull { item ->
+            (item.key as? Long)?.let { RuleCell(it, item.index, Rect(0f, item.offset.toFloat(), width, (item.offset + item.size).toFloat())) }
+        }
+    }
+    override fun pin() = state.requestScrollToItem(state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset)
+}
+
+private class GridCells(private val state: LazyGridState) : RuleCells {
+    override val scroll: ScrollableState get() = state
+    override val vertical = false
+    override val viewportHeight: Int get() = state.layoutInfo.viewportSize.height
+    override fun visible(): List<RuleCell> = state.layoutInfo.visibleItemsInfo.mapNotNull { item ->
+        (item.key as? Long)?.let { RuleCell(it, item.index, Rect(item.offset.toOffset(), item.size.toSize())) }
+    }
+    override fun pin() = state.requestScrollToItem(state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset)
+}
+
+/**
+ * A rule held and dragged in the list or the grid. The lifted card follows the finger; once its
+ * centre is over another rule it takes that rule's place in [order] and the layout re-flows
+ * under it. Nothing is saved while the finger is down: the release reports one move, from where
+ * the rule was lifted to where it was let go. A cancelled gesture, or a filter switched or a rule
+ * added or deleted under the finger, lets go without a move: see [finish].
+ */
+@Stable
+internal class RuleDragState(
+    private val cells: RuleCells,
+    private val rules: State<List<RuleEntity>>,
+    private val onDrop: State<(moved: Long, target: Long) -> Unit>,
+) {
+    /** The held rule; null when none is. */
+    var held by mutableStateOf<Long?>(null)
+        private set
+    /** Rule ids as on screen from the lift on. */
+    private var order by mutableStateOf(emptyList<Long>())
+    private var start = emptyList<Long>()
+    /** The rules the drag started from: the list keeps the drag's order until new ones arrive. */
+    private var liftedFrom: List<RuleEntity>? = null
+    /** The rules [frame] last checked against the drag's order. */
+    private var checkedRules: List<RuleEntity>? = null
+    private var startRect = Rect.Zero
+    private var dragged by mutableStateOf(Offset.Zero)
+    /** Whether the finger has moved the card up, and down, since the lift: see [edgeScroll]. */
+    private var movedUp = false
+    private var movedDown = false
+
+    /** Where the finger has the held card, in the list. */
+    private val liftedRect get() = startRect.translate(dragged)
+
+    /**
+     * What the list shows: the drag's own order while a rule is held, and after the drop until
+     * the view model's re-ordered list comes back, so the list does not flash the old order.
+     */
+    fun shown(rules: List<RuleEntity>): List<RuleEntity> {
+        if (held == null && rules !== liftedFrom) return rules
+        val byId = rules.associateBy { it.id }
+        return order.mapNotNull { byId[it] }
+    }
+
+    /** Lifts the rule under [at]; false when there is none. */
+    fun lift(at: Offset): Boolean {
+        val cell = cells.visible().firstOrNull { it.rect.contains(at) } ?: return false
+        start = shown(rules.value).map { it.id }
+        liftedFrom = rules.value
+        checkedRules = rules.value
+        order = start
+        startRect = cell.rect
+        dragged = Offset.Zero
+        movedUp = false
+        movedDown = false
+        held = cell.id
+        return true
+    }
+
+    fun dragBy(amount: Offset) {
+        dragged += if (cells.vertical) Offset(0f, amount.y) else amount
+        if (amount.y < 0f) movedUp = true
+        if (amount.y > 0f) movedDown = true
+    }
+
+    /**
+     * One frame while a rule is held: scrolls while the card is in an edge band and moves the held
+     * rule to where the card is now. Every frame, not only on a drag or a scroll, so a move the
+     * layout had not caught up with yet is taken on the next one. Rules shown changing under the
+     * finger let go without a move: the drag's order no longer matches what the list shows.
+     */
+    suspend fun frame(edge: Float, maxStep: Float) {
+        if (held == null) return
+        val now = rules.value
+        if (now !== checkedRules) {
+            checkedRules = now
+            if (!sameRules(order, now)) {
+                finish(commit = false)
+                return
+            }
+        }
+        val speed = edgeScroll(liftedRect, cells.viewportHeight, edge, movedUp, movedDown)
+        if (speed != 0f) cells.scroll.scrollBy(speed * maxStep)
+        follow()
+    }
+
+    /** How far the held card is drawn from its place in the layout: to where the finger has it. */
+    fun liftOffset(): Offset {
+        val slot = cells.visible().firstOrNull { it.id == held } ?: return Offset.Zero
+        return liftedRect.topLeft - slot.rect.topLeft
+    }
+
+    /**
+     * Ends the hold, every way it ends. A finger lifted ([commit]) takes the card's last position
+     * and moves a rule that ended up elsewhere into the place of the rule that was there, once,
+     * while the rules shown are still the ones held over. A cancelled gesture or changed rules
+     * save nothing, and the card drops back into the list's own order.
+     */
+    fun finish(commit: Boolean) {
+        val id = held ?: return
+        val save = commit && sameRules(order, rules.value)
+        // The finger can cross onto the next rule and lift before a frame has taken the move.
+        if (save) follow()
+        held = null
+        if (!save) {
+            liftedFrom = null
+            return
+        }
+        val target = start.getOrNull(order.indexOf(id))
+        if (target != null && target != id) onDrop.value(id, target)
+    }
+
+    /** Moves the held rule into the place of the rule [dragTarget] picks for the lifted card. */
+    private fun follow() {
+        val id = held ?: return
+        val target = dragTarget(cells.visible(), order, id, liftedRect) ?: return
+        cells.pin()
+        order = RuleOrder.move(order, id, target)
+    }
+}
+
+/**
+ * The rule whose place the held one takes, with the lifted [card] where the finger has it: the
+ * rule under the card's centre; the first or the last on screen when the centre is past them; the
+ * nearest one when the held rule's own place has scrolled off screen, which brings it back under
+ * the finger. Null keeps the held rule where it is.
+ */
+internal fun dragTarget(visible: List<RuleCell>, order: List<Long>, held: Long, card: Rect): Long? {
+    // The layout has not caught up with the last move yet: its bounds would undo that move.
+    if (visible.any { order.getOrNull(it.index) != it.id }) return null
+    val centre = card.center
+    val slot = visible.firstOrNull { it.id == held }
+    val target = visible.firstOrNull { it.rect.contains(centre) }
+        ?: pastEdge(visible, centre)
+        ?: (if (slot == null) visible.minByOrNull { it.rect.distanceSquaredTo(centre) } else null)
+        ?: return null
+    if (target.id == held) return null
+    // Off screen, the held rule has no place on screen to swap straight back into.
+    if (slot == null) return target.id
+    // Rows differ in height: the centre has to reach the place the held rule is about to take,
+    // or a taller neighbour would still hold it after the move and swap the two straight back.
+    val reached = if (target.index > slot.index) {
+        centre.y >= target.rect.bottom - slot.rect.height
+    } else {
+        centre.y <= target.rect.top + slot.rect.height
+    }
+    return if (reached) target.id else null
+}
+
+/** Whether [rules] are the ones [order] holds, in any order: the same rules, not a filter's subset. */
+internal fun sameRules(order: List<Long>, rules: List<RuleEntity>): Boolean =
+    rules.mapTo(HashSet()) { it.id } == order.toSet()
+
+/**
+ * The first rule on screen when [centre] is before it: above it, or left of it on its row; the
+ * last when after it: below it, or right of it on its row, as over the grid's empty last cells.
+ */
+private fun pastEdge(visible: List<RuleCell>, centre: Offset): RuleCell? {
+    val first = visible.minByOrNull { it.index } ?: return null
+    val last = visible.maxBy { it.index }
+    return when {
+        centre.y >= last.rect.bottom || centre.y >= last.rect.top && centre.x >= last.rect.right -> last
+        centre.y < first.rect.top || centre.y < first.rect.bottom && centre.x < first.rect.left -> first
+        else -> null
+    }
+}
+
+private fun Rect.distanceSquaredTo(point: Offset): Float {
+    val dx = maxOf(left - point.x, 0f, point.x - right)
+    val dy = maxOf(top - point.y, 0f, point.y - bottom)
+    return dx * dx + dy * dy
+}
+
+/**
+ * How fast the held [card] scrolls the list this frame, from -1 (full speed up) to 1 (full speed
+ * down): in the [edge] band along the top or the bottom of the viewport, the deeper the faster.
+ * A band counts once the finger has moved the card towards its edge ([movedUp], [movedDown]), so
+ * a rule lifted inside one does not set the list moving by itself. A card in both bands at once,
+ * taller than the list, goes by its centre: up above the middle, down below it, still in between.
+ */
+internal fun edgeScroll(card: Rect, viewportHeight: Int, edge: Float, movedUp: Boolean, movedDown: Boolean): Float {
+    val up = if (movedUp) (card.top - edge).coerceAtMost(0f) else 0f
+    val down = if (movedDown) (card.bottom - (viewportHeight - edge)).coerceAtLeast(0f) else 0f
+    return ((up + down) / edge).coerceIn(-1f, 1f)
+}
+
+/** The drag of one list or grid; while a rule is held, runs its [RuleDragState.frame] every frame. */
+@Composable
+private fun rememberRuleDrag(cells: RuleCells, rules: List<RuleEntity>, onDrop: (Long, Long) -> Unit): RuleDragState {
+    val latestRules = rememberUpdatedState(rules)
+    val latestOnDrop = rememberUpdatedState(onDrop)
+    val drag = remember(cells) { RuleDragState(cells, latestRules, latestOnDrop) }
+    val holding = drag.held != null
+    val density = LocalDensity.current
+    LaunchedEffect(drag, holding) {
+        if (!holding) return@LaunchedEffect
+        val edge = with(density) { AUTO_SCROLL_EDGE.toPx() }
+        val step = with(density) { AUTO_SCROLL_STEP.toPx() }
+        while (drag.held != null) {
+            withFrameNanos { }
+            drag.frame(edge, step)
+        }
+    }
+    return drag
+}
+
+/**
+ * Long press lifts the rule under the finger, dragging moves it, letting go drops it. Taps and
+ * scrolling reach the cards and the list as before: a scroll that starts first cancels the press.
+ * Only a finger lifted saves the move: a gesture cancelled by the system, or by the list leaving
+ * the screen (a switch to the grid, another tab), drops the card back.
+ */
+private fun Modifier.ruleDrag(drag: RuleDragState): Modifier = pointerInput(drag) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val press = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+        if (!drag.lift(press.position)) return@awaitEachGesture
+        var released = false
+        try {
+            // Held, the gesture is the drag's alone: every change is consumed on the Initial pass,
+            // before the card, its switch and buttons see it, so letting go is never also a tap.
+            do {
+                val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == press.id }
+                if (change != null && change.pressed) drag.dragBy(change.positionChange())
+                // A system cancel arrives as an up already consumed; a finger lifted does not.
+                released = change?.changedToUp() == true
+                change?.consume()
+            } while (change?.pressed == true)
+        } finally {
+            drag.finish(commit = released)
+        }
+    }
+}
+
+/** The held rule: drawn above the rest, a little larger and with a shadow, under the finger. */
+private fun Modifier.liftedWhen(drag: RuleDragState, id: Long): Modifier =
+    if (drag.held != id) this else zIndex(1f).graphicsLayer {
+        val offset = drag.liftOffset()
+        translationX = offset.x
+        translationY = offset.y
+        scaleX = LIFT_SCALE
+        scaleY = LIFT_SCALE
+        shadowElevation = 16.dp.toPx()
+        shape = RULE_CARD_SHAPE
+    }
 
 // --- Editor Dialog ---
 

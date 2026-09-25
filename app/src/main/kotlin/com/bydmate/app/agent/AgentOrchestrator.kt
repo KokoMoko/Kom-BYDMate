@@ -23,6 +23,7 @@ import javax.inject.Singleton
  * via Mutex — concurrent PTT + chat asks serialize, history stays consistent.
  */
 @Singleton
+@Suppress("TooManyFunctions") // the turn loop plus its small prompt/history helpers
 class AgentOrchestrator @Inject constructor(
     private val backend: AgentBackend,
     private val tools: AgentTools,
@@ -44,7 +45,18 @@ class AgentOrchestrator @Inject constructor(
     private val history = mutableListOf<AgentMessage>()
     private var lastAnswerAt = 0L
 
-    suspend fun ask(userText: String, onSentence: ((String) -> Unit)? = null): AgentResult {
+    /** Warms the model host on push-to-talk, before the utterance is even recognized. */
+    suspend fun prewarm() {
+        if (settingsRepository.isAgentEnabled()) backend.prewarm()
+    }
+
+    /** [onFiller] gets the speech-only filler phrase (see runLoopTraced); it sits before
+     *  [onSentence] so a trailing lambda keeps meaning the streamed answer sentences. */
+    suspend fun ask(
+        userText: String,
+        onFiller: ((String) -> Unit)? = null,
+        onSentence: ((String) -> Unit)? = null,
+    ): AgentResult {
         mutex.withLock {
             if (!settingsRepository.isAgentEnabled()) {
                 // Close the follow-up window: a disabled/unconfigured agent must not swallow NLU traffic.
@@ -67,7 +79,7 @@ class AgentOrchestrator @Inject constructor(
                 trimHistory()
                 val result = runLoop(
                     history, systemMessages(), tools.schemas(),
-                    allowAutomationTools = true, onSentence,
+                    allowAutomationTools = true, onSentence, onFiller,
                     onTerminal = { lastAnswerAt = nowMs() },
                 )
                 // Only finished exchanges are worth keeping: an error or a disabled agent is
@@ -135,7 +147,7 @@ class AgentOrchestrator @Inject constructor(
             if (text.isEmpty()) return AgentResult.Disabled
             val messages = mutableListOf<AgentMessage>(AgentMessage.User(text))
             return runLoop(messages, systemMessages(includeMemory = false), tools.schemas(includeAutomationTools = false),
-                allowAutomationTools = false, onSentence = null, onTerminal = {})
+                allowAutomationTools = false, onSentence = null, onFiller = null, onTerminal = {})
         } finally {
             mutex.unlock()
         }
@@ -144,7 +156,8 @@ class AgentOrchestrator @Inject constructor(
     /**
      * Two system messages, and the split is the point: the first is [SYSTEM_PROMPT] and
      * nothing else, byte-identical on every turn of every day, so the provider can cache it
-     * (the backend puts the cache breakpoint on exactly this message). Everything that moves
+     * (the backend puts the cache breakpoint on exactly this message, where a breakpoint pays:
+     * see LlmAgentBackend.cachesStaticPrefix). Everything that moves
      * — today's date, the persona, the driver facts — goes into the second one, after the
      * breakpoint. Per-turn state (driving or not) rides on the user message instead (see
      * [MOVING_TAG]). A detached turn (automation rule, not the driver) carries no memory —
@@ -161,12 +174,14 @@ class AgentOrchestrator @Inject constructor(
     /** The LLM/tool loop shared by [ask] (live, persistent history) and [askDetached]
      *  (automation origin, throwaway messages). [onTerminal] fires exactly where the live
      *  path used to stamp lastAnswerAt. Caller must hold [mutex]. */
+    @Suppress("LongParameterList") // the loop's inputs and callbacks, passed straight through
     private suspend fun runLoop(
         messages: MutableList<AgentMessage>,
         systemMessages: List<AgentMessage>,
         toolSchemas: JSONArray,
         allowAutomationTools: Boolean,
         onSentence: ((String) -> Unit)?,
+        onFiller: ((String) -> Unit)?,
         onTerminal: () -> Unit,
     ): AgentResult {
         val startedAt = nowMs()
@@ -175,7 +190,7 @@ class AgentOrchestrator @Inject constructor(
         var outcome = "cancelled"
         try {
             val result = runLoopTraced(
-                messages, systemMessages, toolSchemas, allowAutomationTools, onSentence, onTerminal,
+                messages, systemMessages, toolSchemas, allowAutomationTools, onSentence, onFiller, onTerminal,
                 rounds, tracer,
             )
             outcome = when (result) {
@@ -198,13 +213,14 @@ class AgentOrchestrator @Inject constructor(
     }
 
     /** The loop itself; [rounds] carries the LLM round count out to the tracing wrapper. */
-    @Suppress("LongParameterList")
+    @Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
     private suspend fun runLoopTraced(
         messages: MutableList<AgentMessage>,
         systemMessages: List<AgentMessage>,
         toolSchemas: JSONArray,
         allowAutomationTools: Boolean,
         onSentence: ((String) -> Unit)?,
+        onFiller: ((String) -> Unit)?,
         onTerminal: () -> Unit,
         rounds: IntArray,
         tracer: AgentTrace,
@@ -212,15 +228,21 @@ class AgentOrchestrator @Inject constructor(
         val outcomes = mutableListOf<AgentToolOutcome>()
         val callCounts = mutableMapOf<String, Int>()
         var loopStrikes = 0
+        // True once a sentence — the model's own streamed text via onSentence, or the filler
+        // below via onFiller — has been handed out this turn; gates the filler so it never
+        // doubles up on live speech and never fires twice. Lives outside the round loop: it
+        // spans the whole turn.
+        var spoken = false
+        val speak: ((String) -> Unit)? = onSentence?.let { cb -> { s: String -> spoken = true; cb(s) } }
         repeat(MAX_ITERATIONS) {
             // Fresh chunker per LLM turn: a tool round's unterminated tail is discarded when
             // the chunker falls out of scope at the end of this iteration (only completed
             // sentences were forwarded); the final turn flushes its tail below.
-            val chunker = if (onSentence != null) SentenceChunker() else null
+            val chunker = if (speak != null) SentenceChunker() else null
             rounds[0]++
             tracer.roundStarted()
-            val onDelta: ((String) -> Unit)? = if (onSentence != null && chunker != null) {
-                { d -> tracer.delta(); chunker.feed(d).forEach(onSentence) }
+            val onDelta: ((String) -> Unit)? = if (speak != null && chunker != null) {
+                { d -> tracer.delta(); chunker.feed(d).forEach(speak) }
             } else null
             val reply = backend
                 .chat(systemMessages + messages, toolSchemas, onDelta)
@@ -233,12 +255,24 @@ class AgentOrchestrator @Inject constructor(
             if (reply.toolCalls.isEmpty()) {
                 val answer = finalAnswer(reply)
                 if (answer.isEmpty()) return AgentResult.Error("Пустой ответ модели")
-                if (onSentence != null) chunker?.flush()?.let(onSentence)
+                if (speak != null) chunker?.flush()?.let(speak)
                 messages += AgentMessage.Assistant(answer)
                 onTerminal()
                 return AgentResult.Answer(answer, outcomes.toList())
             }
             messages += AgentMessage.Assistant(reply.content, reply.toolCalls)
+            // Filler: this round is about to run a slow tool (search, weather, chargers, trip/
+            // charge stats, range, navigation) and nothing has been spoken yet this turn — speak
+            // a short persona phrase now, ahead of the tool result. Speech only: its own callback
+            // (never the answer text stream), never added to messages/history and never part of
+            // the returned answer.
+            val slowCall = reply.toolCalls.firstOrNull { it.name in SLOW_TOOLS }
+            if (onFiller != null && !spoken && slowCall != null) {
+                val phrase = identity().persona.fillerPhrase()
+                tracer.filler(phrase, slowCall.name)
+                spoken = true
+                onFiller(phrase)
+            }
             for ((i, call) in reply.toolCalls.withIndex()) {
                 val key = call.name + "|" + call.arguments
                 val seen = callCounts.getOrDefault(key, 0)
@@ -314,6 +348,13 @@ class AgentOrchestrator @Inject constructor(
         private const val MAX_HISTORY = 20
         private const val MAX_IDENTICAL_CALLS = 2
         private const val MAX_LOOP_STRIKES = 2
+
+        /** Tool calls slow enough (network round-trip) that a filler phrase ahead of the result
+         *  is worth speaking; fast, local calls (vehicle_control etc.) never get one. */
+        private val SLOW_TOOLS = setOf(
+            "web_search", "get_weather", "find_chargers", "query_trips", "query_charges",
+            "range_to_destination", "navigate_to",
+        )
 
         /** Provider stop reason meaning the answer hit max_tokens, plus the mark that makes
          *  such a cut visible in the pill and in the journal. */

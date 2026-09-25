@@ -1,9 +1,11 @@
 package com.bydmate.app.voice
 
 import kotlinx.coroutines.flow.StateFlow
+import java.util.concurrent.BlockingQueue
 
 /** Offline text-to-speech. Implementations must be safe to call from any
  *  thread; speak() is fire-and-forget and must never throw. */
+@Suppress("TooManyFunctions") // one engine contract: speech, PCM playback, lifecycle hooks
 interface TtsEngine {
     /** True when a voice model is downloaded and usable. */
     fun isReady(): Boolean
@@ -29,6 +31,10 @@ interface TtsEngine {
      *  the model load; no-op when not ready or already created. */
     fun warmUp() {}
 
+    /** Opens the network connection to an online voice ahead of the reply (push-to-talk);
+     *  no-op for engines that synthesize locally. */
+    fun prewarmNetwork() {}
+
     /** True from the moment an utterance actually starts playing until its audio has fully
      *  drained from the output device (or stop() cuts it short). The continuous voice
      *  session mutes its mic off this real signal instead of guessing speech duration. */
@@ -45,6 +51,12 @@ interface TtsEngine {
     /** Plays raw mono PCM float samples through the same track/mute machinery as speak().
      *  Returns false when not ready / superseded. */
     fun playPcm(samples: FloatArray, sampleRate: Int): Boolean = false
+
+    /** Streaming twin of [playPcm]: plays mono PCM chunks taken from [chunks] as they arrive; an
+     *  EMPTY array marks the end of the stream. Blocks the caller until everything was written.
+     *  True = real sound or a barge-in (superseded); false = nothing playable, a dead route or a
+     *  stalled stream. */
+    fun playPcmStream(chunks: BlockingQueue<FloatArray>, sampleRate: Int): Boolean = false
 
     /** A speech queue for streamed replies: sentences enqueued one by one play back-to-back
      *  on the same audio track, and [speaking] stays true from the first played sample until

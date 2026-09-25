@@ -2,25 +2,44 @@ package com.bydmate.app.voice.online
 
 import com.bydmate.app.voice.TtsEngine
 import com.bydmate.app.voice.TtsGender
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
+import java.io.IOException
+import java.util.Collections
+import java.util.concurrent.BlockingQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class TtsRouterTest {
 
     /** Records every call so tests can assert on what the router delegated. */
     private class FakeTtsEngine(private val ready: Boolean = true) : TtsEngine {
         val speakCalls = mutableListOf<String>()
-        val playPcmCalls = mutableListOf<Pair<FloatArray, Int>>()
+        val playPcmCalls: MutableList<Pair<FloatArray, Int>> = Collections.synchronizedList(mutableListOf())
+        val playStreamCalls: MutableList<Pair<List<Float>, Int>> = Collections.synchronizedList(mutableListOf())
         val queueEnqueued = mutableListOf<String>()
         var queueFinished = false
         var stopCalls = 0
         var warmUpCalls = 0
         var playPcmResult = true
+        /** Released once playPcmStream has taken its first chunk: the player is really playing. */
+        val streamChunkTaken = CountDownLatch(1)
 
         override fun isReady() = ready
         override fun speak(text: String): Boolean {
@@ -33,6 +52,18 @@ class TtsRouterTest {
         override fun playPcm(samples: FloatArray, sampleRate: Int): Boolean {
             playPcmCalls += samples to sampleRate
             return playPcmResult
+        }
+        // Takes chunks until the end marker (or a 5 s gap), like the engine's pump.
+        override fun playPcmStream(chunks: BlockingQueue<FloatArray>, sampleRate: Int): Boolean {
+            val got = mutableListOf<Float>()
+            var chunk = chunks.poll(5, TimeUnit.SECONDS)
+            while (chunk != null && chunk.isNotEmpty()) {
+                got += chunk.toList()
+                streamChunkTaken.countDown()
+                chunk = chunks.poll(5, TimeUnit.SECONDS)
+            }
+            playStreamCalls += got to sampleRate
+            return true
         }
         override fun startQueue(): TtsEngine.SpeechQueue = object : TtsEngine.SpeechQueue {
             override fun enqueue(text: String): Boolean { queueEnqueued += text; return true }
@@ -67,6 +98,18 @@ class TtsRouterTest {
         override suspend fun configured(): Boolean = true
     }
 
+    /** Counts synth and prewarm calls; synthesis always succeeds. */
+    private class CountingBackend(override val id: String = "minimax") : OnlineTtsBackend {
+        val synthesized = java.util.Collections.synchronizedList(mutableListOf<Pair<String, TtsGender>>())
+        @Volatile var prewarmCalls = 0
+        override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm {
+            synthesized += text to gender
+            return TtsPcm(floatArrayOf(0.1f, 0.2f), 24_000)
+        }
+        override suspend fun configured(): Boolean = true
+        override suspend fun prewarm() { prewarmCalls++ }
+    }
+
     /** Polls [condition] on a real clock -- the router dispatches online work onto a real
      *  background dispatcher (Dispatchers.IO by default), so tests wait for it the same way
      *  SherpaTtsEngineTest waits for its own worker thread, instead of a virtual-time TestScope
@@ -80,6 +123,14 @@ class TtsRouterTest {
             Thread.sleep(pollMs)
         }
     }
+
+    /** Joins everything the router launched on [scope] -- proof the work finished, so negative
+     *  assertions after it cannot miss a late action. */
+    private fun awaitIdle(scope: CoroutineScope) = runBlocking {
+        withTimeout(5_000) { scope.coroutineContext.job.children.toList().joinAll() }
+    }
+
+    private fun testScope() = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // --- speak(): offline source delegates straight through ---
 
@@ -357,6 +408,87 @@ class TtsRouterTest {
         assertEquals(1, delegate.warmUpCalls)
     }
 
+    // --- short-phrase cache (voice speed wave 1b) ---
+
+    @Test
+    fun `short phrase is synthesized once and replayed from the cache`() {
+        val backend = CountingBackend()
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" })
+        router.speak("Готово.")
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        router.speak("Готово.")
+        awaitTrue { delegate.playPcmCalls.size == 2 }
+        assertEquals(2, delegate.playPcmCalls.size)
+        assertEquals(1, backend.synthesized.size)
+    }
+
+    @Test
+    fun `long reply is never cached`() {
+        val backend = CountingBackend()
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" })
+        val reply = "Заряд восемьдесят процентов, запаса хватит на триста километров."
+        router.speak(reply)
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        router.speak(reply)
+        awaitTrue { delegate.playPcmCalls.size == 2 }
+        assertEquals(2, delegate.playPcmCalls.size)
+        assertEquals(2, backend.synthesized.size)
+    }
+
+    @Test
+    fun `gender switch misses the cache so the old voice is never replayed`() {
+        val backend = CountingBackend()
+        val delegate = FakeTtsEngine()
+        var gender = TtsGender.MALE
+        val router = TtsRouter(
+            delegate = delegate, backends = listOf(backend),
+            selectedSource = { "minimax" }, selectedGender = { gender },
+        )
+        router.speak("Готово.")
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        gender = TtsGender.FEMALE
+        router.speak("Готово.")
+        awaitTrue { delegate.playPcmCalls.size == 2 }
+        assertEquals(2, delegate.playPcmCalls.size)
+        assertEquals(listOf("Готово." to TtsGender.MALE, "Готово." to TtsGender.FEMALE), backend.synthesized.toList())
+    }
+
+    @Test
+    fun `warmUp on an online source precaches the phrases, later speech uses them`() {
+        val backend = CountingBackend()
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(
+            delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" },
+            precachePhrases = { listOf("Есть.", "Выполнено.") },
+        )
+        router.warmUp()
+        // The cache write lands after the backend returns: wait for the cache, not the backend.
+        awaitTrue { router.phraseCacheSizeForTest() == 2 }
+        assertEquals(2, router.phraseCacheSizeForTest())
+        router.speak("Выполнено.")
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        assertEquals(1, delegate.playPcmCalls.size)
+        assertEquals(2, backend.synthesized.size)
+        assertEquals(0, delegate.warmUpCalls)
+    }
+
+    @Test
+    fun `prewarmNetwork reaches the online backend only`() {
+        val backend = CountingBackend()
+        TtsRouter(delegate = FakeTtsEngine(), backends = listOf(backend), selectedSource = { "minimax" })
+            .prewarmNetwork()
+        awaitTrue { backend.prewarmCalls == 1 }
+        assertEquals(1, backend.prewarmCalls)
+
+        val offline = CountingBackend()
+        TtsRouter(delegate = FakeTtsEngine(), backends = listOf(offline), selectedSource = { TtsRouter.OFFLINE })
+            .prewarmNetwork()
+        Thread.sleep(100)
+        assertEquals(0, offline.prewarmCalls)
+    }
+
     @Test
     fun `playPcm delegates to the offline engine`() {
         val delegate = FakeTtsEngine()
@@ -364,5 +496,380 @@ class TtsRouterTest {
         val samples = floatArrayOf(0.1f, 0.2f)
         assertTrue(router.playPcm(samples, 16_000))
         assertEquals(listOf(samples to 16_000), delegate.playPcmCalls)
+    }
+
+    @Test
+    fun `empty synthesized audio is never cached`() {
+        val calls = Collections.synchronizedList(mutableListOf<String>())
+        val backend = object : OnlineTtsBackend {
+            override val id = "minimax"
+            override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm {
+                calls += text
+                return TtsPcm(FloatArray(0), 24_000)
+            }
+            override suspend fun configured() = true
+        }
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" })
+        router.speak("Готово.")
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        router.speak("Готово.")
+        awaitTrue { calls.size == 2 }
+        assertEquals(2, calls.size)
+        assertEquals(0, router.phraseCacheSizeForTest())
+    }
+
+    @Test
+    fun `precache stops at the first failed phrase`() {
+        val calls = Collections.synchronizedList(mutableListOf<String>())
+        val backend = object : OnlineTtsBackend {
+            override val id = "minimax"
+            override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm {
+                calls += text
+                if (text == "Есть.") throw IOException("429")
+                return TtsPcm(floatArrayOf(0.1f), 24_000)
+            }
+            override suspend fun configured() = true
+        }
+        val scope = testScope()
+        val router = TtsRouter(
+            delegate = FakeTtsEngine(), backends = listOf(backend), selectedSource = { "minimax" },
+            precachePhrases = { listOf("Готово.", "Есть.", "Выполнено.") }, scope = scope,
+        )
+        router.warmUp()
+        awaitIdle(scope)
+        assertEquals(listOf("Готово.", "Есть."), calls.toList())
+        assertEquals(1, router.phraseCacheSizeForTest())
+    }
+
+    @Test
+    fun `precache stops at the first phrase that comes back without audio`() {
+        val calls = Collections.synchronizedList(mutableListOf<String>())
+        val backend = object : OnlineTtsBackend {
+            override val id = "minimax"
+            override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm {
+                calls += text
+                return TtsPcm(if (text == "Есть.") FloatArray(0) else floatArrayOf(0.1f), 24_000)
+            }
+            override suspend fun configured() = true
+        }
+        val scope = testScope()
+        val router = TtsRouter(
+            delegate = FakeTtsEngine(), backends = listOf(backend), selectedSource = { "minimax" },
+            precachePhrases = { listOf("Готово.", "Есть.", "Выполнено.") }, scope = scope,
+        )
+        router.warmUp()
+        awaitIdle(scope)
+        assertEquals(listOf("Готово.", "Есть."), calls.toList())
+        assertEquals(1, router.phraseCacheSizeForTest())
+    }
+
+    // --- streamed reply queue (voice speed wave 2) ---
+
+    /** Streams scripted chunks per text at 24 kHz. Texts in [failBefore] throw before any chunk,
+     *  in [failAfterFirst] right after the first one, in [hang] after the first one wait until
+     *  cancelled. synthesize() (the whole-sentence path) returns [9f]. */
+    private class StreamingBackend(
+        private val chunks: Map<String, List<FloatArray>>,
+        private val failBefore: Set<String> = emptySet(),
+        private val failAfterFirst: Set<String> = emptySet(),
+        private val hang: Set<String> = emptySet(),
+    ) : OnlineTtsBackend {
+        override val id = "minimax"
+        val streamed: MutableList<String> = Collections.synchronizedList(mutableListOf())
+        val synthesized: MutableList<String> = Collections.synchronizedList(mutableListOf())
+        @Volatile var cancelled = false
+
+        override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm {
+            synthesized += text
+            return TtsPcm(floatArrayOf(9f), 24_000)
+        }
+        override suspend fun configured() = true
+        override suspend fun streamSampleRate() = 24_000
+        override suspend fun synthesizeStream(text: String, gender: TtsGender, onChunk: (FloatArray) -> Unit) {
+            streamed += text
+            if (text in failBefore) throw IOException("stream refused")
+            val list = chunks[text].orEmpty()
+            list.firstOrNull()?.let(onChunk)
+            if (text in failAfterFirst) throw IOException("stream broke")
+            if (text in hang) {
+                try {
+                    awaitCancellation()
+                } finally {
+                    cancelled = true
+                }
+            }
+            list.drop(1).forEach(onChunk)
+        }
+    }
+
+    private fun f(vararg v: Float) = v
+
+    @Test
+    fun `streamed queue plays each sentence via playPcmStream with chunks in order`() {
+        val backend = StreamingBackend(mapOf("Первое." to listOf(f(1f), f(2f)), "Второе." to listOf(f(3f))))
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" })
+        val queue = router.startQueue()!!
+        queue.enqueue("Первое.")
+        queue.enqueue("Второе.")
+        queue.finish()
+        awaitTrue { delegate.playStreamCalls.size == 2 }
+        assertEquals(listOf(listOf(1f, 2f) to 24_000, listOf(3f) to 24_000), delegate.playStreamCalls.toList())
+        assertTrue(delegate.playPcmCalls.isEmpty())
+        assertTrue(backend.synthesized.isEmpty())
+    }
+
+    @Test
+    fun `queue uses whole synthesis when the backend cannot stream`() {
+        val backend = CountingBackend()
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" })
+        val queue = router.startQueue()!!
+        queue.enqueue("Первое.")
+        queue.finish()
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        assertEquals(1, delegate.playPcmCalls.size)
+        assertTrue(delegate.playStreamCalls.isEmpty())
+    }
+
+    @Test
+    fun `queue plays a cached phrase whole instead of streaming it`() {
+        val backend = StreamingBackend(mapOf("Готово." to listOf(f(1f))))
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" })
+        router.speak("Готово.") // single phrases stay whole and fill the cache
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        val queue = router.startQueue()!!
+        queue.enqueue("Готово.")
+        queue.finish()
+        awaitTrue { delegate.playPcmCalls.size == 2 }
+        assertEquals(2, delegate.playPcmCalls.size)
+        assertTrue(delegate.playStreamCalls.isEmpty())
+        assertTrue(backend.streamed.isEmpty())
+        assertEquals(1, backend.synthesized.size)
+    }
+
+    @Test
+    fun `a stream failing before its first chunk falls back to whole synthesis for that sentence`() {
+        val backend = StreamingBackend(
+            mapOf("Второе." to listOf(f(3f))),
+            failBefore = setOf("Первое."),
+        )
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" })
+        val queue = router.startQueue()!!
+        queue.enqueue("Первое.")
+        queue.enqueue("Второе.")
+        queue.finish()
+        awaitTrue { delegate.playStreamCalls.size == 2 }
+        assertEquals(listOf(listOf(9f) to 24_000, listOf(3f) to 24_000), delegate.playStreamCalls.toList())
+        assertEquals(listOf("Первое."), backend.synthesized.toList())
+    }
+
+    @Test
+    fun `a stream failing after audio started silences the rest of the reply`() {
+        val backend = StreamingBackend(
+            mapOf("Первое." to listOf(f(1f), f(2f)), "Второе." to listOf(f(3f))),
+            failAfterFirst = setOf("Первое."),
+        )
+        val delegate = FakeTtsEngine()
+        val scope = testScope()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" }, scope = scope)
+        val queue = router.startQueue()!!
+        queue.enqueue("Первое.")
+        queue.enqueue("Второе.")
+        queue.finish()
+        awaitIdle(scope)
+        assertEquals(listOf(listOf(1f) to 24_000), delegate.playStreamCalls.toList())
+        assertTrue(backend.synthesized.isEmpty()) // no whole fallback once audio started
+        assertTrue(delegate.playPcmCalls.isEmpty())
+    }
+
+    @Test
+    fun `a short streamed phrase lands in the cache`() {
+        val backend = StreamingBackend(mapOf("Готово." to listOf(f(1f), f(2f))))
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" })
+        val queue = router.startQueue()!!
+        queue.enqueue("Готово.")
+        queue.finish()
+        awaitTrue { delegate.playStreamCalls.size == 1 }
+        router.speak("Готово.")
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        assertEquals(1, delegate.playPcmCalls.size)
+        assertEquals(listOf(1f, 2f), delegate.playPcmCalls[0].first.toList())
+        assertEquals(1, backend.streamed.size)
+        assertTrue(backend.synthesized.isEmpty())
+    }
+
+    @Test
+    fun `stop during a stream cancels the backend job and ends playback`() {
+        val backend = StreamingBackend(mapOf("Первое." to listOf(f(1f), f(2f))), hang = setOf("Первое."))
+        val delegate = FakeTtsEngine()
+        val scope = testScope()
+        val router = TtsRouter(delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" }, scope = scope)
+        val queue = router.startQueue()!!
+        queue.enqueue("Первое.")
+        assertTrue(delegate.streamChunkTaken.await(3, TimeUnit.SECONDS))
+        router.stop()
+        awaitIdle(scope)
+        assertTrue(backend.cancelled)
+        // The end marker still reaches the player, so it stops at the chunk already delivered.
+        assertEquals(listOf(listOf(1f) to 24_000), delegate.playStreamCalls.toList())
+        assertEquals(1, delegate.stopCalls)
+        assertFalse(queue.enqueue("Второе."))
+    }
+
+    // --- persisted phrase cache (disk, second level) ---
+
+    @get:Rule val tmp = TemporaryFolder()
+
+    /** Counts synth calls; describes its voice with [identity] (null = cannot describe it). */
+    private class VoicedBackend(
+        @Volatile var identity: String? = "voice-a",
+        private val samples: FloatArray = floatArrayOf(0.1f, 0.2f),
+    ) : OnlineTtsBackend {
+        override val id = "minimax"
+        val synthesized: MutableList<Pair<String, TtsGender>> = Collections.synchronizedList(mutableListOf())
+        override suspend fun synthesize(text: String, gender: TtsGender): TtsPcm {
+            synthesized += text to gender
+            return TtsPcm(samples, 24_000)
+        }
+        override suspend fun configured() = true
+        override suspend fun voiceIdentity(gender: TtsGender) = identity
+    }
+
+    /** Waits until nothing launched on [scope] is left, including the detached disk writes that
+     *  finished jobs launch on their way out. */
+    private fun awaitQuiet(scope: CoroutineScope) {
+        while (scope.coroutineContext.job.children.any()) awaitIdle(scope)
+    }
+
+    private fun phraseFiles(dir: File) = dir.listFiles()?.filter { it.name.endsWith(".pcm") }.orEmpty()
+
+    private fun diskRouter(
+        backend: OnlineTtsBackend,
+        dir: File,
+        delegate: TtsEngine = FakeTtsEngine(),
+        phrases: List<String> = emptyList(),
+        scope: CoroutineScope = testScope(),
+    ) = TtsRouter(
+        delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" },
+        precachePhrases = { phrases }, scope = scope, phraseDir = dir,
+    )
+
+    /** Speaks [text] through a fresh router on [dir] and waits until it and its disk write finished. */
+    private fun speakAndSettle(backend: OnlineTtsBackend, dir: File, text: String, gender: TtsGender = TtsGender.MALE) {
+        val scope = testScope()
+        val delegate = FakeTtsEngine()
+        TtsRouter(
+            delegate = delegate, backends = listOf(backend), selectedSource = { "minimax" },
+            selectedGender = { gender }, scope = scope, phraseDir = dir,
+        ).speak(text)
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        awaitQuiet(scope)
+    }
+
+    @Test
+    fun `a phrase persisted by one router plays in a new router with no backend call`() {
+        val dir = tmp.newFolder()
+        val first = VoicedBackend()
+        speakAndSettle(first, dir, "Готово.")
+        assertEquals(1, first.synthesized.size)
+        assertEquals(1, phraseFiles(dir).size)
+
+        val second = VoicedBackend()
+        val delegate = FakeTtsEngine()
+        diskRouter(second, dir, delegate).speak("Готово.")
+        awaitTrue { delegate.playPcmCalls.size == 1 }
+        assertTrue(second.synthesized.isEmpty())
+        val (samples, rate) = delegate.playPcmCalls.single()
+        assertEquals(24_000, rate)
+        assertEquals(0.1f, samples[0], 1e-4f)
+        assertEquals(0.2f, samples[1], 1e-4f)
+    }
+
+    @Test
+    fun `another gender, voice identity or text misses the persisted phrase`() {
+        val dir = tmp.newFolder()
+        speakAndSettle(VoicedBackend(), dir, "Готово.")
+
+        val female = VoicedBackend()
+        speakAndSettle(female, dir, "Готово.", TtsGender.FEMALE)
+        assertEquals(listOf("Готово." to TtsGender.FEMALE), female.synthesized.toList())
+
+        val otherVoice = VoicedBackend(identity = "voice-b")
+        speakAndSettle(otherVoice, dir, "Готово.")
+        assertEquals(1, otherVoice.synthesized.size)
+
+        val otherText = VoicedBackend()
+        speakAndSettle(otherText, dir, "Есть.")
+        assertEquals(listOf("Есть." to TtsGender.MALE), otherText.synthesized.toList())
+        assertEquals(4, phraseFiles(dir).size)
+    }
+
+    @Test
+    fun `precache on a warm directory makes no backend call, on a partial one only the missing phrases`() {
+        val dir = tmp.newFolder()
+        val phrases = listOf("Готово.", "Есть.", "Выполнено.")
+        val firstScope = testScope()
+        diskRouter(VoicedBackend(), dir, phrases = phrases.take(2), scope = firstScope).warmUp()
+        awaitTrue { phraseFiles(dir).size == 2 }
+        awaitQuiet(firstScope)
+
+        val partial = VoicedBackend()
+        val partialScope = testScope()
+        diskRouter(partial, dir, phrases = phrases, scope = partialScope).warmUp()
+        awaitTrue { phraseFiles(dir).size == 3 }
+        awaitQuiet(partialScope)
+        assertEquals(listOf("Выполнено." to TtsGender.MALE), partial.synthesized.toList())
+
+        val warm = VoicedBackend()
+        val warmScope = testScope()
+        val router = diskRouter(warm, dir, phrases = phrases, scope = warmScope)
+        router.warmUp()
+        awaitQuiet(warmScope)
+        assertTrue(warm.synthesized.isEmpty())
+        assertEquals(3, router.phraseCacheSizeForTest())
+    }
+
+    @Test
+    fun `a corrupt phrase file is dropped and the phrase synthesized again`() {
+        val dir = tmp.newFolder()
+        speakAndSettle(VoicedBackend(), dir, "Готово.")
+        val file = phraseFiles(dir).single()
+        file.writeBytes(file.readBytes().copyOf(15)) // truncated mid-sample
+
+        val backend = VoicedBackend()
+        speakAndSettle(backend, dir, "Готово.")
+        assertEquals(1, backend.synthesized.size)
+        // Re-synthesized and written again as a complete file (16-byte header: crc32 + magic + rate + count).
+        assertEquals(16 + 2 * 2, phraseFiles(dir).single().length().toInt())
+    }
+
+    @Test
+    fun `the phrase directory stays within its file cap`() {
+        val dir = tmp.newFolder()
+        val cache = PhraseDiskCache(dir, maxFiles = 3)
+        repeat(5) { cache.write("key-$it", TtsPcm(floatArrayOf(0.5f), 24_000)) }
+        assertEquals(3, dir.listFiles()!!.size)
+        assertTrue(cache.read("key-4") != null)
+    }
+
+    @Test
+    fun `a backend that cannot describe its voice is never persisted`() {
+        val dir = tmp.newFolder()
+        val backend = VoicedBackend(identity = null)
+        speakAndSettle(backend, dir, "Готово.")
+        assertTrue(dir.listFiles().isNullOrEmpty())
+    }
+
+    @Test
+    fun `empty audio is never written to disk`() {
+        val dir = tmp.newFolder()
+        speakAndSettle(VoicedBackend(samples = FloatArray(0)), dir, "Готово.")
+        PhraseDiskCache(dir).write("key", TtsPcm(FloatArray(0), 24_000))
+        assertTrue(dir.listFiles().isNullOrEmpty())
     }
 }

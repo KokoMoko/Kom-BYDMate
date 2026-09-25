@@ -17,4 +17,22 @@ interface OnlineTtsBackend {
 
     /** True when this backend's API key/config is present and usable. */
     suspend fun configured(): Boolean
+
+    /** Everything besides the text that decides the audio for [gender] (transport, model, voice
+     *  id, output format), or null when this backend cannot describe it -- its phrases are then
+     *  cached in memory only, never persisted across restarts. */
+    suspend fun voiceIdentity(gender: TtsGender): String? = null
+
+    /** Fire-and-forget: opens the connection to the synthesis host ahead of the first sentence. */
+    suspend fun prewarm() {}
+
+    /** Sample rate of [synthesizeStream]'s chunks, or null when this backend cannot stream with
+     *  the current settings -- the router then synthesizes whole sentences. */
+    suspend fun streamSampleRate(): Int? = null
+
+    /** Synthesizes [text] delivering mono PCM chunks to [onChunk] as they arrive (never an empty
+     *  one). Throws on any failure, like [synthesize]. Default: the whole sentence as one chunk. */
+    suspend fun synthesizeStream(text: String, gender: TtsGender, onChunk: (FloatArray) -> Unit) {
+        onChunk(synthesize(text, gender).samples)
+    }
 }

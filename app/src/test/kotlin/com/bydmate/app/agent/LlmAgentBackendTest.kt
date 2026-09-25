@@ -25,6 +25,18 @@ class LlmAgentBackendTest {
     private fun okMessage() = JSONObject("""{"content":"привет"}""")
 
     @Test
+    fun `prewarm opens the primary connection host, nothing when unconfigured`() = runTest {
+        coEvery { resolver.primary() } returns conn("openrouter")
+        io.mockk.every { client.prewarm(any()) } returns Unit
+        backend.prewarm()
+        io.mockk.verify(exactly = 1) { client.prewarm("https://openrouter/v1") }
+
+        coEvery { resolver.primary() } returns null
+        backend.prewarm()
+        io.mockk.verify(exactly = 1) { client.prewarm(any()) }
+    }
+
+    @Test
     fun `transient failure retries primary once then succeeds`() = runTest {
         coEvery { resolver.primary() } returns conn("zai")
         coEvery { resolver.fallback() } returns null
@@ -217,6 +229,60 @@ class LlmAgentBackendTest {
         coEvery { client.chatRaw(any(), any(), any(), any(), any(), any()) } returns
             Result.failure(LlmHttpException(400))
         assertTrue(backend.chat(listOf(AgentMessage.User("q")), null).isFailure)
+        coVerify(exactly = 1) { client.chatRaw(any(), any(), any(), any(), any(), any()) }
+    }
+
+    // --- empty reply with finish_reason=error: HTTP 200 upstream hiccup, retried like a 5xx ---
+
+    @Test
+    fun `empty reply with finish_reason error retries primary once then succeeds`() = runTest {
+        coEvery { resolver.primary() } returns conn("openrouter")
+        coEvery { resolver.fallback() } returns null
+        coEvery { client.chatRaw(any(), any(), any(), any(), any(), any()) } returnsMany listOf(
+            Result.success(JSONObject("""{"finish_reason":"error"}""")),
+            Result.success(okMessage()),
+        )
+        val r = backend.chat(listOf(AgentMessage.User("q")), null)
+        assertEquals("привет", r.getOrThrow().content)
+        coVerify(exactly = 2) { client.chatRaw(any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `empty reply with finish_reason error twice stays empty, no third call`() = runTest {
+        coEvery { resolver.primary() } returns conn("openrouter")
+        coEvery { resolver.fallback() } returns null
+        coEvery { client.chatRaw(any(), any(), any(), any(), any(), any()) } returns
+            Result.success(JSONObject("""{"finish_reason":"error"}"""))
+        val r = backend.chat(listOf(AgentMessage.User("q")), null)
+        assertTrue(r.isSuccess)
+        assertTrue(r.getOrThrow().content.isNullOrBlank())
+        coVerify(exactly = 2) { client.chatRaw(any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `empty reply with finish_reason error after a forwarded delta is not retried`() = runTest {
+        coEvery { resolver.primary() } returns conn("zai")
+        coEvery { resolver.fallback() } returns conn("openrouter")
+        coEvery { client.chatStream(any(), any(), any(), any(), any(), any(), any()) } answers {
+            val cb = arg<(String) -> Unit>(6)
+            cb("Начало ответа. ")
+            Result.success(JSONObject("""{"finish_reason":"error"}"""))
+        }
+        val r = backend.chat(listOf(AgentMessage.User("хай")), null) {}
+        assertTrue(r.isSuccess)
+        assertTrue(r.getOrThrow().content.isNullOrBlank())
+        coVerify(exactly = 1) { client.chatStream(any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `empty reply with finish_reason stop is not retried`() = runTest {
+        coEvery { resolver.primary() } returns conn("openrouter")
+        coEvery { resolver.fallback() } returns null
+        coEvery { client.chatRaw(any(), any(), any(), any(), any(), any()) } returns
+            Result.success(JSONObject("""{"finish_reason":"stop"}"""))
+        val r = backend.chat(listOf(AgentMessage.User("q")), null)
+        assertTrue(r.isSuccess)
+        assertTrue(r.getOrThrow().content.isNullOrBlank())
         coVerify(exactly = 1) { client.chatRaw(any(), any(), any(), any(), any(), any()) }
     }
 
