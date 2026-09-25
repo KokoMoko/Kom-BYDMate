@@ -274,7 +274,8 @@ fun AppNavigation(
                 )
             }
             composable(Screen.Dashboard.route) {
-                DashboardScreen(
+                // Kom-BYDMate: My Dashboard (լռելյայն) ↔ Classic՝ swipe-ով
+                com.bydmate.app.ui.dashboard.DashboardHost(
                     onOpenTechPanel = { navController.navigate("tech_panel") },
                     // Same tab switch as the bottom bar's Settings item.
                     onOpenSettings = {

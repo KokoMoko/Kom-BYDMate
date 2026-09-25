@@ -1761,4 +1761,15 @@
     <string name="kom_ctx_arrival_soc">🔋 On arrival</string>
     <string name="kom_ctx_odometer">🛣 Odometer</string>
     <string name="kom_ctx_today">📅 Today</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_mydash_edit">Edit</string>
+    <string name="kom_mydash_add">Add</string>
+    <string name="kom_mydash_reset">Reset</string>
+    <string name="kom_mydash_add_title">Add a tile</string>
+    <string name="kom_mydash_no_space">No free space — shrink or remove a tile.</string>
+    <string name="kom_tile_widget">Android widget</string>
+    <string name="kom_tile_soc">Charge (SOC)</string>
+    <string name="kom_tile_range">Range</string>
+    <string name="kom_tile_temps">Temperature</string>
+    <string name="kom_widget_hint_generic">Add a widget</string>
 </resources>

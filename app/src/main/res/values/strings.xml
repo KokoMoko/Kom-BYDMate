@@ -1928,4 +1928,15 @@
     <string name="kom_ctx_arrival_soc">🔋 При прибытии</string>
     <string name="kom_ctx_odometer">🛣 Пробег</string>
     <string name="kom_ctx_today">📅 Сегодня</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_mydash_edit">Изменить</string>
+    <string name="kom_mydash_add">Добавить</string>
+    <string name="kom_mydash_reset">Сбросить</string>
+    <string name="kom_mydash_add_title">Добавить плитку</string>
+    <string name="kom_mydash_no_space">Нет свободного места — уменьшите или удалите плитку.</string>
+    <string name="kom_tile_widget">Виджет Android</string>
+    <string name="kom_tile_soc">Заряд (SOC)</string>
+    <string name="kom_tile_range">Запас хода</string>
+    <string name="kom_tile_temps">Температура</string>
+    <string name="kom_widget_hint_generic">Добавить виджет</string>
 </resources>
