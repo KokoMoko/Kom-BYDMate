@@ -83,6 +83,7 @@ object RuleShare {
     internal val KNOWN_TRIGGER_KINDS = setOf(
         "param", "place_enter", "place_exit", "time_of_day", "time_range", "service_start",
         "network_available", "button_press", AutomationEngine.TRIGGER_KIND_STEERING_KEY, "voice",
+        OneShotTrigger.KIND,
     )
 
     /** Action kinds ActionDispatcher.dispatch routes in this build. */
@@ -90,7 +91,7 @@ object RuleShare {
         "param", "notification", "notification_silent", "notification_sound", "app_launch", "call",
         "navigate", "url", "yandex_music", "youtube", "go_home", "delay", "media_volume", "sentry",
         "hotspot", "cluster_projection", "toggle", "speak", "agent_query", "split_screen",
-        "split_screen_close", "split_screen_toggle",
+        "split_screen_close", "split_screen_toggle", "telegram_report",
     )
 
     /** Marker left in a stripped call or tel/sms url payload: the importer has to ask for a number. */
@@ -114,7 +115,7 @@ object RuleShare {
      *   stripped address (the voice agent stores the original address there).
      * - every other kind (`param`, `notification*`, `app_launch`, `navigate`, `yandex_music`,
      *   `youtube`, `go_home`, `delay`, `media_volume`, `sentry`, `hotspot`, `cluster_projection`,
-     *   `toggle`, `speak`, `agent_query`, `split_screen*`): copied as is. Free texts (notification
+     *   `toggle`, `speak`, `agent_query`, `split_screen*`, `telegram_report`): copied as is. Free texts (notification
      *   and speak texts, agent prompts, navigation points, voice phrases, the rule name) stay: the
      *   user shares their own rule and the share note asks them to check those.
      * Rule id, enabled, lastTriggeredAt, triggerCount and createdAt are never written.
@@ -194,7 +195,7 @@ object RuleShare {
         val triggers = (0 until triggersJson.length()).map {
             // Only a name travels: the id always comes from the importing device.
             TriggerDef.fromJson(triggersJson.getJSONObject(it)).let { t -> if (t.kind in PLACE_KINDS) t.copy(placeId = null) else t }
-        }
+        }.let(TrunkRuleMigration::fix)  // a file from before 3.19 may still say Trunk "0" for closed
         val actions = (0 until actionsJson.length()).map {
             ActionDef.fromJson(actionsJson.getJSONObject(it)).let { a ->
                 if (a.kind == "call" && a.displayName.isBlank()) a.copy(displayName = callLabel) else a

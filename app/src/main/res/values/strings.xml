@@ -95,6 +95,7 @@
     <string name="settings_adb_restore_status_connecting">Восстанавливаем…</string>
     <string name="settings_adb_restore_status_restored">Восстановлено в %1$s</string>
     <string name="settings_adb_restore_status_failed">Ошибка: %1$s</string>
+    <string name="settings_adb_restore_status_unsupported">Недоступно на Android 10. Если ADB пропал после перезагрузки, включите его снова по инструкции на GitHub, раздел «Активация ADB».</string>
     <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
     <string name="adb_verdict_not_enabled">ADB не включён: управление не работает</string>
     <string name="adb_verdict_off_after_reboot">ADB отключился после перезагрузки</string>
@@ -109,6 +110,7 @@
     <string name="adb_enable_step_2">2. Вернитесь в BYDMate и нажмите «Проверить»</string>
     <string name="adb_dialog_off_after_reboot_title">ADB отключился после перезагрузки</string>
     <string name="adb_dialog_off_after_reboot_body">На этой прошивке ADB выключается при каждой перезагрузке. BYDMate умеет включать его сам, нужен Wi-Fi.</string>
+    <string name="adb_dialog_off_after_reboot_body_unsupported">На этой прошивке ADB выключается при каждой перезагрузке. Включите его снова по инструкции на GitHub, раздел «Активация ADB».</string>
     <string name="adb_dialog_no_access_title">Нет доступа к ADB</string>
     <string name="adb_dialog_no_access_body">Подтвердите запрос на экране или подключите ADB заново, затем нажмите «Проверить».</string>
     <string name="adb_dialog_helper_down_title">Помощник BYDMate не запустился</string>
@@ -421,7 +423,6 @@
 
     <!-- Rule card context menu -->
     <string name="automation_menu_edit">Изменить</string>
-    <string name="automation_menu_duplicate">Дублировать</string>
     <string name="automation_menu_delete">Удалить</string>
 
     <!-- Delete confirmation dialog -->
@@ -431,11 +432,7 @@
     <string name="automation_cancel_button">Отмена</string>
 
     <!-- Rule card stats -->
-    <string name="automation_rule_triggered_count">Сработало: %1$d</string>
-    <string name="automation_rule_last_trigger">Последний: %1$s</string>
     <string name="automation_rule_cooldown">Пауза: %1$d сек</string>
-    <string name="automation_rule_logic_and"> И </string>
-    <string name="automation_rule_logic_or"> ИЛИ </string>
 
     <!-- Editor dialog -->
     <string name="automation_editor_new_rule_title">Новое правило</string>
@@ -443,12 +440,8 @@
     <string name="automation_section_when">КОГДА (условия)</string>
     <string name="automation_section_then">ТОГДА (действия)</string>
     <string name="automation_section_settings">НАСТРОЙКИ</string>
-    <string name="automation_logic_and">И (AND)</string>
-    <string name="automation_logic_or">ИЛИ (OR)</string>
 
     <!-- Settings section in editor -->
-    <string name="automation_setting_cooldown">Пауза между срабатываниями</string>
-    <string name="automation_setting_unit_sec">сек</string>
     <string name="automation_setting_park_only">Только на парковке (P)</string>
     <string name="automation_setting_confirm_before">Спрашивать перед выполнением</string>
     <string name="automation_setting_once_per_trip">Выполнить один раз за поездку</string>
@@ -463,7 +456,6 @@
     <string name="automation_trigger_place_enter_prefix">Въезд в</string>
     <string name="automation_trigger_place_exit_prefix">Выезд из</string>
     <string name="automation_trigger_place_deleted_placeholder">&lt;удалено&gt;</string>
-    <string name="automation_trigger_time_of_day_label">Время суток:</string>
     <string name="automation_trigger_day">День</string>
     <string name="automation_trigger_night">Ночь</string>
     <string name="automation_trigger_dawn">Рассвет</string>
@@ -482,9 +474,7 @@
     <string name="automation_trigger_type_internet">Доступен интернет</string>
     <string name="automation_trigger_type_button_press">Нажатие кнопки</string>
     <string name="automation_trigger_button_label">Кнопка %1$d</string>
-    <string name="automation_trigger_button_picker_label">Кнопка</string>
     <string name="automation_trigger_type_steering_key">Клавиша руля</string>
-    <string name="automation_trigger_steering_key_picker_label">Клавиша руля</string>
     <string name="automation_trigger_steering_key_unassigned">Клавиша не назначена</string>
     <string name="automation_trigger_steering_key_assign">назначить</string>
     <string name="automation_steering_key_occupied_projection">Эта клавиша включает навигацию на приборке. Освободите её в Настройках, раздел Дисплей, или выберите другую.</string>
@@ -511,16 +501,6 @@
     <string name="automation_day_sun">Вс</string>
 
     <!-- Action row: delay -->
-    <string name="automation_action_delay_label">Пауза</string>
-    <string name="automation_delay_0_5s">0,5 сек</string>
-    <string name="automation_delay_1s">1 сек</string>
-    <string name="automation_delay_2s">2 сек</string>
-    <string name="automation_delay_3s">3 сек</string>
-    <string name="automation_delay_5s">5 сек</string>
-    <string name="automation_delay_10s">10 сек</string>
-    <string name="automation_delay_30s">30 сек</string>
-    <string name="automation_delay_60s">1 мин</string>
-    <string name="automation_delay_display_name">Пауза %1$s</string>
 
     <!-- Add action button -->
     <string name="automation_add_action_button">+ Добавить действие</string>
@@ -534,7 +514,7 @@
     <string name="automation_action_delay">Пауза</string>
     <string name="automation_action_media_volume">Громкость медиа</string>
     <string name="automation_action_media_volume_label">Громкость</string>
-    <string name="automation_action_sentry">Охранный режим</string>
+    <string name="automation_action_sentry">Режим охраны</string>
     <string name="automation_action_sentry_on">Включить</string>
     <string name="automation_action_sentry_off">Отключить</string>
     <string name="automation_action_cluster_projection">Вывод на приборку</string>
@@ -615,7 +595,6 @@
     <string name="automation_journal_empty">Журнал пуст</string>
 
     <!-- Journal relative time -->
-    <string name="automation_time_yesterday">вчера %1$s</string>
 
     <!-- Places screen -->
     <string name="places_tab_title">Места</string>
@@ -1033,7 +1012,7 @@
     <string name="settings_tg_backup_code_not_received">Код ещё не пришёл. Отправьте его боту и нажмите «Проверить» снова.</string>
     <string name="settings_tg_backup_connected_chip">Подключён</string>
     <string name="settings_tg_backup_chat_line">@%1$s, %2$s</string>
-    <string name="settings_tg_backup_connected_note">Копии уходят в этот чат при каждом сохранении.</string>
+    <string name="settings_tg_backup_connected_note">Сюда приходят копии и отчёты.</string>
     <string name="settings_tg_backup_back">Назад</string>
     <string name="settings_log_recording_help">Подробный журнал работы приложения. Нужен, только когда разработчик просит лог для разбора проблемы. Включите, повторите проблему, остановите запись и отправьте файл из папки Download.</string>
     <string name="settings_fid_recorder_help">Записывает все изменения датчиков машины в файл в Download. Нужен, чтобы найти сигнал для новой функции: включите, нажмите нужную кнопку в машине, выключите и отправьте файл разработчику.</string>
@@ -1094,11 +1073,10 @@
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
     <string name="auto_enum_code_off">OFF</string>
-    <string name="auto_enum_code_offroad">Внедорожный</string>
     <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>
-    <string name="auto_enum_code_snow">SNOW</string>
+    <string name="auto_enum_code_snow">Снег</string>
     <string name="auto_enum_code_sport">SPORT</string>
     <string name="auto_enum_connected">Подключён</string>
     <string name="auto_enum_fastened">Пристёгнут</string>
@@ -1126,20 +1104,20 @@
     <string name="auto_param_chargingstatus">Статус зарядки</string>
     <string name="auto_param_powerstate">Питание</string>
     <string name="auto_param_voltage12v">12V аккумулятор</string>
-    <string name="auto_param_mincellvoltage">Напряжение банки (min)</string>
-    <string name="auto_param_maxcellvoltage">Напряжение банки (max)</string>
-    <string name="auto_param_exttemp">Темп. снаружи</string>
+    <string name="auto_param_mincellvoltage">Мин. напряжение ячейки</string>
+    <string name="auto_param_maxcellvoltage">Макс. напряжение ячейки</string>
+    <string name="auto_param_exttemp">Температура снаружи</string>
     <string name="auto_param_insidetemp">Темп. салона</string>
     <string name="auto_param_avgbattemp">Темп. батареи</string>
     <string name="auto_param_windowfl">Окно водителя</string>
     <string name="auto_param_windowfr">Окно пассажира</string>
-    <string name="auto_param_windowrl">Окно ЛЗ</string>
-    <string name="auto_param_windowrr">Окно ПЗ</string>
+    <string name="auto_param_windowrl">Окно сзади слева</string>
+    <string name="auto_param_windowrr">Окно сзади справа</string>
     <string name="auto_param_sunroof">Люк</string>
     <string name="auto_param_doorfl">Дверь водителя</string>
     <string name="auto_param_doorfr">Дверь пассажира</string>
-    <string name="auto_param_doorrl">Дверь ЛЗ</string>
-    <string name="auto_param_doorrr">Дверь ПЗ</string>
+    <string name="auto_param_doorrl">Дверь сзади слева</string>
+    <string name="auto_param_doorrr">Дверь сзади справа</string>
     <string name="auto_param_hood">Капот</string>
     <string name="auto_param_lockfl">Замок двери водителя</string>
     <string name="auto_param_trunk">Багажник</string>
@@ -1156,10 +1134,10 @@
     <string name="auto_param_occupancyrr">Место сзади справа</string>
     <string name="auto_param_lightlevel">Освещённость</string>
     <string name="auto_param_keybattery">Батарейка ключа</string>
-    <string name="auto_param_tirepressfl">Давление ЛП шины</string>
-    <string name="auto_param_tirepressfr">Давление ПП шины</string>
-    <string name="auto_param_tirepressrl">Давление ЛЗ шины</string>
-    <string name="auto_param_tirepressrr">Давление ПЗ шины</string>
+    <string name="auto_param_tirepressfl">Давление левой передней шины</string>
+    <string name="auto_param_tirepressfr">Давление правой передней шины</string>
+    <string name="auto_param_tirepressrl">Давление левой задней шины</string>
+    <string name="auto_param_tirepressrr">Давление правой задней шины</string>
     <string name="auto_param_rain">Датчик дождя</string>
     <string name="auto_param_lightlow">Ближний свет</string>
     <string name="auto_param_drl">Дневные ходовые</string>
@@ -1308,7 +1286,6 @@
     <string name="auto_trig_place_enter">Въезд в «%1$s»</string>
     <string name="auto_trig_service_start">Запуск BYDMate</string>
     <string name="auto_trig_network_available">Доступен интернет</string>
-    <string name="auto_act_delay_1s">Пауза 1 сек</string>
     <string name="auto_act_media_volume">Громкость медиа: 2</string>
     <string name="auto_trig_time_of_day_night">Ночь</string>
     <!-- automation: executeNow toast + a11y -->
@@ -1327,6 +1304,22 @@
     <string name="gate_forbidden_command">Запрещённая команда</string>
     <string name="gate_frunk_speed_unknown">Скорость неизвестна, передний багажник не открыть</string>
     <string name="gate_frunk_moving">Передний багажник открывается только на стоянке (скорость %1$d км/ч)</string>
+    <string name="auto_cat_drive_mode">Режим движения</string>
+    <string name="auto_act_drive_mode_eco">Режим ЭКО</string>
+    <string name="auto_act_drive_mode_normal">Режим Норма</string>
+    <string name="auto_act_drive_mode_sport">Режим Спорт</string>
+    <string name="auto_act_drive_mode_snow">Режим Снег</string>
+    <string name="auto_act_drive_mode_sand">Режим Песок</string>
+    <string name="auto_act_drive_mode_mud">Режим Грязь</string>
+    <string name="auto_act_drive_mode_mountain">Режим Горы</string>
+    <string name="auto_act_drive_mode_rock">Режим Камни</string>
+    <string name="auto_act_drive_mode_smart">Умный режим</string>
+    <string name="gate_drive_mode_speed_unknown">Скорость неизвестна, этот режим движения не включаю</string>
+    <string name="gate_drive_mode_speed">Этот режим движения включается только на скорости до 15 км/ч (сейчас %1$d км/ч)</string>
+    <string name="drive_mode_not_supported">Машина не поддерживает этот режим движения</string>
+    <string name="drive_mode_flotation">Машина в аварийном режиме «высокая вода», режим движения не меняю</string>
+    <string name="drive_mode_not_changed">Режим движения не сменился</string>
+    <string name="drive_mode_failed">Не удалось сменить режим движения</string>
 
     <!-- Voice control (Phase 0) -->
     <string name="settings_section_voice_agent">Голос-агент</string>
@@ -1566,6 +1559,8 @@
     <string name="settings_blindspot_position_drag">Перетащите окошко</string>
     <string name="settings_blindspot_both_main_title">Обе камеры на главный экран</string>
     <string name="settings_blindspot_both_main_desc">Левая камера показывается рядом с правой на планшете, приборка не используется</string>
+    <string name="settings_blindspot_both_cluster_title">Обе камеры на приборку</string>
+    <string name="settings_blindspot_both_cluster_desc">Левая и правая камеры показываются на приборке, главный экран свободен</string>
     <string name="settings_blindspot_left_position_title">Положение левой камеры</string>
     <string name="settings_blindspot_left_position_desc">По умолчанию левое окошко стоит зеркально правому. Перетащите, чтобы задать своё место</string>
     <string name="settings_blindspot_glow_title">Подсветка при объекте в слепой зоне</string>
@@ -1947,4 +1942,179 @@
     <string name="kom_tile_app">Приложение</string>
     <string name="kom_tile_app_pick">Выберите приложение</string>
     <string name="kom_tile_app_hint">Откроется здесь после «Готово»</string>
+    <!-- Telegram reports (3.19) -->
+    <string name="tg_report_field_location">Место на карте</string>
+    <string name="tg_report_field_soc">Заряд</string>
+    <string name="tg_report_field_range">Запас хода</string>
+    <string name="tg_report_field_trip">Поездка</string>
+    <string name="tg_report_field_temps">Температура</string>
+    <string name="tg_report_field_openings">Что открыто</string>
+    <string name="tg_report_field_tires">Давление в шинах</string>
+    <string name="tg_report_header_off">BYDMate: машина выключена в %1$s</string>
+    <string name="tg_report_map_link">Открыть на карте</string>
+    <string name="tg_report_soc">заряд %1$d%%</string>
+    <string name="tg_report_range">запас %1$d км</string>
+    <string name="tg_report_trip_now">Поездка: %1$s</string>
+    <string name="tg_report_trip_last">Последняя поездка %1$s: %2$s</string>
+    <string name="tg_report_trip_km">%1$.1f км</string>
+    <string name="tg_report_trip_km_whole">%1$d км</string>
+    <string name="tg_report_trip_consumption">%1$.1f кВт·ч/100 км</string>
+    <string name="tg_report_temp_outside">снаружи %1$+d°</string>
+    <string name="tg_report_temp_inside">в салоне %1$+d°</string>
+    <string name="tg_report_open_list">Открыто: %1$s</string>
+    <string name="tg_report_all_closed">Всё закрыто</string>
+    <string name="tg_report_open_door_fl">дверь водителя</string>
+    <string name="tg_report_open_door_fr">дверь пассажира</string>
+    <string name="tg_report_open_door_rl">задняя левая дверь</string>
+    <string name="tg_report_open_door_rr">задняя правая дверь</string>
+    <string name="tg_report_open_sunroof">люк</string>
+    <string name="tg_report_open_trunk">багажник</string>
+    <string name="tg_report_open_front_trunk">передний багажник</string>
+    <string name="tg_report_open_hood">капот</string>
+    <string name="tg_report_tires">Шины: %1$s бар</string>
+    <string name="tg_report_recorded_at">(записано в %1$s)</string>
+    <string name="dispatch_tg_report_queued">Нет связи, отчёт уйдёт, когда появится интернет</string>
+    <string name="dispatch_tg_report_no_bot">Подключите бота в Настройках</string>
+    <string name="auto_msg_tg_report_empty">Действие #%1$d: выберите хотя бы один пункт отчёта или напишите свой текст</string>
+    <string name="automation_action_tg_report">Отчёт в Telegram</string>
+    <!-- Telegram reports (3.19): settings and automation editor -->
+    <string name="tg_report_field_location_desc">Ссылка «Открыть на карте»</string>
+    <string name="tg_report_field_soc_desc">Процент батареи</string>
+    <string name="tg_report_field_range_desc">Километры, как на Главной</string>
+    <string name="tg_report_field_trip_desc">Километры, расход и время в пути</string>
+    <string name="tg_report_field_temps_desc">Снаружи и в салоне</string>
+    <string name="tg_report_field_openings_desc">Двери, окна, люк, багажник, капот</string>
+    <string name="tg_report_field_tires_desc">Все четыре колеса</string>
+    <string name="settings_tg_report_off_title">Отчёт при выключении машины</string>
+    <string name="settings_tg_report_off_hint">Отчёт уходит в первые секунды после выключения через мобильный интернет машины. Если связи нет, он придёт при следующем включении.</string>
+    <string name="settings_tg_report_off_no_bot">Сначала подключите Telegram-бот выше.</string>
+    <string name="settings_tg_report_off_connect">Подключить</string>
+    <string name="settings_tg_report_items_label">Что попадает в отчёт</string>
+    <string name="automation_action_tg_report_add">Отправить отчёт в Telegram</string>
+    <string name="automation_tg_report_text_label">Свой текст (опционально)</string>
+    <string name="automation_tg_report_text_hint">Появится под заголовком сообщения.</string>
+    <string name="automation_tg_report_own_text">свой текст</string>
+    <string name="automation_tg_report_no_bot">Telegram-бот не подключён. Подключите его в Настройках, раздел «Сервис и данные».</string>
+    <!-- Automation audit 3.19: journal reasons, write errors, new conditions -->
+    <string name="auto_log_confirm_cancelled">Отменено в окне подтверждения</string>
+    <string name="auto_log_confirm_timeout">Нет ответа в окне подтверждения, не выполнено</string>
+    <string name="auto_log_park_required">Не выполнено: правило только на парковке, а передача не P</string>
+    <string name="auto_log_one_shot_expired">Разовое правило не сработало за сутки и выключено</string>
+    <string name="auto_err_not_confirmed">Машина не подтвердила команду</string>
+    <string name="auto_err_not_supported">Эта команда не поддерживается</string>
+    <string name="auto_err_out_of_range">Недопустимое значение для команды</string>
+    <string name="auto_err_unreachable">Команда не дошла до машины</string>
+    <string name="auto_err_not_done">Машина не выполнила команду</string>
+    <string name="auto_err_unverified">Команда не проверена на этой машине и не сработала</string>
+    <string name="auto_err_failed">Не удалось выполнить команду</string>
+    <string name="auto_enum_moving_m">В движении</string>
+    <string name="auto_enum_code_sand">Песок</string>
+    <string name="auto_enum_code_mud">Грязь</string>
+    <string name="auto_enum_code_mountain">Горы</string>
+    <string name="auto_enum_code_smart">Умный</string>
+    <string name="auto_param_seatbeltrl">Ремень сзади слева</string>
+    <string name="auto_param_seatbeltrm">Ремень сзади в центре</string>
+    <string name="auto_param_seatbeltrr">Ремень сзади справа</string>
+    <string name="auto_param_rangekm">Запас хода</string>
+    <string name="auto_unit_km">км</string>
+    <!-- Automation tab redesign 3.19: card phrase, status, journal, editor -->
+    <string name="auto_ui_phrase_rule">%1$s: %2$s</string>
+    <string name="auto_ui_phrase_and">%1$s и %2$s</string>
+    <string name="auto_ui_phrase_and_comma">%1$s, и %2$s</string>
+    <string name="auto_ui_phrase_or">%1$s или %2$s</string>
+    <string name="auto_ui_phrase_or_comma">%1$s, или %2$s</string>
+    <string name="auto_ui_phrase_list">%1$s, %2$s</string>
+    <string name="auto_ui_phrase_is">%1$s %2$s</string>
+    <string name="auto_ui_phrase_is_not">%1$s не %2$s</string>
+    <string name="auto_ui_phrase_compare">%1$s %2$s %3$s</string>
+    <string name="auto_ui_op_gt">больше</string>
+    <string name="auto_ui_op_lt">меньше</string>
+    <string name="auto_ui_op_ge">не меньше</string>
+    <string name="auto_ui_op_le">не больше</string>
+    <string name="auto_ui_op_eq">равно</string>
+    <string name="auto_ui_op_ne">не равно</string>
+    <string name="auto_ui_phrase_place_exit">Выезд из «%1$s»</string>
+    <string name="auto_ui_phrase_at">В %1$s</string>
+    <string name="auto_ui_phrase_between">С %1$s до %2$s</string>
+    <string name="auto_ui_phrase_days">%1$s %2$s</string>
+    <string name="auto_ui_days_weekdays">По будням</string>
+    <string name="auto_ui_days_weekends">По выходным</string>
+    <string name="auto_ui_phrase_button">Кнопка %1$d на виджете</string>
+    <string name="auto_ui_phrase_steering">Клавиша руля «%1$s»</string>
+    <string name="auto_ui_phrase_steering_none">Клавиша руля не назначена</string>
+    <string name="auto_ui_phrase_voice">Голосом «%1$s»</string>
+    <string name="auto_ui_phrase_once">%1$s, один раз</string>
+    <string name="auto_ui_act_toggle">%1$s, переключить</string>
+    <string name="auto_ui_act_with">%1$s, %2$s</string>
+    <string name="auto_ui_act_wait">Подождать %1$s</string>
+    <string name="auto_ui_act_quoted">%1$s «%2$s»</string>
+    <string name="auto_ui_act_volume">%1$s %2$d</string>
+    <string name="auto_ui_seconds">%1$s с</string>
+    <string name="auto_ui_minutes">%1$s мин</string>
+    <string name="auto_ui_when_today">Сегодня в %1$s</string>
+    <string name="auto_ui_when_yesterday">Вчера в %1$s</string>
+    <string name="auto_ui_when_tomorrow">Завтра в %1$s</string>
+    <string name="auto_ui_when_date">%1$s в %2$s</string>
+    <string name="auto_ui_date_pattern">d MMMM</string>
+    <string name="auto_ui_date_year_pattern">d MMMM yyyy</string>
+    <string name="auto_ui_date_chip_pattern">EEE, d MMMM</string>
+    <string name="auto_ui_status_ok">Сработало %1$s</string>
+    <string name="auto_ui_status_cancelled">Отменено %1$s</string>
+    <string name="auto_ui_status_skipped">Не выполнено %1$s</string>
+    <string name="auto_ui_status_error">Ошибка %1$s</string>
+    <string name="auto_ui_status_never">Ещё не срабатывало</string>
+    <string name="auto_ui_status_planned">Сработает %1$s</string>
+    <string name="auto_ui_card_copy">Копия</string>
+    <string name="auto_ui_card_share">Отправить</string>
+    <string name="auto_ui_journal_rule_title">Журнал правила «%1$s»</string>
+    <string name="auto_ui_journal_done">Выполнено</string>
+    <string name="auto_ui_journal_done_off">Выполнено, правило выключено</string>
+    <string name="auto_ui_journal_error">Ошибка</string>
+    <string name="auto_ui_journal_cancelled">Отменено</string>
+    <string name="auto_ui_journal_skipped">Не выполнено</string>
+    <string name="auto_ui_journal_expired">Не выполнено, правило выключено</string>
+    <string name="auto_ui_journal_one_shot">Разовое правило</string>
+    <string name="auto_ui_journal_step_failed">%1$s не выполнено</string>
+    <string name="auto_ui_logic_all">Все условия</string>
+    <string name="auto_ui_logic_any">Любое условие</string>
+    <string name="auto_ui_pick_param">Выберите, что проверять</string>
+    <string name="auto_ui_pick_value">Выберите</string>
+    <string name="auto_ui_number_hint">Введите число, например 12,5</string>
+    <string name="auto_ui_cooldown">Не чаще, чем раз в</string>
+    <string name="auto_ui_unit_s">с</string>
+    <string name="auto_ui_wait">Подождать</string>
+    <string name="auto_ui_miss_name">Введите название</string>
+    <string name="auto_ui_miss_conditions">Добавьте условие</string>
+    <string name="auto_ui_miss_param">Выберите, что проверять в условии %1$d</string>
+    <string name="auto_ui_miss_value">Выберите значение в условии %1$d</string>
+    <string name="auto_ui_miss_operator">Выберите «равно» или «не равно» в условии %1$d</string>
+    <string name="auto_ui_miss_number">Введите число в условии %1$d</string>
+    <string name="auto_ui_miss_key">Назначьте клавишу руля в условии %1$d</string>
+    <string name="auto_ui_miss_actions">Добавьте действие</string>
+    <string name="auto_ui_miss_two">%1$s и %2$s</string>
+    <string name="auto_ui_miss_more">%1$s и ещё %2$d</string>
+    <string name="auto_ui_err_one_shot_invalid">Выберите дату и время разового условия</string>
+    <string name="auto_ui_err_one_shot_or">Разовое условие работает только с «Все условия»</string>
+    <string name="auto_ui_err_one_shot_event">Разовое условие сочетается только с параметрами машины</string>
+    <string name="auto_ui_err_one_shot_twice">В правиле может быть только одно разовое условие</string>
+    <string name="auto_ui_event_warn">%1$s запускает правило сразу. Другие условия при этом не проверяются.</string>
+    <string name="auto_ui_event_warn_hint">Чтобы их учитывать, сделайте для них отдельное правило.</string>
+    <string name="auto_ui_event_button">Кнопка на виджете</string>
+    <string name="auto_ui_event_key">Клавиша руля</string>
+    <string name="auto_ui_event_voice">Голосовая команда</string>
+    <string name="auto_ui_unsaved_title">Сохранить изменения?</string>
+    <string name="auto_ui_unsaved_text">Если выйти без сохранения, правки пропадут.</string>
+    <string name="auto_ui_unsaved_discard">Не сохранять</string>
+    <string name="auto_ui_trigger_once">Один раз: дата и время</string>
+    <string name="auto_ui_once_hint">Выполнится один раз и выключится само.</string>
+    <string name="auto_ui_once_at">в</string>
+    <string name="auto_ui_add_action_title">Добавить действие</string>
+    <string name="auto_ui_section_messages">Сообщения</string>
+    <string name="auto_ui_section_apps">Приложения</string>
+    <string name="auto_ui_section_screen">Экран</string>
+    <string name="auto_ui_section_system">Система</string>
+    <string name="auto_ui_limit">Можно создать не больше %1$d правил. Удалите ненужное, чтобы добавить новое.</string>
+    <string name="auto_ui_test_park">Не выполнено: правило работает только на парковке. Включите P.</string>
+    <string name="auto_ui_confirm_rule">Правило «%1$s»</string>
+    <string name="auto_ui_confirm_countdown">Отменится через %1$d с</string>
 </resources>

@@ -2,6 +2,9 @@ package com.bydmate.app.agent
 
 import android.content.Context
 import android.content.Intent
+import android.location.Location
+import android.os.SystemClock
+import android.util.Log
 import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.camera.BlindSpotPreferences
@@ -12,6 +15,7 @@ import com.bydmate.app.data.automation.ConfirmOverlayManager
 import com.bydmate.app.data.automation.DispatchResult
 import com.bydmate.app.data.automation.PlaceGeometry
 import com.bydmate.app.data.automation.RuleDraftValidator
+import com.bydmate.app.data.automation.RuleInserts
 import com.bydmate.app.data.automation.TriggerValidationError
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.VoiceFireResult
@@ -24,6 +28,7 @@ import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TriggerDef
+import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.remote.InsightStatsAggregator
 import com.bydmate.app.data.nativestack.MotorSplit
 import com.bydmate.app.data.nativestack.motorSplitPercent
@@ -32,6 +37,9 @@ import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.CommandTranslator
+import com.bydmate.app.data.vehicle.DriveMode
+import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.data.vehicle.WriteAllowlist
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.domain.calculator.RangeEstimate
@@ -145,6 +153,27 @@ class AgentTools @Inject constructor(
         userPhrases = phrases
     }
 
+    // Same method-injection reason as splitPrefs above. Null until Hilt injects it; get_vehicle_state
+    // then falls back to the old dev=1006 drive_mode mapping (see driveModeName below).
+    private var helperClient: HelperClient? = null
+
+    /** Called by Hilt after construction; call manually in unit tests of get_vehicle_state's
+     *  drive_mode field. */
+    @Inject
+    internal fun injectHelperClient(client: HelperClient) {
+        helperClient = client
+    }
+
+    // Same method-injection reason as splitPrefs above. Null until Hilt injects it; where_am_i
+    // then answers with an error instead of guessing.
+    private var settlementSearchClient: SettlementSearchClient? = null
+
+    /** Called by Hilt after construction; call manually in unit tests of where_am_i. */
+    @Inject
+    internal fun injectSettlementSearch(client: SettlementSearchClient) {
+        settlementSearchClient = client
+    }
+
     /** Sorted names of the enabled automations, kept in step with the rules table by
      *  [startRuleWatcher]; null until the first emission. */
     @Volatile private var cachedRuleNames: List<String>? = null
@@ -168,6 +197,32 @@ class AgentTools @Inject constructor(
     /** Test seam — live GPS position, default reads TrackingService's last known fix. */
     internal var locationProvider: () -> Pair<Double, Double>? =
         { TrackingService.lastLocation.value?.let { it.latitude to it.longitude } }
+
+    /** A GPS fix for where_am_i: [ageMs] since it was taken, [live] = delivered by the GPS
+     *  listener in this service run rather than the start-time last-known seed. */
+    internal data class GpsFix(val lat: Double, val lon: Double, val ageMs: Long, val live: Boolean)
+
+    /** Test seam - monotonic clock for [gpsFixAgeMs], default SystemClock.elapsedRealtimeNanos().
+     *  Not System.currentTimeMillis()/Location.time: a wall-clock change (manual or NTP) must not
+     *  turn a stale fix fresh, or a fresh one stale. */
+    internal var elapsedRealtimeNanos: () -> Long = { SystemClock.elapsedRealtimeNanos() }
+
+    /** GPS fix age from the monotonic clock in [elapsedRealtimeNanos], immune to the wall clock
+     *  ([nowMs]) changing underneath it. A provider that leaves the monotonic stamp unset (0)
+     *  would make every fix look as old as the uptime, so such a fix falls back to the wall clock. */
+    internal fun gpsFixAgeMs(location: Location): Long {
+        val stamp = location.elapsedRealtimeNanos
+        val ageMs = if (stamp > 0L) (elapsedRealtimeNanos() - stamp) / 1_000_000L else nowMs() - location.time
+        return ageMs.coerceAtLeast(0L)
+    }
+
+    /** Test seam - [locationProvider] plus the age and origin of the fix, for where_am_i. Reads
+     *  TrackingService's location+live snapshot once, so the two never come from different fixes. */
+    internal var gpsFixProvider: () -> GpsFix? = {
+        TrackingService.lastLocationFix?.let { fix ->
+            GpsFix(fix.location.latitude, fix.location.longitude, gpsFixAgeMs(fix.location), fix.isLive)
+        }
+    }
 
     /** Test seam - launchable apps as label to package pairs. */
     internal var launcherAppsProvider: () -> List<Pair<String, String>> = { queryLauncherApps() }
@@ -375,6 +430,15 @@ class AgentTools @Inject constructor(
                 .put("type", "string")
                 .put("description", "Имя контакта, как записано в телефонной книге")),
             listOf("name"),
+        ))
+        put(tool(
+            "where_am_i",
+            "Где сейчас машина: ближайшие населённые пункты вокруг текущей GPS-позиции (данные " +
+                "OpenStreetMap) с расстоянием до центра в км и стороной света от машины, ближайший " +
+                "первым, плюс ближайший город. Известны только центры, не границы: ответ говорит, " +
+                "насколько машина близко к месту, а не в каком месте она. Вызывай на вопросы \"где я\", " +
+                "\"что рядом\", \"какой это населённый пункт\"; не ищи координаты через web_search.",
+            JSONObject(), emptyList(),
         ))
         // Always declared: with no Exa key the execute path below falls back to the primary
         // connection's native search (openrouter:web_search server tool or z.ai web_search).
@@ -729,7 +793,7 @@ class AgentTools @Inject constructor(
                                 .put("value", JSONObject().put("type", "integer")
                                     .put("description", "Только для kind=param: значение, если команда его требует"))
                                 .put("ms", JSONObject().put("type", "integer")
-                                    .put("description", "Только для kind=delay: пауза в мс, 0..30000"))
+                                    .put("description", "Только для kind=delay: пауза в мс, 0..60000"))
                                 .put("op", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=media_volume: число / \"+N\" / \"-N\" / mute / unmute"))
                                 .put("title", JSONObject().put("type", "string")
@@ -807,6 +871,7 @@ class AgentTools @Inject constructor(
             when (call.name) {
                 "get_vehicle_state" -> vehicleState()
                 "get_weather" -> getWeather(args)
+                "where_am_i" -> whereAmI()
                 "call_contact" -> callContact(args)
                 "web_search" -> webSearch(args)
                 "query_trips" -> queryTrips(args)
@@ -936,8 +1001,9 @@ class AgentTools @Inject constructor(
         }
         // Gun fid: 1=NONE, 2=AC, 3=DC, 4=AC_DC, 5=VTOL -- NONE is 1, not 0.
         putIf("charging_gun_connected", d.chargeGunState?.let { it >= 2 })
-        // Off-road submodes (snow/sand/mud/mountain) are indistinguishable on this fid.
-        putIf("drive_mode", when (d.driveMode) { 1 -> "ECO"; 2 -> "SPORT"; 3 -> "NORMAL"; 4 -> "OFFROAD"; else -> null })
+        // The old dev=1006 fid (d.driveMode) stays 3/NORMAL for sand/mud/mountain/smart (live L3
+        // 2026-09-27); driveModeName reads the real target mode and falls back to it on failure.
+        putIf("drive_mode", driveModeName(d.driveMode))
         putIf("power_state", when (d.powerState) { 0 -> "OFF"; 1 -> "ON"; 2 -> "DRIVE"; else -> null })
         putIf("work_mode", when (d.workMode) { 0 -> "STOP"; 1 -> "EV"; 2 -> "FORCED_EV"; 3 -> "HEV"; else -> null })
         putIf("light_low_beam_on", d.lightLow?.let { it == 1 })
@@ -1000,6 +1066,25 @@ class AgentTools @Inject constructor(
                 }
             }
         return o.toString()
+    }
+
+    /**
+     * Real drive mode name from SETTING_TARGET_DRIVING_MODE (dev=1023, the fid DriveModeChannel
+     * writes and verifies), through the same HelperClient read DriveModeChannel uses -- unlike
+     * the dev=1006 fid in [fallback], it also reflects sand/mud/mountain/rock/smart. Falls back
+     * to the dev=1006 mapping when [helperClient] is unset, the read fails, or it is a sentinel.
+     */
+    private suspend fun driveModeName(fallback: Int?): String? {
+        val target = helperClient?.let { hc ->
+            runCatchingCancellable { hc.read(WriteAllowlist.DRIVE_MODE_DEV, WriteAllowlist.DRIVE_MODE_TARGET_FID)?.toInt() }
+                .getOrNull()
+        }?.let { SentinelDecoder.decodeInt(it) }
+        val name = when (target) {
+            null -> null
+            DriveMode.TARGET_FLOTATION -> "FLOTATION"
+            else -> DriveMode.entries.firstOrNull { it.value == target }?.name
+        }
+        return name ?: when (fallback) { 1 -> "ECO"; 2 -> "SPORT"; 3 -> "NORMAL"; 4 -> "SNOW"; else -> null }
     }
 
     // --- get_weather ---
@@ -1636,6 +1721,85 @@ class AgentTools @Inject constructor(
         }).put("note", "данные OpenStreetMap, наличие и мощность не гарантированы").toString()
     }
 
+    // --- where_am_i ---
+
+    private suspend fun whereAmI(): String {
+        val fix = gpsFixProvider()
+            ?: return """{"error":"нет GPS-позиции машины, не могу определить, где мы"}"""
+        val lat = fix.lat
+        val lon = fix.lon
+        val client = settlementSearchClient
+            ?: return """{"error":"поиск населённых пунктов недоступен"}"""
+        Log.i(TAG, "where_am_i: request, fix age=${fix.ageMs / 1000}s live=${fix.live}")
+        val searchStartMs = nowMs()
+        val found = runCatchingCancellable {
+            client.search(lat, lon, SETTLEMENT_RADIUS_M, TOWN_RADIUS_M)
+        }.getOrNull()?.getOrElse {
+            Log.w(TAG, "where_am_i: search failed: ${it.message}")
+            null
+        } ?: return """{"error":"сервис карт недоступен, не могу определить, где мы"}"""
+        val latencyMs = nowMs() - searchStartMs
+        fun km(s: SettlementSearchClient.Settlement) = PlaceGeometry.distanceMeters(lat, lon, s.lat, s.lon) / 1000.0
+        // A lone farmstead is a poor answer to "где я" while any real settlement is around.
+        val regular = found.filter { it.place != "isolated_dwelling" }
+        val nearest = (regular.ifEmpty { found }).sortedBy { km(it) }.take(MAX_SETTLEMENTS)
+        val town = found.filter { it.place == "city" || it.place == "town" }.minByOrNull { km(it) }
+        // No place names in this log: user logs land in public GitHub issues and a name+distance
+        // pair would localize the car. Counts, the rounded nearest distance, fix age/origin,
+        // latency and the answering endpoint are enough to diagnose a "wrong answer" report.
+        val nearestKm = nearest.firstOrNull()?.let { round1(km(it)) }?.toString() ?: "-"
+        Log.i(TAG, "where_am_i: found=${found.size} nearest_km=$nearestKm town=${town != null} " +
+            "fix_age=${fix.ageMs / 1000}s live=${fix.live} latency=${latencyMs}ms endpoint=${client.lastEndpoint ?: "-"}")
+        val json = JSONObject().put("fix_age_min", fix.ageMs / 60_000L)
+        staleFixNote(fix)?.let { json.put("fix_note", it) }
+        if (nearest.isEmpty()) {
+            return json.put("settlements", JSONArray())
+                .put("note", "рядом населённых пунктов в OpenStreetMap не найдено; не называй место наугад")
+                .toString()
+        }
+        json.put("settlements", JSONArray().apply {
+            nearest.forEach { put(settlementJson(lat, lon, it)) }
+        })
+        if (town != null) json.put("nearest_town", settlementJson(lat, lon, town))
+        return json.put("note", "distance_km - по прямой до центра населённого пункта, direction_from_car - " +
+            "в какой стороне он от машины. Границ в данных нет: даже при малом расстоянии не говори, что машина " +
+            "в нём, говори «примерно N км от X, X к северу от нас». Называй только эти места").toString()
+    }
+
+    /** Null for a fresh fix. A stale fix always gets a hedge, live or seed: the 8 m GPS filter
+     *  explains why a live fix stops updating while genuinely parked, but the car's current
+     *  speed proves nothing about whether it moved after the signal was lost - so the hedge
+     *  cannot be made conditional on it. A start-time seed may predate the drive. */
+    private fun staleFixNote(fix: GpsFix): String? {
+        if (fix.ageMs <= FRESH_FIX_MS) return null
+        val min = fix.ageMs / 60_000L
+        return if (fix.live) {
+            "GPS-позиция не обновлялась $min мин: машина могла стоять, либо сигнал пропал - " +
+                "всегда говори «по последним данным»"
+        } else {
+            "свежего GPS-сигнала после запуска не было, позиция сохранена $min мин назад - говори " +
+                "«по последним данным»"
+        }
+    }
+
+    private fun settlementJson(lat: Double, lon: Double, s: SettlementSearchClient.Settlement): JSONObject =
+        JSONObject()
+            .put("name", s.name)
+            .put("type", SETTLEMENT_TYPES[s.place] ?: s.place)
+            .put("distance_km", round1(PlaceGeometry.distanceMeters(lat, lon, s.lat, s.lon) / 1000.0))
+            .put("direction_from_car", compassRu(lat, lon, s.lat, s.lon))
+
+    /** Eight-point compass direction from the car to the point, in Russian. */
+    private fun compassRu(fromLat: Double, fromLon: Double, toLat: Double, toLon: Double): String {
+        val phi1 = Math.toRadians(fromLat)
+        val phi2 = Math.toRadians(toLat)
+        val dLon = Math.toRadians(toLon - fromLon)
+        val y = Math.sin(dLon) * Math.cos(phi2)
+        val x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon)
+        val bearing = (Math.toDegrees(Math.atan2(y, x)) + 360.0) % 360.0
+        return COMPASS_RU[((bearing + 22.5) / 45.0).toInt() % 8]
+    }
+
     // Same saved-place-then-geocode lookup as navigateTo, plus a straight-line distance
     // (with a road-factor fudge) against the current range estimate.
     private suspend fun rangeToDestination(args: JSONObject): String {
@@ -2091,15 +2255,7 @@ class AgentTools @Inject constructor(
         // across rules). editingId=0L because this is a new rule with no persisted id yet.
         RuleDraftValidator.validateTriggers(
             listOf(trigger), editingId = 0L, existingRules = existing, userCommandPhrases = userPhrases.owners(),
-        )?.let {
-            val msg = when (it) {
-                TriggerValidationError.VoicePhraseEmpty -> "не указана голосовая фраза"
-                is TriggerValidationError.VoicePhraseBuiltin ->
-                    "эта фраза уже используется встроенной командой «${it.command}», выбери другую"
-                is TriggerValidationError.VoicePhraseTaken -> "эта фраза уже используется автоматизацией «${it.rule}»"
-            }
-            return JSONObject().put("error", msg).toString()
-        }
+        )?.let { return JSONObject().put("error", triggerErrorText(it)).toString() }
 
         val actions = mutableListOf<ActionDef>()
         for (i in 0 until actionsArg.length()) {
@@ -2123,8 +2279,9 @@ class AgentTools @Inject constructor(
             playSound = playSound,
             confirmBeforeExecute = actions.any { ActionDispatcher.isDangerousAction(it) },
         )
-        runCatchingCancellable { ruleDao.insert(rule) }
+        runCatchingCancellable { RuleInserts.insertWithinLimit(ruleDao, rule, MAX_AUTOMATIONS) }
             .getOrElse { return """{"error":"не удалось создать автоматизацию"}""" }
+            ?: return """{"error":"достигнут предел в 50 автоматизаций"}"""
         // One compact Russian line the model is told to read back: the driver hears exactly
         // what was created and catches a wrong threshold or action on the spot.
         return JSONObject()
@@ -2296,8 +2453,8 @@ class AgentTools @Inject constructor(
             "delay" -> {
                 val hasMs = a.has("ms") && !a.isNull("ms")
                 val ms = if (hasMs) a.optInt("ms", -1) else -1
-                if (!hasMs || ms !in 0..30000) {
-                    return Built.Error("не указана длительность паузы (мс, 0..30000)")
+                if (!hasMs || ms !in 0..MAX_DELAY_MS) {
+                    return Built.Error("не указана длительность паузы (мс, 0..$MAX_DELAY_MS)")
                 }
                 Built.Value(ActionDef(command = "delay", displayName = "Пауза $ms мс",
                     kind = "delay", payload = ms.toString()))
@@ -2432,6 +2589,19 @@ class AgentTools @Inject constructor(
         }
     }
 
+    private fun triggerErrorText(err: TriggerValidationError): String = when (err) {
+        is TriggerValidationError.ValueNotNumber -> "значение для «${err.param}» должно быть числом"
+        TriggerValidationError.SteeringKeyUnassigned -> "не назначена клавиша руля"
+        TriggerValidationError.OneShotInvalid,
+        TriggerValidationError.OneShotWithOr,
+        TriggerValidationError.OneShotWithEvent,
+        TriggerValidationError.OneShotTwice -> "разовое правило по дате этим инструментом не создаётся"
+        TriggerValidationError.VoicePhraseEmpty -> "не указана голосовая фраза"
+        is TriggerValidationError.VoicePhraseBuiltin ->
+            "эта фраза уже используется встроенной командой «${err.command}», выбери другую"
+        is TriggerValidationError.VoicePhraseTaken -> "эта фраза уже используется автоматизацией «${err.rule}»"
+    }
+
     private fun actionErrorJson(err: ActionValidationError): String {
         val msg = when (err) {
             is ActionValidationError.CommandMissing -> "не указана команда (действие ${err.index})"
@@ -2460,6 +2630,8 @@ class AgentTools @Inject constructor(
                 "оба приложения должны быть разными (действие ${err.index})"
             is ActionValidationError.SplitScreenInvalidSide ->
                 "неверная сторона split_screen (действие ${err.index})"
+            is ActionValidationError.TelegramReportEmpty ->
+                "в отчёте в Telegram не выбран ни один пункт (действие ${err.index})"
         }
         return JSONObject().put("error", msg).toString()
     }
@@ -2517,6 +2689,7 @@ class AgentTools @Inject constructor(
         private const val OK = """{"ok":true}"""
         private const val SEARCH_ERROR = """{"error":"поиск недоступен"}"""
         private const val MAX_AUTOMATIONS = 50
+        private const val MAX_DELAY_MS = 60_000
         private const val MAX_PLACES = 50
         private const val BAD_ARGS_ERROR = """{"error":"некорректные аргументы"}"""
         private const val CALL_CONTACT_FAILED = """{"error":"не удалось позвонить"}"""
@@ -2524,6 +2697,21 @@ class AgentTools @Inject constructor(
         // Straight-line distance underestimates real road distance; this fudge factor
         // brings the estimate closer to typical highway/road routing.
         private const val ROAD_FACTOR = 1.25
+
+        private const val TAG = "AgentTools"
+        // where_am_i: villages within 15 km, towns within 50 km, at most five answers.
+        private const val SETTLEMENT_RADIUS_M = 15_000
+        private const val TOWN_RADIUS_M = 50_000
+        private const val MAX_SETTLEMENTS = 5
+        // where_am_i: a fix older than this gets fix_note so the model hedges.
+        private const val FRESH_FIX_MS = 120_000L
+        private val SETTLEMENT_TYPES = mapOf(
+            "city" to "город", "town" to "город", "village" to "деревня или посёлок",
+            "hamlet" to "деревня", "suburb" to "район города", "isolated_dwelling" to "хутор",
+        )
+        private val COMPASS_RU = listOf(
+            "север", "северо-восток", "восток", "юго-восток", "юг", "юго-запад", "запад", "северо-запад",
+        )
 
         // Any wheel below this is clearly deflated (Leopard 3 cold placard ~250 kPa).
         private const val TIRE_WARN_MIN_KPA = 210

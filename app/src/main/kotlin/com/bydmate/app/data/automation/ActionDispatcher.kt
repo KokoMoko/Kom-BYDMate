@@ -18,8 +18,16 @@ import androidx.core.app.NotificationCompat
 import com.bydmate.app.R
 import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
+import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.telegram.TELEGRAM_REPORT_KIND
+import com.bydmate.app.data.telegram.TelegramReporter
+import com.bydmate.app.data.telegram.runReportAction
+import com.bydmate.app.data.vehicle.BatchReadItem
+import com.bydmate.app.data.vehicle.CommandTranslator
+import com.bydmate.app.data.vehicle.DriveMode
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.vehicle.VehicleWriteError
@@ -38,15 +46,18 @@ import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.ceil
 
 /** [daemonRestarting]: the cluster projection failed because its daemon is restarting (retriable, not broken). */
 data class DispatchResult(val success: Boolean, val reason: String? = null, val daemonRestarting: Boolean = false)
 
 @Singleton
+@Suppress("LargeClass") // the one entry point for every automation action kind
 class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies
     private val vehicleApi: VehicleApi,
     private val helper: HelperClient,
@@ -56,6 +67,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     private val audioCapture: com.bydmate.app.voice.AudioCapture,
     private val splitSessionManager: SplitSessionManager,
     private val appStrings: AppStrings,
+    private val telegramReporter: dagger.Lazy<TelegramReporter>,
 ) {
     companion object {
         private const val TAG = "ActionDispatcher"
@@ -181,6 +193,23 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             if (!isDoorUnlockCommand(command)) return null
             val s = speed ?: return BlockReason.UnlockSpeedUnknown
             if (s > 30) return BlockReason.UnlockSpeed(s)
+            return null
+        }
+
+        /** The drive mode [command] selects, or null when it is not a drive mode command. */
+        internal fun driveModeOf(command: String): DriveMode? =
+            CommandTranslator.resolve(command).singleOrNull()?.let { DriveMode.ofAction(it.actionName) }
+
+        /**
+         * Returns a block reason if [command] selects a terrain drive mode (snow, sand, mud,
+         * mountain, rock, smart) above [DriveMode.TERRAIN_MAX_SPEED_KMH] or at unknown speed
+         * (fail-closed). ECO, normal and sport switch at any speed, like BYD's own voice
+         * assistant. Pure function.
+         */
+        internal fun driveModeGateBlockReason(command: String, speed: Int?): BlockReason? {
+            if (driveModeOf(command)?.terrain != true) return null
+            val s = speed ?: return BlockReason.DriveModeSpeedUnknown
+            if (s > DriveMode.TERRAIN_MAX_SPEED_KMH) return BlockReason.DriveModeSpeed(s)
             return null
         }
 
@@ -323,14 +352,59 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             else -> resolveLocksToggle(value)   // TOGGLE_LOCKS -- the only target left
         }
 
-        /** Why a param dispatch failed, as the step reason. Only the steering heat channel
-         *  reports NotEquipped (see VehicleWriteError); it and the windows that never moved get
-         *  a readable, localized text. */
+        /** Why a param dispatch failed, as the step reason, always in the app language. Only the
+         *  steering heat channel reports NotEquipped (see VehicleWriteError). The raw error
+         *  (`value=-10011 sentinel returned` and the like) stays in the log only. */
         internal fun paramFailureReason(err: Throwable?, strings: AppStrings): String = when {
+            err is VehicleWriteError && DriveMode.ofAction(err.action) != null -> driveModeFailureReason(err, strings)
             err is VehicleWriteError.NotEquipped -> strings.get(R.string.steering_heat_not_equipped)
             err is VehicleWriteError.ReadbackMismatch && err.stuckPanes.isNotEmpty() ->
                 stuckWindowsReason(err.stuckPanes, strings)
-            else -> err?.message ?: "dispatch failed"
+            else -> strings.get(writeErrorText(err))
+        }
+
+        private fun writeErrorText(err: Throwable?): Int = when (err) {
+            is VehicleWriteError.Sentinel -> R.string.auto_err_not_confirmed
+            is VehicleWriteError.AllowlistMiss -> R.string.auto_err_not_supported
+            is VehicleWriteError.OutOfRange -> R.string.auto_err_out_of_range
+            is VehicleWriteError.HelperUnreachable -> R.string.auto_err_unreachable
+            is VehicleWriteError.ReadbackMismatch -> R.string.auto_err_not_done
+            is VehicleWriteError.Unsupported -> R.string.auto_err_unverified
+            else -> R.string.auto_err_failed
+        }
+
+        /** True when [command] is allowed or refused by speed: frunk open, unlock, terrain
+         *  drive modes, window and sunroof opens. */
+        internal fun isSpeedGated(command: String): Boolean =
+            isFrontTrunkOpenCommand(command) || isDoorUnlockCommand(command) ||
+                driveModeOf(command)?.terrain == true ||
+                isSunroofOpenCommand(command) || isWindowOpenCommand(command)
+
+        /** The gate of a speed-gated [command] decided on [speed] alone; every gated command,
+         *  windows and sunroof included, fails closed when [speed] is null. Pure function. */
+        internal fun speedOnlyBlockReason(command: String, speed: Int?): BlockReason? {
+            if (BLOCKED_PATTERNS.any { command.contains(it) }) return BlockReason.Forbidden
+            if (isFrontTrunkOpenCommand(command)) {
+                val s = speed ?: return BlockReason.FrunkSpeedUnknown
+                if (s > 0) return BlockReason.FrunkMoving(s)
+            }
+            unlockGateBlockReason(command, speed)?.let { return it }
+            driveModeGateBlockReason(command, speed)?.let { return it }
+            return speedGateBlockReason(command, speed)
+        }
+
+        /** How long the direct speed read before a gated step may take. */
+        private const val GATE_SPEED_READ_TIMEOUT_MS = 1_000L
+
+        /** A failed drive mode switch: too fast, not on this car, flotation, no change, or no answer. */
+        private fun driveModeFailureReason(err: VehicleWriteError, strings: AppStrings): String = when (err) {
+            is VehicleWriteError.SpeedBlocked -> err.speed
+                ?.let { strings.get(R.string.gate_drive_mode_speed, it) }
+                ?: strings.get(R.string.gate_drive_mode_speed_unknown)
+            is VehicleWriteError.NotEquipped -> strings.get(R.string.drive_mode_not_supported)
+            is VehicleWriteError.StateBlocked -> strings.get(R.string.drive_mode_flotation)
+            is VehicleWriteError.ReadbackMismatch -> strings.get(R.string.drive_mode_not_changed)
+            else -> strings.get(R.string.drive_mode_failed)
         }
 
         /** «окно водителя не сдвинулось…» for one pane, «не сдвинулись с места: …» for several. */
@@ -400,8 +474,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
 
         /**
          * Full safety gate for a raw vehicle command: blocked patterns, frunk
-         * parked-only, door unlock above 30 km/h, window/sunroof speed limits.
-         * Frunk and unlock fail closed on missing telemetry; window/sunroof
+         * parked-only, door unlock above 30 km/h, terrain drive modes above 15 km/h,
+         * window/sunroof speed limits. Frunk, unlock and terrain modes fail closed on missing telemetry; window/sunroof
          * checks are skipped when [data] is null (existing semantics -- callers
          * that need fail-closed window behavior check the snapshot themselves).
          * Pure function -- unit-testable and reusable by manual dispatch paths.
@@ -418,6 +492,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             // Door unlock is a safety gate like the frunk: checked BEFORE the
             // data==null guard so unknown speed blocks the unlock.
             unlockGateBlockReason(command, data?.speed)?.let { return it }
+            // Terrain drive modes fail closed on unknown speed too.
+            driveModeGateBlockReason(command, data?.speed)?.let { return it }
             if (data == null) return null
             return speedGateBlockReason(command, data.speed)
         }
@@ -453,6 +529,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         data object Forbidden : BlockReason()
         data object FrunkSpeedUnknown : BlockReason()
         data class FrunkMoving(val speed: Int) : BlockReason()
+        data object DriveModeSpeedUnknown : BlockReason()
+        data class DriveModeSpeed(val speed: Int) : BlockReason()
 
         fun toText(context: Context): String {
             val lc = context.appLocalizedContext()
@@ -465,6 +543,8 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
                 is Forbidden -> lc.getString(R.string.gate_forbidden_command)
                 is FrunkSpeedUnknown -> lc.getString(R.string.gate_frunk_speed_unknown)
                 is FrunkMoving -> lc.getString(R.string.gate_frunk_moving, speed)
+                is DriveModeSpeedUnknown -> lc.getString(R.string.gate_drive_mode_speed_unknown)
+                is DriveModeSpeed -> lc.getString(R.string.gate_drive_mode_speed, speed)
             }
         }
     }
@@ -481,6 +561,25 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     // Test seam: real impl asks MediaSessionManager for active sessions via our listener component.
     /** Test seam -- the freshest poll a "toggle" resolves its state against. */
     internal var liveSnapshot: () -> DiParsData? = { TrackingService.lastData.value }
+
+    /** Test seam -- the direct speed read a speed-gated step is decided on, rounded UP like
+     *  the drive mode guard (15.1 km/h is 16, not 15). Null when the read fails or times out. */
+    internal var readSpeedNow: suspend () -> Int? = {
+        withTimeoutOrNull(GATE_SPEED_READ_TIMEOUT_MS) { readSpeedViaDaemon() }?.let { ceil(it).toInt() }
+    }
+
+    /**
+     * The speed through the helper daemon, not ADB: an ADB read waits on a JVM monitor a timeout
+     * cannot interrupt, the daemon's transport lock is a coroutine mutex it can (review
+     * 2026-09-27). Every step this gates writes through the daemon anyway. A single-item tx=7
+     * batch read, decoded like NativeParsReader decodes one: sentinel bits -> null.
+     */
+    private suspend fun readSpeedViaDaemon(): Float? {
+        val address = FidAddresses.of("speed")
+        val (status, word) = helper.readBatch(listOf(BatchReadItem(tx = 7, dev = address.device, fid = address.fid)))
+            ?.singleOrNull() ?: return null
+        return if (status != 0) null else SentinelDecoder.parseFloatFromShellInt(word)
+    }
 
     /** Last seat step asked for per seat, so a «toggle» can bring the seat back to it. */
     internal var seatLevelMemory = SeatLevelMemory(context)
@@ -522,14 +621,16 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             "split_screen" -> dispatchSplitScreen(action)
             "split_screen_close" -> dispatchSplitScreenClose()
             "split_screen_toggle" -> dispatchSplitScreenToggle()
+            TELEGRAM_REPORT_KIND -> telegramReporter.get().runReportAction(action, appStrings)
             else -> DispatchResult(false, "Unknown action kind: ${action.kind}")
         }
     } catch (e: Exception) {
         // CancellationException must propagate so the voice routing job can be
         // cancelled by the orb hard-stop without swallowing the signal as a failure.
         if (e is CancellationException) throw e
-        Log.e(TAG, "dispatch failed for kind=${action.kind}: ${e.message}")
-        DispatchResult(false, e.message ?: "Unknown error")
+        // Class name only: an exception message can carry the intent URI (tokens, coordinates).
+        Log.e(TAG, "dispatch failed for kind=${action.kind}: ${e.javaClass.simpleName}")
+        DispatchResult(false, e.javaClass.simpleName)
     }
 
     // --- sentry mode (Settings.Global via helper daemon) ---
@@ -821,7 +922,11 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     // --- param (native autoservice via VehicleApi) ---
 
     private suspend fun dispatchParam(action: ActionDef, data: DiParsData?): DispatchResult {
-        val blockReason = getBlockReason(action.command, data)
+        val blockReason = if (isSpeedGated(action.command)) {
+            speedOnlyBlockReason(action.command, gateSpeed(action.command))
+        } else {
+            getBlockReason(action.command, data)
+        }
         if (blockReason != null) {
             Log.w(TAG, "Blocked '${action.command}': $blockReason")
             return DispatchResult(false, blockReason.toText(context))
@@ -831,7 +936,23 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         // A seat step the driver asked for is the one a later «toggle» brings back.
         if (success) seatLevelMemory.remember(action.command)
         val reason = if (!success) paramFailureReason(result.exceptionOrNull(), appStrings) else null
+        if (!success) Log.w(TAG, "param '${action.command}' failed: ${result.exceptionOrNull()?.message}")
         return DispatchResult(success, reason)
+    }
+
+    /**
+     * The speed a speed-gated step is decided on: a direct read, else unknown (the gate then
+     * refuses). No poll fallback: the poll truncates the speed (0.8 km/h reads 0) and a zero a
+     * few seconds old does not prove the car is standing now (review 2026-09-27). Never the
+     * snapshot the caller passed in: a rule hands every step the one taken when it fired, which
+     * after a delay or a confirm window can say 0 km/h while the car is already moving.
+     */
+    private suspend fun gateSpeed(command: String): Int? {
+        val direct = runCatching { readSpeedNow() }
+            .onFailure { if (it is CancellationException) throw it }
+            .getOrNull()
+        Log.i(TAG, "gate speed '$command': source=daemon direct=$direct -> ${direct ?: "unknown"}")
+        return direct
     }
 
     /** A failed [VehicleApi] write in the app language, the same text a rule step reports. */
@@ -932,7 +1053,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             try {
                 context.sendBroadcast(press)
             } catch (e: Exception) {
-                Log.w(TAG, "autoDial broadcast failed: ${e.message}")
+                Log.w(TAG, "autoDial broadcast failed: ${e.javaClass.simpleName}")
             }
         }
         return result
@@ -1161,11 +1282,11 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
 
     /** [startNavigate] for the Maps dialect: no package pin, no 2GIS fallback reason. */
     private fun startMapsIntent(mode: String, uri: String, label: String): DispatchResult {
-        Log.i(TAG, "navigate app=maps kind=$mode uri=$uri")
+        Log.i(TAG, "navigate app=maps kind=$mode uri=${LinkRedaction.forLog(uri)}")
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val result = tryStartActivity(intent, label)
-        Log.i(TAG, "navigate app=maps intent sent label=$label ok=${result.success}" +
+        Log.i(TAG, "navigate app=maps intent sent label=${LinkRedaction.forLog(label)} ok=${result.success}" +
             (result.reason?.let { " reason=$it" } ?: ""))
         return result
     }
@@ -1179,14 +1300,14 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     private fun startNavigate(
         navigator: String, mode: String, uri: String, label: String, fallbackReason: String?,
     ): DispatchResult {
-        Log.i(TAG, "navigate: app=$navigator mode=$mode uri=$uri")
+        Log.i(TAG, "navigate: app=$navigator mode=$mode uri=${LinkRedaction.forLog(uri)}")
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (navigator == RouteNavigatorUris.DGIS) {
             intent.setPackage(RouteNavigatorUris.DGIS_PACKAGE)
         }
         val result = tryStartActivity(intent, label)
-        Log.i(TAG, "navigate: intent sent label=$label ok=${result.success}")
+        Log.i(TAG, "navigate: intent sent label=${LinkRedaction.forLog(label)} ok=${result.success}")
         return if (result.success && fallbackReason != null) result.copy(reason = fallbackReason)
         else result
     }
@@ -1297,7 +1418,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         try {
             context.startActivity(home)
         } catch (e: Exception) {
-            Log.w(TAG, "home failed: ${e.message}")
+            Log.w(TAG, "home failed: ${e.javaClass.simpleName}")
         }
     }
 
@@ -1305,11 +1426,13 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         context.startActivity(intent)
         DispatchResult(true)
     } catch (e: ActivityNotFoundException) {
-        Log.w(TAG, "$label: ${e.message}")
-        DispatchResult(false, appStrings.get(R.string.dispatch_no_handler_app, e.message.toString()))
+        // Class name only: the message spells out the whole intent, URI with its token included.
+        // The label carries the link, number or coordinates too: only what LinkRedaction leaves.
+        Log.w(TAG, "${LinkRedaction.forLog(label)}: ${e.javaClass.simpleName}")
+        DispatchResult(false, appStrings.get(R.string.dispatch_no_handler_app, e.javaClass.simpleName))
     } catch (e: SecurityException) {
-        Log.w(TAG, "$label (security): ${e.message}")
-        DispatchResult(false, appStrings.get(R.string.dispatch_no_permission, e.message.toString()))
+        Log.w(TAG, "${LinkRedaction.forLog(label)} (security): ${e.javaClass.simpleName}")
+        DispatchResult(false, appStrings.get(R.string.dispatch_no_permission, e.javaClass.simpleName))
     }
 
     // --- helpers ---

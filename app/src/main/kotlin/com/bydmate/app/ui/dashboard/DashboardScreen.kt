@@ -137,6 +137,7 @@ fun DashboardScreen(
             AdbVerdictDialog(
                 verdict = adbVerdict,
                 restoreEnabled = viewModel.adbRestoreEnabled,
+                restoreSupported = viewModel.adbRestoreSupported,
                 onCheck = { viewModel.recheckAdb() },
                 onEnableRestore = { viewModel.enableAdbRestore() },
                 onOpenDiagnostics = onOpenSettings,

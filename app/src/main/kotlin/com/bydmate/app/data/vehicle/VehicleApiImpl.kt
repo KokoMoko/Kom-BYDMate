@@ -52,6 +52,14 @@ class VehicleApiImpl @Inject constructor(
         SteeringHeatReadback { readSteeringHeatState() },
     )
 
+    private val driveModeChannel = DriveModeChannel(
+        DriveModeWriter { name, value, beforeSend -> doWriteOutcome(name, value, journaled = false, beforeSend = beforeSend) },
+        DriveModeReader { fid -> helper.read(WriteAllowlist.DRIVE_MODE_DEV, fid)?.toInt() },
+        // Rounded UP, not truncated: a plain toInt() turns 15.9 km/h into 15 and lets a
+        // terrain mode through above the owner's 15 km/h limit (finding 2026-09-27).
+        speed = { FidAddresses.of("speed").let { autoservice.getFloat(it.device, it.fid) }?.let { kotlin.math.ceil(it).toInt() } },
+    )
+
     // Owns the window position samples taken around a write. A write that fails before the
     // verdict cancels its sample (see doWrite), so no read outlives its dispatch.
     // internal var (not a constructor param — Hilt's @Inject constructor can't carry a
@@ -66,7 +74,7 @@ class VehicleApiImpl @Inject constructor(
 
     // Individual readers — direct autoservice fid hits.
     override suspend fun readSoc(): Float? = autoservice.getFloat(1014, 1246777400)
-    override suspend fun readSpeed(): Float? = autoservice.getFloat(1013, -1807745016)
+    override suspend fun readSpeed(): Float? = FidAddresses.of("speed").let { autoservice.getFloat(it.device, it.fid) }
     override suspend fun readMileageKm(): Float? =
         autoservice.getInt(1014, 1246765072)?.let { it / 10f }
     override suspend fun readPowerKw(): Int? = autoservice.getInt(1012, 339738656)
@@ -110,10 +118,7 @@ class VehicleApiImpl @Inject constructor(
         }
         if (resolved.size == 1) {
             val r = resolved[0]
-            if (r.actionName in STEERING_HEAT_ACTIONS) {
-                // Write + readback (+ fallback write): one unit, like the seat sequence.
-                return withContext(NonCancellable) { steeringHeat(r.actionName) }
-            }
+            channelWrite(r.actionName)?.let { return it }
             // doWrite protects its own window verdict from cancellation, so no wrapper here.
             return doWrite(r.actionName, r.value)
         }
@@ -314,6 +319,15 @@ class VehicleApiImpl @Inject constructor(
     }
 
     /**
+     * Actions that go through a verification channel instead of a bare write, or null. Write +
+     * readback (+ fallback write) run as one unit, like the seat sequence.
+     */
+    private suspend fun channelWrite(action: String): Result<Unit>? = when {
+        action in STEERING_HEAT_ACTIONS -> withContext(NonCancellable) { steeringHeat(action) }
+        else -> DriveMode.ofAction(action)?.let { mode -> withContext(NonCancellable) { driveMode(mode) } }
+    }
+
+    /**
      * Steering wheel heat through its verification channel, as the Result dispatch returns.
      * The per-write audit rows only say the daemon accepted a write; one more row records the
      * channel's verdict: dev = the device of the last write (0 = none), readback = the last
@@ -334,6 +348,35 @@ class VehicleApiImpl @Inject constructor(
                 Result.failure(VehicleWriteError.HelperUnreachable(action, "helper write not accepted"))
             SteeringHeatChannel.Result.UNCONFIRMED ->
                 Result.failure(VehicleWriteError.HelperUnreachable(action, "result not confirmed (${outcome.verdict})"))
+        }
+    }
+
+    /**
+     * Drive mode through its verification channel, as the Result dispatch returns. Like the
+     * steering heat verdict row: dev = 1023, readback = the last target mode read, error =
+     * "verdict=<label>" (also on success).
+     */
+    private suspend fun driveMode(mode: DriveMode): Result<Unit> {
+        val outcome = driveModeChannel.actuate(mode)
+        val action = mode.actionName
+        val entry = allowlist.find(action)
+        val ok = outcome.result == DriveModeChannel.Result.OK
+        logWrite(
+            action, WriteAllowlist.DRIVE_MODE_DEV, WriteAllowlist.DRIVE_MODE_WRITE_FID, mode.value,
+            outcome.target, ok, "verdict=${outcome.verdict}", entry?.validated ?: false,
+        )
+        return when (outcome.result) {
+            DriveModeChannel.Result.OK -> Result.success(Unit)
+            DriveModeChannel.Result.SPEED ->
+                Result.failure(VehicleWriteError.SpeedBlocked(action, outcome.verdict, outcome.speed))
+            DriveModeChannel.Result.NOT_SUPPORTED -> Result.failure(VehicleWriteError.NotEquipped(action))
+            DriveModeChannel.Result.FLOTATION ->
+                Result.failure(VehicleWriteError.StateBlocked(action, "emergency flotation mode"))
+            DriveModeChannel.Result.NOT_CHANGED -> Result.failure(
+                VehicleWriteError.ReadbackMismatch(action, "mode did not change: expected=${mode.value} got=${outcome.target}"),
+            )
+            DriveModeChannel.Result.UNREADABLE, DriveModeChannel.Result.UNREACHABLE ->
+                Result.failure(VehicleWriteError.HelperUnreachable(action, outcome.verdict))
         }
     }
 
@@ -639,8 +682,18 @@ class VehicleApiImpl @Inject constructor(
      * range) maps to TRANSIENT so the adaptive channel never switches channels because
      * of a code bug. seat entries have no readbackFid, so no read-back verification.
      * [journaled] = false keeps non-seat writes (steering heat) out of the seat journal.
+     * [beforeSend], when given, is handed to [HelperClient.writeStatus], which runs it inside
+     * its own transport mutex, immediately before the transact — the actual last-instant guard,
+     * with no queue wait behind another helper request able to separate the check from the send.
+     * A false return skips the transact entirely and surfaces here as [WriteGuardRefused],
+     * reported as "pre_send_refused".
      */
-    internal suspend fun doWriteOutcome(actionName: String, value: Int, journaled: Boolean = true): WriteOutcome {
+    internal suspend fun doWriteOutcome(
+        actionName: String,
+        value: Int,
+        journaled: Boolean = true,
+        beforeSend: (suspend (LockedReader) -> Boolean)? = null,
+    ): WriteOutcome {
         val entry = allowlist.find(actionName) ?: run {
             Log.w(TAG, "doWriteOutcome: action=$actionName not in allowlist")
             logWrite(actionName, -1, -1, value, null, false, "allowlist_miss", validated = false)
@@ -653,11 +706,16 @@ class VehicleApiImpl @Inject constructor(
         }
         logAttempt(actionName, entry, value)
         val status: Int? = try {
-            helper.writeStatus(entry.dev, entry.writeFid, value)
+            helper.writeStatus(entry.dev, entry.writeFid, value, beforeSend)
+        } catch (e: CancellationException) {
+            // Rethrow so callers outside the NonCancellable write unit (channel resolution,
+            // probe logic) can still be cancelled normally.
+            throw e
+        } catch (e: WriteGuardRefused) {
+            Log.w(TAG, "doWriteOutcome: action=$actionName refused by beforeSend guard: ${e.message}")
+            logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "pre_send_refused", entry.validated)
+            return WriteOutcome.TRANSIENT
         } catch (e: Exception) {
-            // Rethrow cancellation so callers outside the NonCancellable write unit
-            // (channel resolution, probe logic) can still be cancelled normally.
-            if (e is CancellationException) throw e
             Log.w(TAG, "doWriteOutcome: action=$actionName helper threw: ${e.message}")
             logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "helper_exception", entry.validated)
             return WriteOutcome.TRANSIENT

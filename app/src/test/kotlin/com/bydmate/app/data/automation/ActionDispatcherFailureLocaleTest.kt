@@ -45,8 +45,11 @@ class ActionDispatcherFailureLocaleTest {
         cluster,
         mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
         split,
-        AppStrings(app),
-    ).also { it.clusterPollIntervalMs = 1L }
+        AppStrings(app), dagger.Lazy { io.mockk.mockk(relaxed = true) },
+    ).also {
+        it.clusterPollIntervalMs = 1L
+        it.readSpeedNow = { 0 } // a standing car unless a test says otherwise
+    }
 
     init {
         every { split.state } returns MutableStateFlow(SplitSessionState.Idle)
@@ -98,12 +101,34 @@ class ActionDispatcherFailureLocaleTest {
         assertEquals("не сдвинулись с места: заднее левое окно, заднее правое окно", reason(driverWindowOpen))
     }
 
-    @Test fun `a readback mismatch that names no window keeps its raw message`() = runTest {
-        lang("en")
+    // Audit 3.19 item 7: the journal shows a phrase in the app language, never the raw error.
+    @Test fun `a readback mismatch that names no window is worded in the app language`() = runTest {
         coEvery { vehicleApi.dispatch(any()) } returns
             Result.failure(VehicleWriteError.ReadbackMismatch("doors_lock", "expected=2 got=1"))
 
-        assertEquals("doors_lock: expected=2 got=1", reason(driverWindowOpen))
+        lang("en")
+        assertEquals("The car did not carry out the command", reason(driverWindowOpen))
+        lang("ru")
+        assertEquals("Машина не выполнила команду", reason(driverWindowOpen))
+    }
+
+    @Test fun `write errors are worded per cause in the app language`() = runTest {
+        val cases = listOf(
+            VehicleWriteError.Sentinel("doors_lock") to "Машина не подтвердила команду",
+            VehicleWriteError.AllowlistMiss("doors_lock") to "Эта команда не поддерживается",
+            VehicleWriteError.OutOfRange("doors_lock", "value=7") to "Недопустимое значение для команды",
+            VehicleWriteError.HelperUnreachable("doors_lock", "binder dead") to "Команда не дошла до машины",
+            VehicleWriteError.Unsupported("doors_lock") to "Команда не проверена на этой машине и не сработала",
+            IllegalStateException("boom") to "Не удалось выполнить команду",
+        )
+        lang("ru")
+        for ((err, text) in cases) {
+            coEvery { vehicleApi.dispatch(any()) } returns Result.failure(err)
+            assertEquals(err.toString(), text, reason(driverWindowOpen))
+        }
+        lang("en")
+        coEvery { vehicleApi.dispatch(any()) } returns Result.failure(VehicleWriteError.Sentinel("doors_lock"))
+        assertEquals("The car did not confirm the command", reason(driverWindowOpen))
     }
 
     // The per-action run button writes through VehicleApi directly and words the error here.
@@ -112,6 +137,44 @@ class ActionDispatcherFailureLocaleTest {
         val err = VehicleWriteError.ReadbackMismatch("window_driver_open", "log line", listOf(WindowPane.DRIVER))
 
         assertEquals("driver window did not move, the command did not work", dispatcher.vehicleFailureReason(err))
+    }
+
+    // ── drive mode (#253) ──────────────────────────────────────────────────────
+
+    @Test fun `drive mode failures are worded per cause in the app language`() = runTest {
+        val eco = ActionDef(command = "ECO模式", displayName = "x", kind = "param")
+        val cases = listOf(
+            VehicleWriteError.NotEquipped("drive_mode_eco") to
+                ("Машина не поддерживает этот режим движения" to "This car does not support this drive mode"),
+            VehicleWriteError.StateBlocked("drive_mode_eco", "emergency flotation mode") to
+                ("Машина в аварийном режиме «высокая вода», режим движения не меняю" to
+                    "The car is in the emergency high-water mode, the drive mode stays as it is"),
+            VehicleWriteError.ReadbackMismatch("drive_mode_eco", "mode did not change") to
+                ("Режим движения не сменился" to "The drive mode did not change"),
+            VehicleWriteError.HelperUnreachable("drive_mode_eco", "unreachable") to
+                ("Не удалось сменить режим движения" to "Could not change the drive mode"),
+            VehicleWriteError.SpeedBlocked("drive_mode_eco", "too fast", 40) to
+                ("Этот режим движения включается только на скорости до 15 км/ч (сейчас 40 км/ч)" to
+                    "This drive mode switches on only up to 15 km/h (now 40 km/h)"),
+            VehicleWriteError.SpeedBlocked("drive_mode_eco", "speed unknown", null) to
+                ("Скорость неизвестна, этот режим движения не включаю" to
+                    "Speed unknown, this drive mode is not switched on"),
+        )
+        for ((err, texts) in cases) {
+            coEvery { vehicleApi.dispatch(any()) } returns Result.failure(err)
+            lang("ru")
+            assertEquals(texts.first, reason(eco))
+            lang("en")
+            assertEquals(texts.second, reason(eco))
+        }
+    }
+
+    @Test fun `a terrain mode at unknown speed is refused before the car is asked`() = runTest {
+        lang("ru")
+        dispatcher.readSpeedNow = { null }
+        val snow = ActionDef(command = "雪地模式", displayName = "x", kind = "param")
+        assertEquals("Скорость неизвестна, этот режим движения не включаю", reason(snow))
+        io.mockk.coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
     }
 
     // ── every other step reason ────────────────────────────────────────────────

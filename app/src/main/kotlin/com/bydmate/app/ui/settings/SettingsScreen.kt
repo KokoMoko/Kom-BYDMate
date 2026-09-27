@@ -7,6 +7,7 @@ import android.provider.Settings as AndroidSettings
 import android.widget.Toast
 import com.bydmate.app.camera.BlindSpotPositionOverlay
 import com.bydmate.app.camera.BlindSpotPreferences
+import com.bydmate.app.camera.blindSpotClusterDisplay
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.data.autoservice.AdbRestoreState
 import com.bydmate.app.data.autoservice.AdbVerdict
@@ -117,6 +118,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.horizontalScroll
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.rememberCoroutineScope
+import com.bydmate.app.data.telegram.ReportField
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.window.Dialog
@@ -1378,6 +1386,11 @@ private fun BlindSpotCard() {
     var bothOnMain by remember {
         mutableStateOf(prefs.getBoolean(BlindSpotPreferences.KEY_BOTH_ON_MAIN, false))
     }
+    var bothOnCluster by remember {
+        mutableStateOf(prefs.getBoolean(BlindSpotPreferences.KEY_BOTH_ON_CLUSTER, false))
+    }
+    // Same lookup the controller routes by: without a projection panel there is no cluster to offer.
+    val hasClusterDisplay = remember { blindSpotClusterDisplay(context) != null }
 
     // Drag-to-place preview: it lives in a WindowManager overlay, so leaving the screen has to
     // take it down explicitly. The state follows the window rather than the clicks — the overlay
@@ -1498,7 +1511,12 @@ private fun BlindSpotCard() {
             checked = bothOnMain,
             onCheckedChange = {
                 bothOnMain = it
-                prefs.edit().putBoolean(BlindSpotPreferences.KEY_BOTH_ON_MAIN, it).apply()
+                // The two screen opt-ins exclude each other (#240): one write, so the controller
+                // never sees both on.
+                if (it) bothOnCluster = false
+                val editor = prefs.edit().putBoolean(BlindSpotPreferences.KEY_BOTH_ON_MAIN, it)
+                if (it) editor.putBoolean(BlindSpotPreferences.KEY_BOTH_ON_CLUSTER, false)
+                editor.apply()
                 // The left window only exists on the main screen while this is on; its placement
                 // row goes away with it, and an open drag overlay would have nothing to dismiss it.
                 if (!it && placing == BlindSpotPositionOverlay.Side.LEFT) positionOverlay.hide()
@@ -1521,6 +1539,24 @@ private fun BlindSpotCard() {
                     val closing = placing == side
                     positionOverlay.hide()
                     if (!closing && positionOverlay.show(context, side)) placing = side
+                },
+                enabled = enabled,
+            )
+        }
+        if (hasClusterDisplay) {
+            SettingDivider()
+            SettingToggleRow(
+                title = stringResource(R.string.settings_blindspot_both_cluster_title),
+                description = stringResource(R.string.settings_blindspot_both_cluster_desc),
+                checked = bothOnCluster,
+                onCheckedChange = {
+                    bothOnCluster = it
+                    if (it) bothOnMain = false
+                    val editor = prefs.edit().putBoolean(BlindSpotPreferences.KEY_BOTH_ON_CLUSTER, it)
+                    if (it) editor.putBoolean(BlindSpotPreferences.KEY_BOTH_ON_MAIN, false)
+                    editor.apply()
+                    // Turning the main-screen opt-in off takes the left placement row with it.
+                    if (it && placing == BlindSpotPositionOverlay.Side.LEFT) positionOverlay.hide()
                 },
                 enabled = enabled,
             )
@@ -2074,6 +2110,8 @@ private fun ServiceSection(
     // every car: where the port survives a reboot the status line simply says so.
     val adbRestore = remember { clusterEntryPoint.adbRestoreManager() }
     var adbRestoreEnabled by remember { mutableStateOf(adbRestore.isEnabled()) }
+    // Android 10: the toggle stays visible but locked off, the status line says why.
+    val adbRestoreSupported = remember { adbRestore.isSupported() }
     var adbRestoreHelpOpen by remember { mutableStateOf(false) }
     val adbRestoreState by adbRestore.state.collectAsStateWithLifecycle()
     val adbVerdict by viewModel.adbVerdict.collectAsStateWithLifecycle()
@@ -2100,12 +2138,14 @@ private fun ServiceSection(
             SettingToggleRow(
                 title = stringResource(R.string.settings_adb_restore_title),
                 description = stringResource(R.string.settings_adb_restore_desc),
-                checked = adbRestoreEnabled,
+                checked = adbRestoreEnabled && adbRestoreSupported,
                 onCheckedChange = { enabled ->
                     adbRestoreEnabled = enabled
                     adbRestore.setEnabled(enabled)
                 },
-                onHelp = { adbRestoreHelpOpen = true },
+                enabled = adbRestoreSupported,
+                // The help explains a working restore; on Android 10 the status line says why there is none.
+                onHelp = if (adbRestoreSupported) ({ adbRestoreHelpOpen = true }) else null,
             )
             adbRestoreStatusText(adbRestoreState)?.let { SettingHint(text = it) }
             val verdict = adbVerdict
@@ -2140,6 +2180,7 @@ private fun ServiceSection(
         AdbVerdictDialog(
             verdict = dialogVerdict,
             restoreEnabled = adbRestoreEnabled,
+            restoreSupported = adbRestoreSupported,
             onCheck = { viewModel.recheckAdb() },
             onEnableRestore = {
                 // Keep the toggle above in step with the dialog's switch-on.
@@ -2383,11 +2424,16 @@ private fun DiagnosticsRows(state: SettingsUiState, viewModel: SettingsViewModel
     }
 }
 
-/** Automatic save (#237, #238): period and part chips with the last run, then the Telegram bot. */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+/**
+ * Automatic save (#237, #238): period and part chips with the last run, then the Telegram bot and
+ * the power-off report it sends (3.19).
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun AutoBackupRows(state: SettingsUiState, viewModel: SettingsViewModel) {
     val context = LocalContext.current
+    val tokenFocus = remember { FocusRequester() }
+    val botBringer = remember { BringIntoViewRequester() }
     val periods = AutoBackupPeriod.entries
     val locale = LocalConfiguration.current.locales[0]
     val dateFormat = remember(locale) { SimpleDateFormat("d MMM HH:mm", locale) }
@@ -2461,13 +2507,88 @@ private fun AutoBackupRows(state: SettingsUiState, viewModel: SettingsViewModel)
         }
     }
     SettingDivider()
-    TelegramBotRows(state, viewModel)
+    TelegramBotRows(state, viewModel, tokenFocus, botBringer)
+    SettingDivider()
+    PowerOffReportRows(state, viewModel, tokenFocus, botBringer)
+}
+
+/**
+ * «Отчёт при выключении машины»: needs the bot above, so without it the switch is grey and a link
+ * takes the driver to the token field. The items show only while the report is on.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun PowerOffReportRows(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    tokenFocus: FocusRequester,
+    botBringer: BringIntoViewRequester,
+) {
+    val connected = state.tgBackupBinding != null
+    val scope = rememberCoroutineScope()
+    SettingToggleRow(
+        title = stringResource(R.string.settings_tg_report_off_title),
+        description = stringResource(R.string.settings_tg_report_off_hint),
+        checked = connected && state.tgReportOffEnabled,
+        onCheckedChange = { viewModel.setTgReportOffEnabled(it) },
+        enabled = connected,
+    )
+    if (!connected) {
+        FlowRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable {
+                    scope.launch {
+                        botBringer.bringIntoView()
+                        // The token field exists only on the first step; on the code step the block is enough.
+                        if (state.tgBackupCode == null) tokenFocus.requestFocus()
+                    }
+                }
+                .padding(bottom = 4.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                stringResource(R.string.settings_tg_report_off_no_bot),
+                color = TextSecondary, fontSize = 12.5.sp, lineHeight = 17.sp,
+                modifier = Modifier.padding(end = 4.dp),
+            )
+            Text(
+                stringResource(R.string.settings_tg_report_off_connect),
+                color = AccentBlue, fontSize = 12.5.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold,
+            )
+        }
+    } else if (state.tgReportOffEnabled) {
+        Text(
+            stringResource(R.string.settings_tg_report_items_label),
+            color = TextSecondary, fontSize = 12.sp, lineHeight = 16.sp,
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(bottom = 6.dp),
+        ) {
+            ReportField.entries.forEach { field ->
+                val label = stringResource(field.labelRes)
+                val selected = field in state.tgReportOffFields
+                UnitChip(
+                    label = if (selected) "✓ $label" else label,
+                    selected = selected,
+                    onClick = { viewModel.toggleTgReportOffField(field) },
+                )
+            }
+        }
+    }
 }
 
 /** Telegram bot as a three-step stepper: token, code sent to the bot, connected (#238). */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun TelegramBotRows(state: SettingsUiState, viewModel: SettingsViewModel) {
+private fun TelegramBotRows(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    tokenFocus: FocusRequester,
+    botBringer: BringIntoViewRequester,
+) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val copiedToast = stringResource(R.string.settings_tg_backup_code_copied)
@@ -2479,7 +2600,7 @@ private fun TelegramBotRows(state: SettingsUiState, viewModel: SettingsViewModel
         else -> 1
     }
     Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().bringIntoViewRequester(botBringer).padding(vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
@@ -2551,6 +2672,7 @@ private fun TelegramBotRows(state: SettingsUiState, viewModel: SettingsViewModel
                             onValueChange = { viewModel.updateTgBackupToken(it) },
                             keyboardType = KeyboardType.Password,
                             secret = true,
+                            modifier = Modifier.focusRequester(tokenFocus),
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
@@ -3811,7 +3933,8 @@ private fun SettingsTextField(
     onValueChange: (String) -> Unit,
     keyboardType: KeyboardType,
     secret: Boolean = false,
-    singleLine: Boolean = true
+    singleLine: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     // Secret fields (API keys, tokens) are masked so screenshots and over-the-shoulder
     // looks do not leak them; the eye icon reveals the value while editing.
@@ -3837,7 +3960,7 @@ private fun SettingsTextField(
                 }
             }
         } else null,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = Color.White,
@@ -4046,6 +4169,7 @@ private fun ModelPickerDialog(
 @Composable
 private fun adbRestoreStatusText(state: AdbRestoreState): String? = when (state) {
     AdbRestoreState.Disabled -> null
+    AdbRestoreState.Unsupported -> stringResource(R.string.settings_adb_restore_status_unsupported)
     AdbRestoreState.NotNeeded -> stringResource(R.string.settings_adb_restore_status_not_needed)
     AdbRestoreState.NeedsActivation -> stringResource(R.string.settings_adb_restore_status_needs_activation)
     AdbRestoreState.WaitingWifi -> stringResource(R.string.settings_adb_restore_status_waiting_wifi)

@@ -123,6 +123,8 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var autoBackupScheduler: com.bydmate.app.data.backup.AutoBackupScheduler
     @Inject lateinit var postRestoreCheck: com.bydmate.app.data.backup.PostRestoreCheck
     @Inject lateinit var appStrings: com.bydmate.app.util.AppStrings
+    @Inject lateinit var telegramReporter: com.bydmate.app.data.telegram.TelegramReporter
+    @Inject lateinit var powerOffArmer: com.bydmate.app.data.telegram.PowerOffArmer
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -266,6 +268,13 @@ class TrackingService : Service(), LocationListener {
         )
     }
 
+    /** [location] paired with whether the GPS listener delivered it in this service run (true)
+     *  or it is only the getLastKnownLocation() seed from start, which may predate the whole
+     *  drive (false). A live fix then stays put while parked (8 m filter), so its age alone does
+     *  not mean the position is wrong. Bundled into one snapshot, written whole at both call
+     *  sites below, so a reader can never pair a stale point with a live flag read separately. */
+    internal data class LocationFix(val location: Location, val isLive: Boolean)
+
     companion object {
         private const val TAG = "TrackingService"
         private const val NOTIFICATION_ID = 1
@@ -360,11 +369,11 @@ class TrackingService : Service(), LocationListener {
          * that no rule can act on.
          */
         internal val PUSH_EVALUATE_FIELDS: Set<String> = setOf(
-            "gear", "turnSignal", "powerState", "workMode",
+            "gear", "turnSignal", "powerState", "workMode", "driveModeTarget",
             "doorFL", "doorFR", "doorRL", "doorRR",
             "windowFL", "windowFR", "windowRL", "windowRR",
             "sunroof", "trunk", "hood", "lockFL",
-            "seatbeltFL", "seatbeltFR",
+            "seatbeltFL", "seatbeltFR", "seatbeltRL", "seatbeltRM", "seatbeltRR",
             "occupancyFL", "occupancyFR", "occupancyRL", "occupancyRM", "occupancyRR",
             "acStatus", "acCirc", "lightLow", "drl", "lightLevel",
             "keyBatteryStatus",
@@ -400,6 +409,9 @@ class TrackingService : Service(), LocationListener {
 
         private val _lastLocation = MutableStateFlow<Location?>(null)
         val lastLocation: StateFlow<Location?> = _lastLocation
+
+        @Volatile internal var lastLocationFix: LocationFix? = null
+            private set
 
         // GPS fix older than this is not forwarded to ABRP: a stale coordinate would
         // pin the car marker to an old position, which is worse than sending none.
@@ -544,6 +556,8 @@ class TrackingService : Service(), LocationListener {
         registerWifiRestoreCallback()
         // HUD output resumes with the service on cars where the user enabled it.
         hudController.startIfEnabled()
+        // Rule journal retention: 30 days, 2000 rows.
+        serviceScope.launch { automationEngine.pruneJournal() }
 
         // A daemon can be spawned by any ensureRunning() caller (GrantSelfHeal reassert, Settings,
         // cluster) after the startup resolve already failed with "daemon unreachable" — crazyhack's
@@ -711,6 +725,8 @@ class TrackingService : Service(), LocationListener {
             } catch (e: Exception) {
                 Log.w(TAG, "HelperBootstrap.ensureRunning failed: ${e.message}")
                 ChainLog.append(this@TrackingService, "Helper bootstrap failed: ${e.message}")
+            } finally {
+                powerOffArmer.bootstrapAttempted()
             }
         }
 
@@ -783,6 +799,15 @@ class TrackingService : Service(), LocationListener {
         // Start the network monitor BEFORE polling so the first evaluate() tick
         // already has access to the latest VALIDATED edge state.
         networkAvailableMonitor.start()
+        // Telegram reports that met no network go out now and whenever the internet comes back;
+        // the edge at 0 is the start value, drained by the first line already.
+        serviceScope.launch {
+            telegramReporter.drainOutbox("service_start")
+            networkAvailableMonitor.edges.collect { at -> if (at > 0L) telegramReporter.drainOutbox("network") }
+        }
+        // The power-off report: keeps the helper daemon armed while the car is on (it sends the
+        // report itself at the power-off, when this process is already killed).
+        serviceScope.launch { powerOffArmer.run() }
         startPolling()
         startCameraMonitor()
         // Pushed fid values are laid into the live snapshot as they arrive; the poll above is
@@ -891,6 +916,7 @@ class TrackingService : Service(), LocationListener {
         if (applied && pushLogThrottle.shouldLog(field)) {
             Log.i("FidPush", "push fid=${event.fid} $field=${event.intValue}/${event.doubleValue} applied")
         }
+        if (applied) _lastData.value?.let(beltProbeLog::onSnapshot)
         // A rule that watches this field must not wait for the next poll tick (up to 5 s
         // while parked). Same snapshot and same session id the poll subscriber passes, on
         // serviceScope so the binder callback thread is free the moment the patch lands.
@@ -919,6 +945,7 @@ class TrackingService : Service(), LocationListener {
      * the log. Only the logging is throttled — every event still patches the snapshot.
      */
     private val pushLogThrottle = com.bydmate.app.data.autoservice.LogThrottle(1_000L)
+    private val beltProbeLog = BeltProbeLog()
 
     private fun resolveFidCatalog() {
         serviceScope.launch {
@@ -1404,6 +1431,7 @@ class TrackingService : Service(), LocationListener {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onLocationChanged(location: Location) {
+        lastLocationFix = LocationFix(location, isLive = true)
         _lastLocation.value = location
         // AC-06: never log raw coordinates in release — logcat is readable on DiLink
         // and ends up in user-shared diagnostic dumps.
@@ -1445,6 +1473,7 @@ class TrackingService : Service(), LocationListener {
                     lastDataAtMs = System.currentTimeMillis()
                     lastSample = sample
                     blindSpotController.onPollSnapshot(data)
+                    beltProbeLog.onSnapshot(data)
                     alicePollingManager.latestData = data
                     // Cache for AutoserviceChargingDetector — avoids extra parsReader.fetch() inside runCatchUp.
                     autoserviceDetector.onSample(data)
@@ -1848,6 +1877,9 @@ class TrackingService : Service(), LocationListener {
     }
 
     private fun startLocationUpdates() {
+        // Whatever this run manages below (no permission, GPS off, a throwing provider), a fix
+        // kept from a previous run of this service in the same process is not this run's data.
+        lastLocationFix = nextSnapshotOnRestart(lastLocationFix, lastKnown = null)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -1882,6 +1914,10 @@ class TrackingService : Service(), LocationListener {
         // Immediate fix from GPS last-known only (like TripInfo).
         try {
             val lastKnown = if (gpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null
+            // A seed is never live; with no fresh seed (GPS off, no fix yet), any snapshot kept
+            // from a previous run of this service is demoted too, so a restart never keeps
+            // serving a stale point as if the listener just delivered it.
+            lastLocationFix = nextSnapshotOnRestart(lastLocationFix, lastKnown)
             if (lastKnown != null) {
                 _lastLocation.value = lastKnown
                 Log.i(TAG, "lastKnownLocation: provider=${lastKnown.provider} " +
@@ -2121,3 +2157,14 @@ class TrackingService : Service(), LocationListener {
         nm.notify(NOTIFICATION_ID, buildNotification(text))
     }
 }
+
+/** [TrackingService.lastLocationFix] at service (re)start: a fresh [lastKnown] seed replaces it,
+ *  never live; with no fresh seed (GPS off, or no fix yet), [previous] is kept but demoted to
+ *  not-live, since a seed from a prior run of the same process is not this run's data either.
+ *  Pure top-level function (not a Companion member, to stay under detekt's function-count
+ *  threshold there) so a restart never leaves a stale point wrongly marked live. */
+internal fun nextSnapshotOnRestart(
+    previous: TrackingService.LocationFix?,
+    lastKnown: Location?,
+): TrackingService.LocationFix? =
+    lastKnown?.let { TrackingService.LocationFix(it, isLive = false) } ?: previous?.copy(isLive = false)

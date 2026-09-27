@@ -16,10 +16,13 @@ import com.bydmate.app.data.local.LocalePreferences
 import androidx.annotation.StringRes
 import com.bydmate.app.BuildConfig
 import com.bydmate.app.R
+import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.data.automation.ActionValidationError
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.RuleDraftValidator
+import com.bydmate.app.data.automation.RuleInserts
+import com.bydmate.app.data.automation.RuleJournal
 import com.bydmate.app.data.automation.RuleParseResult
 import com.bydmate.app.data.automation.RuleShare
 import com.bydmate.app.data.automation.RuleShareFiles
@@ -39,6 +42,9 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.loop.TimedSnapshot
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.telegram.ReportField
+import com.bydmate.app.data.telegram.TELEGRAM_REPORT_KIND
+import com.bydmate.app.data.telegram.withReportRuleName
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.overlay.OverlayNotificationManager
@@ -51,11 +57,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import javax.inject.Inject
@@ -98,6 +106,10 @@ fun TriggerParamOption.localizedEnumLabel(value: String, context: Context): Stri
     enumValues?.firstOrNull { it.first == value }
         ?.let { context.appLocalizedContext().getString(it.second) } ?: value
 
+/** A trigger value as the rule card shows it: an enum code by its localized name, anything else as stored. */
+fun triggerValueLabel(trigger: TriggerDef, context: Context): String =
+    TRIGGER_PARAMS.firstOrNull { it.param == trigger.param }?.localizedEnumLabel(trigger.value, context) ?: trigger.value
+
 fun ActionOption.localizedName(context: Context): String {
     val lc = context.appLocalizedContext()
     // A toggle entry reuses the target's own name and reads as «Багажник: переключить».
@@ -127,7 +139,7 @@ fun ActionOption.localizedCategory(context: Context): String =
 val TRIGGER_PARAMS = listOf(
         TriggerParamOption("Speed", "车速", R.string.auto_param_speed, R.string.auto_cat_driving, R.string.auto_unit_kmh),
         TriggerParamOption("Gear", "档位", R.string.auto_param_gear, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_code_p, "2" to R.string.auto_enum_code_r, "3" to R.string.auto_enum_code_n, "4" to R.string.auto_enum_code_d)),
-        TriggerParamOption("DriveMode", "整车运行模式", R.string.auto_param_drivemode, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_code_eco, "2" to R.string.auto_enum_code_sport, "3" to R.string.auto_enum_code_normal, "4" to R.string.auto_enum_code_offroad)),
+        TriggerParamOption("DriveMode", "整车运行模式", R.string.auto_param_drivemode, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_code_eco, "2" to R.string.auto_enum_code_sport, "3" to R.string.auto_enum_code_normal, "4" to R.string.auto_enum_code_snow, "5" to R.string.auto_enum_code_sand, "6" to R.string.auto_enum_code_mud, "7" to R.string.auto_enum_code_mountain, "21" to R.string.auto_enum_code_smart)),
         // Live codes (Leopard 3 2026-07-31): mask of the blinker lines, holds steady while blinking
         TriggerParamOption("TurnSignal", "转向灯", R.string.auto_param_turnsignal, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_turn_off, "2" to R.string.auto_enum_turn_left, "4" to R.string.auto_enum_turn_right, "6" to R.string.auto_enum_turn_hazard)),
         TriggerParamOption("SOC", "电量百分比", R.string.auto_param_soc, R.string.auto_cat_energy, R.string.auto_unit_percent),
@@ -136,6 +148,8 @@ val TRIGGER_PARAMS = listOf(
         TriggerParamOption("Voltage12V", "蓄电池电压", R.string.auto_param_voltage12v, R.string.auto_cat_energy, R.string.auto_unit_volt),
         TriggerParamOption("MinCellVoltage", "单体最低电压", R.string.auto_param_mincellvoltage, R.string.auto_cat_energy, R.string.auto_unit_volt),
         TriggerParamOption("MaxCellVoltage", "单体最高电压", R.string.auto_param_maxcellvoltage, R.string.auto_cat_energy, R.string.auto_unit_volt),
+        // The range the Dashboard shows (TrackingService), not a fid of its own
+        TriggerParamOption("RangeKm", "续航里程", R.string.auto_param_rangekm, R.string.auto_cat_energy, R.string.auto_unit_km),
         TriggerParamOption("ExtTemp", "车外温度", R.string.auto_param_exttemp, R.string.auto_cat_temperature, R.string.auto_unit_celsius),
         TriggerParamOption("InsideTemp", "车内温度", R.string.auto_param_insidetemp, R.string.auto_cat_temperature, R.string.auto_unit_celsius),
         TriggerParamOption("AvgBatTemp", "平均电池温度", R.string.auto_param_avgbattemp, R.string.auto_cat_temperature, R.string.auto_unit_celsius),
@@ -150,13 +164,17 @@ val TRIGGER_PARAMS = listOf(
         TriggerParamOption("DoorRR", "右后车门", R.string.auto_param_doorrr, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_f, "1" to R.string.auto_enum_open_f)),
         TriggerParamOption("Hood", "引擎盖", R.string.auto_param_hood, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_m, "1" to R.string.auto_enum_open_m)),
         TriggerParamOption("LockFL", "主驾车门锁", R.string.auto_param_lockfl, R.string.auto_cat_body, enumValues = listOf("1" to R.string.auto_enum_unlocked, "2" to R.string.auto_enum_locked)),  // codes match DiParsData.lockFL runtime: 1=unlocked, 2=locked
-        TriggerParamOption("Trunk", "后备箱门", R.string.auto_param_trunk, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_m, "1" to R.string.auto_enum_open_m)),
+        // Live codes: 2=closed, 1=open, 3=moving (0 is not a trunk state; old rules migrated)
+        TriggerParamOption("Trunk", "后备箱门", R.string.auto_param_trunk, R.string.auto_cat_body, enumValues = listOf("2" to R.string.auto_enum_closed_m, "1" to R.string.auto_enum_open_m, "3" to R.string.auto_enum_moving_m)),
         TriggerParamOption("ACStatus", "空调状态", R.string.auto_param_acstatus, R.string.auto_cat_climate),
         TriggerParamOption("ACCirc", "空调循环方式", R.string.auto_param_accirc, R.string.auto_cat_climate, enumValues = listOf("0" to R.string.auto_enum_fresh_air, "1" to R.string.auto_enum_recirc)),
         TriggerParamOption("ACTemp", "主驾驶空调温度", R.string.auto_param_actemp, R.string.auto_cat_climate, R.string.auto_unit_celsius),
         TriggerParamOption("FanLevel", "风量档位", R.string.auto_param_fanlevel, R.string.auto_cat_climate),
         TriggerParamOption("SeatbeltFL", "主驾驶安全带状态", R.string.auto_param_seatbeltfl, R.string.auto_cat_safety, enumValues = listOf("0" to R.string.auto_enum_unfastened, "1" to R.string.auto_enum_fastened)),
         TriggerParamOption("SeatbeltFR", "副驾安全带状态", R.string.auto_param_seatbeltfr, R.string.auto_cat_safety, enumValues = listOf("0" to R.string.auto_enum_unfastened, "1" to R.string.auto_enum_fastened)),
+        TriggerParamOption("SeatbeltRL", "左后安全带状态", R.string.auto_param_seatbeltrl, R.string.auto_cat_safety, enumValues = listOf("0" to R.string.auto_enum_unfastened, "1" to R.string.auto_enum_fastened)),
+        TriggerParamOption("SeatbeltRM", "后中安全带状态", R.string.auto_param_seatbeltrm, R.string.auto_cat_safety, enumValues = listOf("0" to R.string.auto_enum_unfastened, "1" to R.string.auto_enum_fastened)),
+        TriggerParamOption("SeatbeltRR", "右后安全带状态", R.string.auto_param_seatbeltrr, R.string.auto_cat_safety, enumValues = listOf("0" to R.string.auto_enum_unfastened, "1" to R.string.auto_enum_fastened)),
         // Occupancy codes: 1=free, 2=occupied (validated on-car; NOT 0/1 as the BYD manual claims)
         TriggerParamOption("OccupancyFL", "主驾座椅占用状态", R.string.auto_param_occupancyfl, R.string.auto_cat_safety, enumValues = listOf("1" to R.string.auto_enum_seat_free, "2" to R.string.auto_enum_seat_occupied)),
         TriggerParamOption("OccupancyFR", "副驾座椅占用状态", R.string.auto_param_occupancyfr, R.string.auto_cat_safety, enumValues = listOf("1" to R.string.auto_enum_seat_free, "2" to R.string.auto_enum_seat_occupied)),
@@ -262,6 +280,15 @@ val ACTION_COMMANDS = listOf(
         ActionOption("方向盘加热", R.string.auto_act_steering_heat_on, R.string.auto_cat_climate),
         ActionOption("关闭方向盘加热", R.string.auto_act_steering_heat_off, R.string.auto_cat_climate),
         ActionOption("", R.string.toggle_target_steering_heat, R.string.auto_cat_climate, toggleTarget = ActionDispatcher.TOGGLE_STEERING_HEAT),
+        ActionOption("ECO模式", R.string.auto_act_drive_mode_eco, R.string.auto_cat_drive_mode),
+        ActionOption("普通模式", R.string.auto_act_drive_mode_normal, R.string.auto_cat_drive_mode),
+        ActionOption("运动模式", R.string.auto_act_drive_mode_sport, R.string.auto_cat_drive_mode),
+        ActionOption("雪地模式", R.string.auto_act_drive_mode_snow, R.string.auto_cat_drive_mode),
+        ActionOption("沙地模式", R.string.auto_act_drive_mode_sand, R.string.auto_cat_drive_mode),
+        ActionOption("泥地模式", R.string.auto_act_drive_mode_mud, R.string.auto_cat_drive_mode),
+        ActionOption("山地模式", R.string.auto_act_drive_mode_mountain, R.string.auto_cat_drive_mode),
+        ActionOption("岩石模式", R.string.auto_act_drive_mode_rock, R.string.auto_cat_drive_mode),
+        ActionOption("智能模式", R.string.auto_act_drive_mode_smart, R.string.auto_cat_drive_mode),
         ActionOption("氛围灯打开", R.string.auto_act_ambient_light_on, R.string.auto_cat_light),
         ActionOption("氛围灯关闭", R.string.auto_act_ambient_light_off, R.string.auto_cat_light),
         ActionOption("打开日行灯", R.string.auto_act_drl_on, R.string.auto_cat_light),
@@ -414,6 +441,15 @@ data class AutomationUiState(
     val testRunning: Boolean = false,
     /** A share file is being written: the «Поделиться» buttons wait for it. */
     val shareInProgress: Boolean = false,
+    /** The Telegram bot is connected in Settings: the report dialog warns when it is not. */
+    val tgBotConnected: Boolean = false,
+    /** The newest journal entry of each rule, by rule id: the status line on its card. */
+    val lastLogs: Map<Long, RuleLogEntity> = emptyMap(),
+    /** The journal shows only this rule's entries: opened from the rule's status line. */
+    val journalRuleId: Long? = null,
+    val ruleLogs: List<RuleLogEntity> = emptyList(),
+    /** A short note at the bottom of the tab (rule limit, test run refused); the screen hides it. */
+    val message: String? = null,
 )
 
 @HiltViewModel
@@ -448,6 +484,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
     internal var shareSheet: (File) -> Unit = { startShareSheet(it) }
 
     private var testRunJob: Job? = null
+    private var ruleJournalJob: Job? = null
     private var importJob: Job? = null
     private var draftToken = 0L
 
@@ -467,8 +504,20 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             }
         }
         viewModelScope.launch {
+            combine(
+                settingsRepository.observeString(SettingsRepository.KEY_TG_BACKUP_TOKEN),
+                settingsRepository.observeString(SettingsRepository.KEY_TG_BACKUP_CHAT_ID),
+            ) { token, chat -> !token.isNullOrBlank() && chat?.toLongOrNull() != null }
+                .collect { connected -> _uiState.update { it.copy(tgBotConnected = connected) } }
+        }
+        viewModelScope.launch {
             ruleLogDao.getRecent(100).collect { logs ->
                 _uiState.update { it.copy(logs = logs) }
+            }
+        }
+        viewModelScope.launch {
+            ruleLogDao.getLastPerRule().collect { last ->
+                _uiState.update { it.copy(lastLogs = last.associateBy { l -> l.ruleId }) }
             }
         }
         viewModelScope.launch {
@@ -555,7 +604,10 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
     // --- Editor ---
 
     fun openNewRule() {
-        if (_uiState.value.rules.size >= MAX_RULES) return
+        if (_uiState.value.rules.size >= MAX_RULES) {
+            showLimitMessage()
+            return
+        }
         editorSession++
         _uiState.update {
             it.copy(
@@ -598,6 +650,14 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         _uiState.update { it.copy(showEditor = false, editorError = null, editorRuleDeleted = false) }
     }
 
+    /** The editor says the rule limit is reached; [what] names the save path in the log. */
+    private fun refuseAtRuleLimit(what: String) {
+        Log.i("AutomationViewModel", "$what not saved: limit of $MAX_RULES rules reached")
+        _uiState.update {
+            it.copy(editorError = context.appLocalizedContext().getString(R.string.automation_rule_limit, MAX_RULES))
+        }
+    }
+
     /**
      * «Правило уже удалено» → «Сохранить как новое»: the draft becomes a new rule, switch as it
      * was. The editor and the draft stay open until the insert returns: it closes only on
@@ -617,8 +677,12 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         _uiState.update { it.copy(editorRuleDeleted = false, editing = it.editing.copy(saving = true)) }
         viewModelScope.launch {
             try {
-                ruleDao.insert(e.applyTo(RuleEntity(name = "", triggers = "", actions = "", enabled = e.enabled)))
-                if (session == editorSession) closeEditor()
+                val id = RuleInserts.insertWithinLimit(
+                    ruleDao, e.applyTo(RuleEntity(name = "", triggers = "", actions = "", enabled = e.enabled)), MAX_RULES,
+                )
+                if (session == editorSession) {
+                    if (id != null) closeEditor() else refuseAtRuleLimit("saveDeletedRuleAsNew")
+                }
             } catch (cancel: CancellationException) {
                 throw cancel
             } catch (e: Exception) {
@@ -662,14 +726,30 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             is ActionValidationError.SplitScreenWideEmpty -> ctx.getString(R.string.auto_msg_split_wide_empty, err.index)
             is ActionValidationError.SplitScreenSamePackage -> ctx.getString(R.string.auto_msg_split_same_package, err.index)
             is ActionValidationError.SplitScreenInvalidSide -> ctx.getString(R.string.auto_msg_split_invalid_side, err.index)
+            is ActionValidationError.TelegramReportEmpty -> ctx.getString(R.string.auto_msg_tg_report_empty, err.index)
             null -> null
         }
     }
 
-    private fun validateTriggers(triggers: List<TriggerDef>, editingId: Long): String? {
+    private fun validateTriggers(
+        triggers: List<TriggerDef>,
+        editingId: Long,
+        triggerLogic: String,
+        keyPickedLater: Boolean = false,
+    ): String? {
         val ctx = context.appLocalizedContext()
         val userPhrases = runCatching { userCommandPhrases() }.getOrDefault(emptyMap())
-        return when (val err = RuleDraftValidator.validateTriggers(triggers, editingId, _uiState.value.rules, userPhrases)) {
+        val err = RuleDraftValidator.validateTriggers(triggers, editingId, _uiState.value.rules, userPhrases, triggerLogic)
+            ?.takeUnless { keyPickedLater && it == TriggerValidationError.SteeringKeyUnassigned }
+        if (err != null) Log.i("AutomationViewModel", "rule not saved: $err")
+        return when (err) {
+            TriggerValidationError.SteeringKeyUnassigned -> ctx.getString(R.string.automation_trigger_steering_key_unassigned)
+            is TriggerValidationError.ValueNotNumber ->
+                ctx.getString(R.string.auto_ui_miss_number, triggers.indexOfFirst { it.kind == "param" && it.param == err.param } + 1)
+            TriggerValidationError.OneShotInvalid -> ctx.getString(R.string.auto_ui_err_one_shot_invalid)
+            TriggerValidationError.OneShotWithOr -> ctx.getString(R.string.auto_ui_err_one_shot_or)
+            TriggerValidationError.OneShotWithEvent -> ctx.getString(R.string.auto_ui_err_one_shot_event)
+            TriggerValidationError.OneShotTwice -> ctx.getString(R.string.auto_ui_err_one_shot_twice)
             TriggerValidationError.VoicePhraseEmpty -> ctx.getString(R.string.automation_voice_phrase_empty)
             is TriggerValidationError.VoicePhraseBuiltin -> ctx.getString(R.string.automation_voice_phrase_taken, err.command)
             is TriggerValidationError.VoicePhraseTaken -> ctx.getString(R.string.automation_voice_phrase_taken, err.rule)
@@ -690,17 +770,31 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             _uiState.value = _uiState.value.copy(editorError = actionError)
             return
         }
-        val triggerError = validateTriggers(e.triggers, if (e.isNew) -1L else e.id)
+        // Every save path, «Сохранить изменения?» included: a list condition keeps no hidden operator.
+        val noOperator = e.triggers.indexOfFirst { hasListOperatorMissing(it) }
+        if (noOperator >= 0) {
+            Log.i("AutomationViewModel", "rule not saved: list condition ${noOperator + 1} has operator ${e.triggers[noOperator].operator}")
+            _uiState.value = _uiState.value.copy(
+                editorError = context.appLocalizedContext().getString(R.string.auto_ui_miss_operator, noOperator + 1)
+            )
+            return
+        }
+        val triggerError = validateTriggers(e.triggers, if (e.isNew) -1L else e.id, e.triggerLogic)
         if (triggerError != null) {
             _uiState.value = _uiState.value.copy(editorError = triggerError)
             return
         }
         // Clear previous error on success path
         _uiState.value = _uiState.value.copy(editorError = null)
+        // Names follow the catalog as saved: a value or param changed after the pick keeps no
+        // stale text in the card, the confirm window or the journal.
+        val named = e.copy(
+            triggers = e.triggers.map { withCatalogName(it, context) },
+            actions = e.actions.map { withCatalogName(it, context) },
+        )
 
         if (e.isNew) {
-            viewModelScope.launch { ruleDao.insert(e.applyTo(RuleEntity(name = "", triggers = "", actions = ""))) }
-            closeEditor()
+            insertNewRule(named)
             return
         }
         val session = editorSession
@@ -712,8 +806,34 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             if (stored == null) {
                 if (session == editorSession) _uiState.update { it.copy(editorRuleDeleted = true) }
             } else {
-                ruleDao.update(e.applyTo(stored))
+                ruleDao.update(named.applyTo(stored))
                 if (session == editorSession) closeEditor()
+            }
+        }
+    }
+
+    /**
+     * The editor closes once the insert got in: a save racing another one at the limit stays
+     * open with the refusal instead of losing the draft, frozen while the insert runs.
+     */
+    private fun insertNewRule(named: EditingRule) {
+        if (named.saving) return
+        if (_uiState.value.rules.size >= MAX_RULES) {
+            refuseAtRuleLimit("new rule")
+            return
+        }
+        val session = editorSession
+        _uiState.update { it.copy(editing = it.editing.copy(saving = true)) }
+        viewModelScope.launch {
+            try {
+                val id = RuleInserts.insertWithinLimit(
+                    ruleDao, named.applyTo(RuleEntity(name = "", triggers = "", actions = "")), MAX_RULES,
+                )
+                if (session == editorSession) {
+                    if (id != null) closeEditor() else refuseAtRuleLimit("new rule")
+                }
+            } finally {
+                if (session == editorSession) _uiState.update { it.copy(editing = it.editing.copy(saving = false)) }
             }
         }
     }
@@ -722,16 +842,18 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
 
     fun duplicateRule(rule: RuleEntity) {
         viewModelScope.launch {
-            ruleDao.insert(
-                rule.copy(
-                    id = 0,
-                    name = "${rule.name} (${context.appLocalizedContext().getString(R.string.auto_rule_copy_suffix)})",
-                    enabled = false,
-                    lastTriggeredAt = null,
-                    triggerCount = 0,
-                    createdAt = System.currentTimeMillis()
-                )
+            val copy = rule.copy(
+                id = 0,
+                name = "${rule.name} (${context.appLocalizedContext().getString(R.string.auto_rule_copy_suffix)})",
+                enabled = false,
+                lastTriggeredAt = null,
+                triggerCount = 0,
+                createdAt = System.currentTimeMillis()
             )
+            if (RuleInserts.insertWithinLimit(ruleDao, copy, MAX_RULES) == null) {
+                Log.i("AutomationViewModel", "copy of rule ${rule.id} refused: limit of $MAX_RULES rules reached")
+                showLimitMessage()
+            }
         }
     }
 
@@ -753,8 +875,32 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
 
     // --- Journal ---
 
-    fun showJournal() { _uiState.update { it.copy(showJournal = true) } }
-    fun hideJournal() { _uiState.update { it.copy(showJournal = false) } }
+    fun showJournal() {
+        ruleJournalJob?.cancel()
+        _uiState.update { it.copy(showJournal = true, journalRuleId = null, ruleLogs = emptyList()) }
+    }
+
+    /** The status line on a card: the journal of this rule only, all its entries. */
+    fun showRuleJournal(ruleId: Long) {
+        ruleJournalJob?.cancel()
+        _uiState.update { it.copy(showJournal = true, journalRuleId = ruleId, ruleLogs = emptyList()) }
+        ruleJournalJob = viewModelScope.launch {
+            ruleLogDao.getByRule(ruleId).collect { logs -> _uiState.update { it.copy(ruleLogs = logs) } }
+        }
+    }
+
+    fun hideJournal() {
+        ruleJournalJob?.cancel()
+        _uiState.update { it.copy(showJournal = false, journalRuleId = null, ruleLogs = emptyList()) }
+    }
+
+    // --- Note at the bottom of the tab ---
+
+    fun dismissMessage() { _uiState.update { it.copy(message = null) } }
+
+    private fun showLimitMessage() {
+        _uiState.update { it.copy(message = context.appLocalizedContext().getString(R.string.auto_ui_limit, MAX_RULES)) }
+    }
 
     // --- Test run ---
 
@@ -767,9 +913,10 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
      * dispatcher lets a window or the sunroof open with no snapshot at all, and a stale speed 0
      * passes every gate. Without one the action is skipped and counted as not done; so is an
      * action the pre-check cannot classify. Closing the editor stops the run.
-     * The trigger conditions, «Только на паркинге», cooldown, «Раз за поездку» and «Спрашивать
-     * подтверждение» are skipped: the button press is the confirmation. Nothing is written:
-     * no lastTriggeredAt / triggerCount update and no journal entry.
+     * «Только на парковке» holds as when the rule fires: off P, or with no fresh P, the run is refused with a note,
+     * and a saved rule gets the refusal in its journal. The trigger conditions, cooldown, «Раз за
+     * поездку» and «Спрашивать подтверждение» are skipped: the button press is the confirmation.
+     * Otherwise a run writes no lastTriggeredAt / triggerCount update and no journal entry.
      */
     fun testRun() {
         val e = _uiState.value.editing
@@ -777,6 +924,18 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         val actionError = validateActions(e.actions)
         if (actionError != null) {
             _uiState.update { it.copy(editorError = actionError) }
+            return
+        }
+        val gear = liveSnapshot()?.gear
+        if (e.requirePark && !inFreshPark(gear)) {
+            _uiState.update { it.copy(message = context.appLocalizedContext().getString(R.string.auto_ui_test_park)) }
+            if (!e.isNew) {
+                viewModelScope.launch {
+                    val rule = ruleDao.getById(e.id) ?: return@launch
+                    RuleJournal(ruleLogDao, AppStrings(context))
+                        .parkRequired(rule, JSONObject().put(TEST_RUN_KEY, true).toString(), gear)
+                }
+            }
             return
         }
         _uiState.update { it.copy(testRunning = true, editorError = null) }
@@ -809,6 +968,18 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
     }
 
     /**
+     * P from a polled snapshot younger than [TEST_RUN_MAX_SNAPSHOT_AGE_MS] of a running service,
+     * and still P in the live snapshot [gear]: the live snapshot outlives the service and never
+     * says how old it is.
+     */
+    private fun inFreshPark(gear: Int?): Boolean {
+        val freshGear = liveSample()?.takeIf { isSampleFresh(it, serviceRunning(), elapsedNow()) }?.data?.gear
+        if (freshGear == 1 && gear == 1) return true
+        Log.i("AutomationViewModel", "test run refused: park only, gear=$gear fresh=$freshGear")
+        return false
+    }
+
+    /**
      * One test-run step: null when it was done, else why not. A speed-gated action is sent with
      * the very snapshot whose age was checked.
      */
@@ -828,7 +999,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         } else {
             liveSnapshot()
         }
-        val result = actionDispatcher.dispatch(action, snapshot)
+        val result = actionDispatcher.dispatch(action.withReportRuleName(_uiState.value.editing.name), snapshot)
         return if (result.success) null else result.reason ?: lc.getString(R.string.auto_msg_unavailable)
     }
 
@@ -1046,7 +1217,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
                 else -> a.withCall(VALIDATION_PHONE, "", false)
             }
         }
-        val error = validateActions(forValidation) ?: validateTriggers(rule.triggers, -1L)
+        val error = validateActions(forValidation) ?: validateTriggers(rule.triggers, -1L, rule.triggerLogic, keyPickedLater = true)
         if (error != null) {
             _uiState.update { it.copy(importDraft = draft.copy(error = error)) }
             return
@@ -1061,10 +1232,10 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
         _uiState.update { it.copy(importDraft = draft.copy(saving = true, error = null)) }
         viewModelScope.launch {
             val failure = try {
-                if (ruleDao.getCount() >= MAX_RULES) {
+                if (RuleInserts.insertWithinLimit(ruleDao, entity, MAX_RULES) == null) {
+                    Log.i("AutomationViewModel", "import refused: limit of $MAX_RULES rules reached")
                     lc.getString(R.string.automation_rule_limit, MAX_RULES)
                 } else {
-                    ruleDao.insert(entity)
                     null
                 }
             } catch (e: SQLiteException) {
@@ -1082,111 +1253,180 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
 
     private suspend fun insertStarterTemplatesIfNeeded() {
         val prefs = context.getSharedPreferences("automation", Context.MODE_PRIVATE)
-        if (prefs.getBoolean("templates_inserted", false)) return
-
-        val lang = currentLang(context)
-        fun tName(zh: String, en: String, ru: String): String = when (lang) { "zh" -> zh; "ru", "be" -> ru; else -> en }
-
-        val templates = listOf(
-            RuleEntity(
-                name = tName("高速关窗", "Close windows on highway", "Закрыть окна на трассе"),
-                enabled = false,
-                triggerLogic = "AND",
-                triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("Speed", "车速", ">", "100",
-                        tName("车速 > 100 km/h", "Speed > 100 km/h", "Скорость > 100 км/ч"))
-                )),
-                actions = ActionDef.listToJson(listOf(
-                    ActionDef("车窗关闭",
-                        tName("关闭所有车窗", "Close All Windows", "Закрыть все окна"))
-                )),
-                cooldownSeconds = 60
-            ),
-            RuleEntity(
-                name = tName("冬季启动", "Winter start", "Зимний старт"),
-                enabled = false,
-                triggerLogic = "AND",
-                triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("ExtTemp", "车外温度", "<", "0",
-                        tName("车外温度 < 0°C", "Outside Temp < 0°C", "Темп. снаружи < 0°C")),
-                    TriggerDef("PowerState", "电源状态", "==", "2",
-                        tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
-                )),
-                actions = ActionDef.listToJson(listOf(
-                    ActionDef("主驾座椅加热2档",
-                        tName("主驾座椅加热2档", "Driver Heat 2", "Подогрев водителя 2")),
-                    ActionDef("后视镜加热",
-                        tName("后视镜加热开", "Mirror Heat On", "Подогрев зеркал вкл"))
-                )),
-                cooldownSeconds = 600
-            ),
-            RuleEntity(
-                name = tName("低电量ECO", "ECO at low SOC", "Эко при низком заряде"),
-                enabled = false,
-                triggerLogic = "AND",
-                triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("SOC", "电量百分比", "<", "15", "SOC < 15%")
-                )),
-                actions = ActionDef.listToJson(listOf(
-                    ActionDef("ECO模式", tName("ECO 模式", "ECO Mode", "ECO режим"))
-                )),
-                cooldownSeconds = 300
-            ),
-            RuleEntity(
-                name = tName("夏季制冷", "Summer cooling", "Летнее охлаждение"),
-                enabled = false,
-                triggerLogic = "AND",
-                triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("InsideTemp", "车内温度", ">", "30",
-                        tName("车内温度 > 30°C", "Cabin Temp > 30°C", "Темп. салона > 30°C")),
-                    TriggerDef("PowerState", "电源状态", "==", "2",
-                        tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
-                )),
-                actions = ActionDef.listToJson(listOf(
-                    ActionDef("主驾座椅通风1档",
-                        tName("主驾座椅通风1档", "Driver Vent 1", "Вентиляция водителя 1")),
-                    ActionDef("自动空调",
-                        tName("自动空调", "Auto AC", "Авто AC"))
-                )),
-                cooldownSeconds = 600
-            ),
-            RuleEntity(
-                name = tName("行驶开遮阳帘", "Sunshade while driving", "Шторка при движении"),
-                enabled = false,
-                triggerLogic = "AND",
-                triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("PowerState", "电源状态", "==", "2",
-                        tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
-                )),
-                actions = ActionDef.listToJson(listOf(
-                    ActionDef("遮阳帘打开",
-                        tName("遮阳帘打开", "Sunshade Open", "Открыть шторку"))
-                )),
-                cooldownSeconds = 600
-            ),
-            RuleEntity(
-                name = tName("充电时空调", "Climate while charging", "Климат при зарядке"),
-                enabled = false,
-                triggerLogic = "AND",
-                triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("ChargingStatus", "充电状态", "==", "2",
-                        tName("充电状态 = 充电中", "Charging Status = Charging", "Зарядка = Начата")),
-                    TriggerDef("ExtTemp", "车外温度", "<", "5",
-                        tName("车外温度 < 5°C", "Outside Temp < 5°C", "Темп. снаружи < 5°C"))
-                )),
-                actions = ActionDef.listToJson(listOf(
-                    ActionDef("自动空调",
-                        tName("自动空调", "Auto AC", "Авто AC")),
-                    ActionDef("主驾座椅加热1档",
-                        tName("主驾座椅加热1档", "Driver Heat 1", "Подогрев водителя 1"))
-                )),
-                cooldownSeconds = 600
-            )
-        )
-
-        templates.forEach { ruleDao.insert(it) }
-        prefs.edit().putBoolean("templates_inserted", true).apply()
+        if (!prefs.getBoolean("templates_inserted", false)) {
+            if (RuleInserts.insertAllWithinLimit(ruleDao, starterTemplates(currentLang(context)), MAX_RULES) == null) {
+                Log.i("AutomationViewModel", "starter templates refused: limit of $MAX_RULES rules reached")
+            }
+            prefs.edit().putBoolean("templates_inserted", true).putBoolean(TG_TEMPLATES_KEY, true).apply()
+            return
+        }
+        // Installs from before 3.19 got their templates already: add only the Telegram report ones,
+        // once, and only where both fit under the rule limit.
+        if (prefs.getBoolean(TG_TEMPLATES_KEY, false)) return
+        val ids = RuleInserts.insertAllWithinLimit(ruleDao, telegramReportTemplates(currentLang(context)), MAX_RULES)
+        Log.i("AutomationViewModel", "telegram report templates: added=${ids != null} (limit $MAX_RULES rules)")
+        prefs.edit().putBoolean(TG_TEMPLATES_KEY, true).apply()
     }
+}
+
+/** Disabled starter rules a fresh install gets once, named in [lang]. */
+@Suppress("LongMethod") // a data table: one entry per template
+internal fun starterTemplates(lang: String): List<RuleEntity> {
+    fun tName(zh: String, en: String, ru: String): String = when (lang) { "zh" -> zh; "ru", "be" -> ru; else -> en }
+
+    return listOf(
+        RuleEntity(
+            name = tName("高速关窗", "Close windows on highway", "Закрыть окна на трассе"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("Speed", "车速", ">", "100",
+                    tName("车速 > 100 km/h", "Speed > 100 km/h", "Скорость > 100 км/ч"))
+            )),
+            actions = ActionDef.listToJson(listOf(
+                ActionDef("车窗关闭",
+                    tName("关闭所有车窗", "Close All Windows", "Закрыть все окна"))
+            )),
+            cooldownSeconds = 60
+        ),
+        RuleEntity(
+            name = tName("冬季启动", "Winter start", "Зимний старт"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("ExtTemp", "车外温度", "<", "0",
+                    tName("车外温度 < 0°C", "Outside Temp < 0°C", "Темп. снаружи < 0°C")),
+                TriggerDef("PowerState", "电源状态", "==", "2",
+                    tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
+            )),
+            actions = ActionDef.listToJson(listOf(
+                ActionDef("主驾座椅加热2档",
+                    tName("主驾座椅加热2档", "Driver Heat 2", "Подогрев водителя 2")),
+                ActionDef("后视镜加热",
+                    tName("后视镜加热开", "Mirror Heat On", "Подогрев зеркал вкл"))
+            )),
+            cooldownSeconds = 600
+        ),
+        RuleEntity(
+            name = tName("低电量ECO", "ECO at low SOC", "Эко при низком заряде"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("SOC", "电量百分比", "<", "15", "SOC < 15%")
+            )),
+            actions = ActionDef.listToJson(listOf(
+                ActionDef("ECO模式", tName("ECO 模式", "ECO Mode", "ECO режим"))
+            )),
+            cooldownSeconds = 300
+        ),
+        RuleEntity(
+            name = tName("夏季制冷", "Summer cooling", "Летнее охлаждение"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("InsideTemp", "车内温度", ">", "30",
+                    tName("车内温度 > 30°C", "Cabin Temp > 30°C", "Темп. салона > 30°C")),
+                TriggerDef("PowerState", "电源状态", "==", "2",
+                    tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
+            )),
+            actions = ActionDef.listToJson(listOf(
+                ActionDef("主驾座椅通风1档",
+                    tName("主驾座椅通风1档", "Driver Vent 1", "Вентиляция водителя 1")),
+                ActionDef("自动空调",
+                    tName("自动空调", "Auto AC", "Авто AC"))
+            )),
+            cooldownSeconds = 600
+        ),
+        RuleEntity(
+            name = tName("行驶开遮阳帘", "Sunshade while driving", "Шторка при движении"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("PowerState", "电源状态", "==", "2",
+                    tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
+            )),
+            actions = ActionDef.listToJson(listOf(
+                ActionDef("遮阳帘打开",
+                    tName("遮阳帘打开", "Sunshade Open", "Открыть шторку"))
+            )),
+            cooldownSeconds = 600
+        ),
+        RuleEntity(
+            name = tName("充电时空调", "Climate while charging", "Климат при зарядке"),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("ChargingStatus", "充电状态", "==", "2",
+                    tName("充电状态 = 充电中", "Charging Status = Charging", "Зарядка = Начата")),
+                TriggerDef("ExtTemp", "车外温度", "<", "5",
+                    tName("车外温度 < 5°C", "Outside Temp < 5°C", "Темп. снаружи < 5°C"))
+            )),
+            actions = ActionDef.listToJson(listOf(
+                ActionDef("自动空调",
+                    tName("自动空调", "Auto AC", "Авто AC")),
+                ActionDef("主驾座椅加热1档",
+                    tName("主驾座椅加热1档", "Driver Heat 1", "Подогрев водителя 1"))
+            )),
+            cooldownSeconds = 600
+        ),
+    ) + telegramReportTemplates(lang)
+}
+
+/** The two Telegram report rules of 3.19, disabled: also added once to installs made before it. */
+internal fun telegramReportTemplates(lang: String): List<RuleEntity> {
+    // A local six-language helper: the shared tName above only knows zh/en/ru and falls back to
+    // ru for be, en for pl/pt, which ends up in the sent report header (finding #4, 2026-09-27).
+    fun tName(zh: String, en: String, ru: String, be: String, pl: String, pt: String): String = when (lang) {
+        "zh" -> zh
+        "ru" -> ru
+        "be" -> be
+        "pl" -> pl
+        "pt" -> pt
+        else -> en
+    }
+    val reportName = tName(
+        "Telegram 报告", "Telegram report", "Отчёт в Telegram",
+        "Справаздача ў Telegram", "Raport w Telegramie", "Relatório no Telegram",
+    )
+    fun report(vararg fields: ReportField) = ActionDef(
+        command = "",
+        displayName = reportName,
+        kind = TELEGRAM_REPORT_KIND,
+        payload = telegramReportPayload(fields.toSet(), ""),
+    )
+    return listOf(
+        RuleEntity(
+            name = tName(
+                "车在哪里", "Where the car is", "Где машина",
+                "Дзе машына", "Gdzie jest samochód", "Onde está o carro",
+            ),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("Gear", "档位", "==", "1", tName(
+                    "档位 = P", "Gear = P", "Передача = P", "Перадача = P", "Bieg = P", "Marcha = P",
+                ))
+            )),
+            actions = ActionDef.listToJson(listOf(report(ReportField.LOCATION, ReportField.SOC, ReportField.RANGE))),
+            cooldownSeconds = 60
+        ),
+        RuleEntity(
+            name = tName(
+                "启动时状态", "Status at start", "Статус при запуске",
+                "Стан пры запуску", "Stan przy uruchomieniu", "Status ao iniciar",
+            ),
+            enabled = false,
+            triggerLogic = "AND",
+            triggers = TriggerDef.listToJson(listOf(
+                TriggerDef("ServiceStart", "服务启动", "==", "true", tName(
+                    "BYDMate 启动", "BYDMate startup", "Запуск BYDMate",
+                    "Запуск BYDMate", "Uruchomienie BYDMate", "Inicialização do BYDMate",
+                ), kind = "service_start")
+            )),
+            actions = ActionDef.listToJson(listOf(report(ReportField.SOC, ReportField.RANGE, ReportField.TRIP))),
+            cooldownSeconds = 60
+        ),
+    )
 }
 
 /** Stand-in phone for validating an imported rule whose call contact is not picked yet. */
@@ -1197,6 +1437,9 @@ private const val VALIDATION_URL = "https://localhost"
 
 /** Rules the user can have: the editor, the import and the voice agent stop at this many. */
 internal const val MAX_RULES = 50
+
+/** Set once the Telegram report templates were offered (3.19), on fresh and older installs alike. */
+private const val TG_TEMPLATES_KEY = "templates_tg_report_inserted"
 
 /** How old the telemetry snapshot may be for a test run to send a speed-gated action. */
 internal const val TEST_RUN_MAX_SNAPSHOT_AGE_MS = 10_000L
@@ -1461,6 +1704,22 @@ fun newToggleAction(context: Context): ActionDef = ActionDef(
 )
 
 /** "Переключить: <цель>" — the saved display name for a toggle action. */
+/** [trigger] with the catalog's name of its param and value; anything off the catalog as it is. */
+internal fun withCatalogName(trigger: TriggerDef, context: Context): TriggerDef {
+    if (trigger.kind != "param") return trigger
+    val option = TRIGGER_PARAMS.firstOrNull { it.param == trigger.param } ?: return trigger
+    val value = option.localizedEnumLabel(trigger.value, context)
+    return trigger.copy(displayName = "${option.localizedName(context)} ${trigger.operator} $value")
+}
+
+/** [action] with the catalog's name of its command or toggle target; anything else as it is. */
+internal fun withCatalogName(action: ActionDef, context: Context): ActionDef = when (action.kind) {
+    "toggle" -> action.payload?.let { action.copy(displayName = toggleDisplayName(context, it)) } ?: action
+    "param" -> ACTION_COMMANDS.firstOrNull { it.toggleTarget == null && it.command == action.command }
+        ?.let { action.copy(displayName = it.localizedName(context)) } ?: action
+    else -> action
+}
+
 fun toggleDisplayName(context: Context, target: String): String {
     val lc = context.appLocalizedContext()
     val nameRes = ActionDispatcher.toggleTargetNameRes(target) ?: return lc.getString(R.string.automation_action_toggle)
@@ -1500,6 +1759,29 @@ fun ActionDef.agentPrompt(): String = try {
 fun ActionDef.withAgentPrompt(prompt: String): ActionDef = copy(
     payload = org.json.JSONObject().apply { put("prompt", prompt) }.toString()
 )
+
+// --- Telegram report helpers (3.19) ---
+
+fun newTelegramReportAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = context.appLocalizedContext().getString(R.string.automation_action_tg_report),
+    kind = TELEGRAM_REPORT_KIND,
+    payload = telegramReportPayload(ReportField.DEFAULT, ""),
+)
+
+internal fun telegramReportPayload(fields: Set<ReportField>, text: String): String =
+    org.json.JSONObject().put("fields", ReportField.toJson(fields)).put("text", text).toString()
+
+fun ActionDef.reportFields(): Set<ReportField> = try {
+    ReportField.fromJson(org.json.JSONObject(payload ?: "{}").optJSONArray("fields"))
+} catch (e: Exception) { emptySet() }
+
+fun ActionDef.reportText(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("text")
+} catch (e: Exception) { "" }
+
+fun ActionDef.withTelegramReport(fields: Set<ReportField>, text: String): ActionDef =
+    copy(payload = telegramReportPayload(fields, text))
 
 // --- Split screen helpers ---
 

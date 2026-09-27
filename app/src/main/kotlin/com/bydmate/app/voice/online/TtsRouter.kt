@@ -4,6 +4,7 @@ import android.util.Log
 import com.bydmate.app.voice.TtsEngine
 import com.bydmate.app.voice.TtsGender
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -42,10 +43,24 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
 
     override val speaking: StateFlow<Boolean> = delegate.speaking
 
-    // Cancels whatever online work (a single speak() or a queue) is currently in flight, so
-    // stop() -- called on barge-in -- can never let a sentence still awaiting synthesis play
-    // out after the caller already considers speech stopped.
-    @Volatile private var cancelActive: (() -> Unit)? = null
+    // Every online job still in flight (single speak() calls and agent reply queues), so stop()
+    // -- called on barge-in -- can never let a sentence still awaiting synthesis play out after
+    // the caller already considers speech stopped. Several speak() calls can overlap (an
+    // automation's consecutive "speak" actions), so one slot is not enough. Guarded by [inFlightLock];
+    // cancel handles run outside the lock (a job's completion handler removes itself under it).
+    private class InFlight(val isQueue: Boolean, val cancel: () -> Unit)
+    private val inFlightLock = Any()
+    private val inFlight = mutableListOf<InFlight>()
+
+    /** Removes the matching in-flight entries and registers [add] in ONE critical section (so two
+     *  racing calls behave as if sequential: the later one always cancels the earlier), then runs
+     *  the removed entries' cancel handles outside the lock. */
+    private fun replaceInFlight(add: InFlight?, which: (InFlight) -> Boolean) {
+        val dropped = synchronized(inFlightLock) {
+            inFlight.filter(which).also { inFlight.removeAll(it); if (add != null) inFlight += add }
+        }
+        dropped.forEach { it.cancel() }
+    }
 
     // Short phrases (persona confirmations) replay from memory instead of paying a network
     // round-trip every time. The key carries source + gender + voice identity + text, so a switch
@@ -70,8 +85,15 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         val backend = onlineBackend()
         Log.i(TAG, "route: source=${backend?.id ?: OFFLINE}")
         if (backend == null) return delegate.speak(text)
-        val job = scope.launch { speakOnline(backend, text) }
-        cancelActive = { job.cancel() }
+        // A new reply supersedes an agent reply queue still awaiting synthesis: its sentences must
+        // not play after (or between) the new audio. A previous single speak() is left alone, so
+        // an automation's consecutive "speak" actions all still play.
+        // Lazy: registered before it can run, so a stop() racing this call cancels it too.
+        val job = scope.launch(start = CoroutineStart.LAZY) { speakOnline(backend, text) }
+        val entry = InFlight(isQueue = false) { job.cancel() }
+        replaceInFlight(entry) { it.isQueue }
+        job.invokeOnCompletion { synchronized(inFlightLock) { inFlight.remove(entry) } }
+        job.start()
         return true
     }
 
@@ -90,8 +112,7 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
     }
 
     override fun stop() {
-        cancelActive?.invoke()
-        cancelActive = null
+        replaceInFlight(add = null) { true }
         delegate.stop()
     }
 
@@ -151,7 +172,8 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         Log.i(TAG, "route: source=${backend?.id ?: OFFLINE}")
         if (backend == null) return delegate.startQueue()
         val queue = OnlineSpeechQueue(backend)
-        cancelActive = { queue.cancel() }
+        // A new agent reply drops whatever online speech is still pending.
+        replaceInFlight(InFlight(isQueue = true) { queue.cancel() }) { true }
         return queue
     }
 
@@ -434,7 +456,9 @@ class TtsRouter @Suppress("LongParameterList") constructor( // DI-provided lambd
         internal const val PHRASE_CACHE_ENTRIES = 48
         // Part of every phrase key: bump when the stored format or the synthesis request changes
         // so phrases persisted by an older build are never replayed.
-        private const val PHRASE_FORMAT = 2 // v2: file header gained a CRC32 check, see PhraseDiskCache
+        // v2: file header gained a CRC32 check, see PhraseDiskCache.
+        // v3: a take is frozen once cached; re-roll every phrase after the filler text change.
+        private const val PHRASE_FORMAT = 3
         private const val TIER_MEMORY = "memory"
         private const val TIER_DISK = "disk"
     }

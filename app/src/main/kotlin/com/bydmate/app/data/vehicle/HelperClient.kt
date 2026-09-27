@@ -7,9 +7,13 @@ import android.os.Parcel
 import android.util.Log
 import android.view.Surface
 import java.io.ByteArrayOutputStream
+import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.helper.HelperBinderHolder
 import com.bydmate.app.helper.DisplayDevice
 import com.bydmate.app.helper.HelperBinderProtocol
+import com.bydmate.app.helper.offreport.OffReportStatus
+import com.bydmate.app.helper.offreport.readOffReportStatus
+import com.bydmate.app.helper.offreport.writeOffReportArm
 import com.bydmate.app.helper.push.FID_REC_NO_ERROR
 import com.bydmate.app.helper.push.FidPushResult
 import com.bydmate.app.helper.push.FidPushStatus
@@ -163,6 +167,30 @@ sealed class DumpFidsResult {
 }
 
 /**
+ * Thrown by [HelperClient.writeStatus] when its [beforeSend][HelperClient.writeStatus] guard
+ * refuses the send from inside the transport lock, right before the transact. Lets
+ * [VehicleApiImpl.doWriteOutcome] tell a guard refusal apart from every other write failure
+ * (daemon unreachable, exception) without overloading the raw status int.
+ */
+class WriteGuardRefused : Exception()
+
+/**
+ * Reader handed to [HelperClient.writeStatus]'s beforeSend guard: a live speed re-check must go
+ * through the daemon, not ADB — ADB's AutoserviceClient shares a `@Synchronized` monitor with
+ * every other in-flight ADB call, and a guard blocked on THAT monitor cannot be interrupted by its
+ * own [runInterruptible]/timeout, holding the write's transport mutex past its budget while every
+ * unrelated helper call queues behind it (2026-09-27, review round 3). [HelperClientImpl] binds
+ * this straight to its already-held transport lock (via `transactBodyUnlocked`), never to
+ * [HelperClient.readBatch] — that would try to re-take the (non-reentrant) mutex the guard is
+ * already running inside and deadlock.
+ */
+fun interface LockedReader {
+    /** tx=7 (getFloat bits) read of [dev]/[fid]; null on any failure or sentinel bits — decoded
+     *  exactly like NativeParsReader decodes a tx=7 batch reply. */
+    suspend fun readFloat(dev: Int, fid: Int): Float?
+}
+
+/**
  * Client for the in-vehicle helper daemon registered as the `bydmate_helper`
  * binder service (ServiceManager.getService + IBinder.transact).
  *
@@ -186,8 +214,18 @@ interface HelperClient {
      */
     suspend fun readBatch(items: List<BatchReadItem>): List<Pair<Int, Int>>?
     suspend fun write(dev: Int, fid: Int, value: Int): Boolean
-    /** Raw autoservice setInt status (1 real, 0 no-op, <0 error, null daemon unreachable). */
-    suspend fun writeStatus(dev: Int, fid: Int, value: Int): Int?
+    /**
+     * Raw autoservice setInt status (1 real, 0 no-op, <0 error, null daemon unreachable).
+     * [beforeSend], when given, runs inside the transport mutex, immediately before EACH
+     * transact attempt — a dead-binder retry re-checks it too, so no queue wait and no stale
+     * verdict from before a retry can separate the check from the actual send. It is handed a
+     * [LockedReader] bound to this same already-held lock, so a last-instant re-check reads a
+     * live value through the daemon instead of a separate (and separately blockable) ADB call.
+     * The guard gets its own bounded budget (GUARD_TIMEOUT_MS, well under the shared timeout) so
+     * it cannot hold the mutex for long either. A false return, or a guard that does not finish
+     * in time, skips the transact entirely and [writeStatus] throws [WriteGuardRefused].
+     */
+    suspend fun writeStatus(dev: Int, fid: Int, value: Int, beforeSend: (suspend (LockedReader) -> Boolean)? = null): Int?
     suspend fun isAlive(): Boolean
 
     /** Creates a VirtualDisplay backed by [surface]; returns its displayId (>0) or null. */
@@ -492,6 +530,22 @@ interface HelperClient {
 
     /** Live recorder counters (TX_REC_STATUS); null when the daemon is unreachable. */
     suspend fun recStatus(): FidRecStatus?
+
+    /**
+     * Arms the power-off Telegram report (TX_OFFREPORT_ARM); [lateMark] is the line a report
+     * delivered later carries, with `{{time}}`. False when the daemon is unreachable or too old to
+     * know the verb; [isAlive] tells the two apart.
+     */
+    suspend fun offReportArm(id: String, token: String, chatId: Long, text: String, lateMark: String): Boolean
+
+    /**
+     * Drops the armed power-off report and the pending ones (TX_OFFREPORT_DISARM). False on any
+     * transport failure, and while the daemon could not delete every pending file.
+     */
+    suspend fun offReportDisarm(): Boolean
+
+    /** Where report [id] stands in the daemon (TX_OFFREPORT_STATUS); null when there is no answer. */
+    suspend fun offReportStatus(id: String): OffReportStatus?
 }
 
 @Singleton
@@ -500,6 +554,21 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     @Volatile private var cached: IBinder? = null
     /** Last transport reported by [noteSource] — kept so the log line is printed only on change. */
     @Volatile private var lastSource: String? = null
+
+    /** Test seam: invoked right before every attempt to acquire [mutex] in [transactParsed],
+     *  i.e. right before the write path takes the lock — lets a test observe "about to enter the
+     *  queue" deterministically instead of racing a countdown placed before the whole call
+     *  (2026-09-27, review round 3). No-op in production. */
+    @Volatile internal var onBeforeLock: (() -> Unit)? = null
+
+    /** Test seam: read-only view of whether [mutex] is currently held, so a test can prove a
+     *  guard read ran WHILE the transport lock was held, by ordering rather than by a wall-clock
+     *  wait (2026-09-27, review round 5). No production behaviour depends on this. */
+    internal val transportLockedForTest: Boolean get() = mutex.isLocked
+
+    /** Bound to [transactBodyUnlocked] (never [readBatch]) so a guard's beforeSend can read a
+     *  live value through the daemon without re-taking the mutex it is already running inside. */
+    private val lockedReader = LockedReader { dev, fid -> readFloatLocked(dev, fid) }
 
     /** Intermediate holder for one TX_DUMP_FIDS chunk reply (chunked transport, Q4). */
     private data class DumpChunkReply(val status: Int, val totalLength: Int, val bytes: ByteArray?)
@@ -525,10 +594,10 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         }
     }
 
-    override suspend fun writeStatus(dev: Int, fid: Int, value: Int): Int? {
-        val status = transact(HelperBinderProtocol.TX_WRITE) {
+    override suspend fun writeStatus(dev: Int, fid: Int, value: Int, beforeSend: (suspend (LockedReader) -> Boolean)?): Int? {
+        val status = transactParsed(HelperBinderProtocol.TX_WRITE, {
             it.writeInt(dev); it.writeInt(fid); it.writeInt(value)
-        }?.first
+        }, beforeSend = beforeSend) { reply -> if (reply.dataAvail() >= 4) reply.readInt() else null }
         // status forwarded from the autoservice setInt return code: 1 = real action,
         // 0 = accepted no-op (fid ineffective on this trim), <0 = error, null =
         // daemon unreachable. INFO so a "green" automation that physically did
@@ -1061,6 +1130,25 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             readRecStatus(reply)
         }
 
+    override suspend fun offReportArm(id: String, token: String, chatId: Long, text: String, lateMark: String): Boolean =
+        transactParsed(
+            HelperBinderProtocol.TX_OFFREPORT_ARM,
+            { p -> writeOffReportArm(p, id, token, chatId, text, lateMark) },
+            // The daemon only stores the report and answers; registration and reads run on its
+            // worker, so the call holds the shared channel for a few ms, never a vendor call.
+        ) { reply -> reply.dataAvail() >= 4 && reply.readInt() == 0 } ?: false
+
+    override suspend fun offReportDisarm(): Boolean =
+        transactParsed(HelperBinderProtocol.TX_OFFREPORT_DISARM, { }) { reply ->
+            reply.dataAvail() >= 4 && reply.readInt() == 0
+        } ?: false
+
+    override suspend fun offReportStatus(id: String): OffReportStatus? =
+        transactParsed(HelperBinderProtocol.TX_OFFREPORT_STATUS, { it.writeString(id) }) { reply ->
+            if (reply.dataAvail() < 4 || reply.readInt() != 0) return@transactParsed null
+            readOffReportStatus(reply)
+        }
+
     /** (status,value) reply; true iff status == 0. Shared by the boolean projection ops. */
     private suspend fun statusOk(code: Int, writeArgs: (Parcel) -> Unit): Boolean =
         transact(code, writeArgs)?.let { (status, _) -> readAccepted(status) } ?: false
@@ -1070,25 +1158,34 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         code: Int,
         writeArgs: (Parcel) -> Unit,
         timeoutMs: Long = REQ_TIMEOUT_MS,
+        beforeSend: (suspend (LockedReader) -> Boolean)? = null,
         parse: (Parcel) -> T?,
     ): T? =
         withContext(Dispatchers.IO) {
             withTimeoutOrNull(timeoutMs) {
-                mutex.withLock { transactBodyUnlocked(code, writeArgs, parse) }
+                onBeforeLock?.invoke()
+                mutex.withLock { transactBodyUnlocked(code, writeArgs, beforeSend, parse) }
             }
         }
 
     /**
      * Shared transact body. Assumes [mutex] is already held by the caller.
      * Returns the parsed reply or null on any failure; retries ONCE on a dead cached binder.
+     * [beforeSend], when given, is checked right after the binder is resolved and immediately
+     * before EACH transact attempt below — the retry on a dead binder re-checks it too, so a
+     * verdict from before the retry never reaches the second send (2026-09-27, review round 2).
+     * It is handed [lockedReader], bound to THIS already-held lock via a direct
+     * [transactBodyUnlocked] call, never [readBatch] (which would re-take the mutex and deadlock).
      */
-    private fun <T> transactBodyUnlocked(
+    private suspend fun <T> transactBodyUnlocked(
         code: Int,
         writeArgs: (Parcel) -> Unit,
+        beforeSend: (suspend (LockedReader) -> Boolean)? = null,
         parse: (Parcel) -> T?,
     ): T? {
         repeat(2) { attempt ->
             val binder = ensureBinder() ?: return null
+            if (beforeSend != null && !runGuard { beforeSend(lockedReader) }) throw WriteGuardRefused()
             val data = Parcel.obtain()
             val reply = Parcel.obtain()
             try {
@@ -1107,6 +1204,43 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             }
         }
         return null
+    }
+
+    /**
+     * Runs [beforeSend] under its own [GUARD_TIMEOUT_MS] budget, well under the shared
+     * [REQ_TIMEOUT_MS]: a guard slow to decide (e.g. a laggy speed read) must not hold this
+     * mutex for the whole shared write budget, and a caller waiting behind it must not see that
+     * slowness surface as a generic "helper unreachable" — a guard that does not finish in time
+     * is refused exactly like a plain false return (2026-09-27, review round 2).
+     */
+    private suspend fun runGuard(beforeSend: suspend () -> Boolean): Boolean =
+        withTimeoutOrNull(GUARD_TIMEOUT_MS) { beforeSend() } ?: false
+
+    /**
+     * [LockedReader]'s implementation: a single-item TX_READ_BATCH round-trip, same wire format
+     * [readBatch] uses, but through [transactBodyUnlocked] directly — [readBatch] goes through
+     * [transactParsed], which would try to re-take [mutex] and deadlock, since this only ever
+     * runs from inside a beforeSend guard that is already holding it. Decoded exactly like
+     * NativeParsReader decodes a tx=7 batch reply: sentinel bits -> null.
+     *
+     * This read is a synchronous binder transact exactly like every other helper call made under
+     * this mutex, including the write that follows it; [withTimeoutOrNull] cannot interrupt a
+     * blocked `binder.transact`, so a hung daemon/autoservice holds the mutex here the same way it
+     * would during the write itself. Accepted (2026-09-27, review round 5), not a new failure class.
+     */
+    private suspend fun readFloatLocked(dev: Int, fid: Int): Float? {
+        val item = BatchReadItem(tx = 7, dev = dev, fid = fid) // 7 = getFloat bits
+        return transactBodyUnlocked(HelperBinderProtocol.TX_READ_BATCH, { p ->
+            p.writeInt(1)
+            p.writeInt(item.tx); p.writeInt(item.dev); p.writeInt(item.fid)
+        }) { reply ->
+            if (reply.dataAvail() < 4 || reply.readInt() != 1 || reply.dataAvail() < 8) {
+                return@transactBodyUnlocked null
+            }
+            val status = reply.readInt()
+            val word = reply.readInt()
+            if (status != 0) null else SentinelDecoder.parseFloatFromShellInt(word)
+        }
     }
 
     /** (status, value) wrapper used by read/write/ping. */
@@ -1167,6 +1301,13 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
         private const val TAG = "HelperClient"
         private const val REQ_TIMEOUT_MS = 2000L
+        /** Budget for a [writeStatus] beforeSend guard (e.g. DriveModeChannel's terrain speed
+         *  re-check): well under REQ_TIMEOUT_MS so a slow guard cannot hold the transport mutex
+         *  for the whole shared write budget, or make a caller behind it wait the full 2 s just
+         *  to be told the helper looked "unreachable" (2026-09-27, review round 2). 1 s fits one
+         *  on-device `service call` speed read over ADB with room for load; a tighter budget would
+         *  refuse terrain switches whenever the read is merely slow. */
+        private const val GUARD_TIMEOUT_MS = 1_000L
         /** Budget for one daemon-side forcing op. For TX_LAUNCH_FREEFORM it is counted from the
          *  moment the channel is held, and the daemon spends it as: launch retry loop (~9.5s on a
          *  cold start) + pin loop + grace poll sleeps, capped by its GRACE_DEADLINE_MS = 11.5s, plus

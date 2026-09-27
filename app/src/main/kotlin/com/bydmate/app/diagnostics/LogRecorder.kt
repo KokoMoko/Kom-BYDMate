@@ -400,7 +400,13 @@ class LogRecorder internal constructor(
             // Voice speed wave: which TTS source spoke and its per-sentence synth time, LLM
             // retries, the per-round token usage line (prompt cache hits via cached_tokens) and
             // the push-to-talk connection prewarm.
-            "TtsRouter:*", "LlmAgentBackend:*", "OpenRouterClient:*", "HttpPrewarm:*"
+            "TtsRouter:*", "LlmAgentBackend:*", "OpenRouterClient:*", "HttpPrewarm:*",
+            // Drive mode switch: one line per attempt (flag, target before/after, speed, verdict).
+            "DriveModeChannel:*",
+            // Telegram reports: build (items taken / skipped, length), send, outbox add/drain/drop.
+            "TgReport:*",
+            // Power-off report in the helper daemon: arm, power off/on, send attempts, outcome.
+            "OffReport:*"
         )
     }
 }
