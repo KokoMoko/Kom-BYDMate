@@ -55,7 +55,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -183,17 +185,6 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                         valueRange = 50f..75f,
                     )
                     Text(stringResource(R.string.kom_cluster_style_hint), color = TextMuted, fontSize = 13.sp)
-                    // Ժամանակավոր՝ DiLink-ի 3D մեքենայի մաքուր screenshot (Cluster-ի մեքենայի պատկերի համար)
-                    var captureMsg by remember { mutableStateOf<String?>(null) }
-                    TextButton(onClick = {
-                        captureMsg = context.getString(R.string.kom_capture_wait)
-                        KomScreenCapture.captureLater(context, 10_000L) { path ->
-                            captureMsg = path?.let { context.getString(R.string.kom_capture_saved, it) }
-                                ?: context.getString(R.string.kom_capture_failed)
-                            android.widget.Toast.makeText(context, captureMsg, android.widget.Toast.LENGTH_LONG).show()
-                        }
-                    }) { Text(stringResource(R.string.kom_capture_button)) }
-                    captureMsg?.let { Text(it, color = TextMuted, fontSize = 12.sp) }
                     // Ախտորոշում՝ մեքենայի տեսախցիկի նշանների ազդանշանները (TSR)
                     val tsrStatus by CarSignReader.status.collectAsStateWithLifecycle()
                     val tsrRaw by CarSignReader.raw.collectAsStateWithLifecycle()
@@ -234,6 +225,27 @@ private fun ClusterTop(state: DashboardUiState, modifier: Modifier) {
     val power by animateFloatAsState(powerTarget.coerceIn(P_MIN, P_MAX), tween(500, easing = FastOutSlowInEasing), label = "power")
     val speed by animateFloatAsState((state.speed ?: 0).toFloat().coerceIn(0f, S_MAX), tween(600, easing = FastOutSlowInEasing), label = "speed")
 
+    // Արգելակում ընթացքի ժամանակ՝ արագությունը նկատելիորեն նվազում է (≥ 3 կմ/ժ վայրկյանում)
+    // կամ ուժեղ ռեկուպերացիա է․ լույսերը մնում են վառ ևս 1.2 վրկ, որ չթարթեն
+    var lastSpeed by remember { mutableStateOf<Pair<Float, Long>?>(null) }
+    var brakeUntil by remember { mutableStateOf(0L) }
+    val rawSpeed = (state.speed ?: 0).toFloat()
+    LaunchedEffect(rawSpeed) {
+        val now = System.currentTimeMillis()
+        val prev = lastSpeed
+        if (prev != null) {
+            val dt = (now - prev.second) / 1000f
+            if (dt in 0.2f..5f && (prev.first - rawSpeed) / dt >= 3f && rawSpeed > 0f) brakeUntil = now + 1_200L
+        }
+        lastSpeed = rawSpeed to now
+    }
+    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(brakeUntil) {
+        while (System.currentTimeMillis() < brakeUntil) { nowMs = System.currentTimeMillis(); delay(200) }
+        nowMs = System.currentTimeMillis()
+    }
+    val decelBraking = nowMs < brakeUntil
+
     val powerColor = when {
         charging -> AccentGreen
         power < -0.5f -> RegenBlue
@@ -268,7 +280,8 @@ private fun ClusterTop(state: DashboardUiState, modifier: Modifier) {
         Column(Modifier.weight(0.4f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
             ClusterHeader(state)
             Spacer(Modifier.height(6.dp))
-            RoadScene(speedKmh = speed, braking = power < -1f || (speed < 0.5f && state.gear != 1),
+            RoadScene(speedKmh = speed, braking = decelBraking || (rawSpeed > 2f && rawPower < -5f && !state.isCharging) ||
+                (rawSpeed < 0.5f && state.gear != null && state.gear != 1),
                 modifier = Modifier.fillMaxWidth().weight(1f))
         }
         Box(Modifier.weight(0.3f).fillMaxHeight()) {
@@ -465,6 +478,10 @@ private fun DrawScope.drawDial(value: Float, min: Float, max: Float, step: Float
  */
 @Composable
 private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier) {
+    // Իսկական Sealion 06-ը (DiLink-ի 3D մոդելի screenshot-ից) և արգելակման լույսերի շերտը
+    val carImg = ImageBitmap.imageResource(R.drawable.kom_car_rear)
+    val brakeImg = ImageBitmap.imageResource(R.drawable.kom_car_brake)
+    val brakeAlpha by animateFloatAsState(if (braking) 1f else 0f, tween(250), label = "brake")
     var offset by remember { mutableFloatStateOf(0f) }
     val speedNow by rememberUpdatedState(speedKmh)
     LaunchedEffect(Unit) {
@@ -503,7 +520,17 @@ private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier) {
                 drawPath(dash, Color(0xFFC8D7EB).copy(alpha = 0.25f + z0 * 0.6f))
             }
         }
-        drawCar(cx, by, hw * 0.46f, braking)
+        // Մեքենան՝ ճանապարհի ներքևի մասում, կենտրոնում
+        val cw = hw * 0.62f
+        val ch = cw * carImg.height / carImg.width
+        val dst = androidx.compose.ui.unit.IntOffset((cx - cw / 2).toInt(), (by - ch).toInt())
+        val dstSize = androidx.compose.ui.unit.IntSize(cw.toInt(), ch.toInt())
+        drawOval(Color.Black.copy(alpha = 0.45f), Offset(cx - cw * 0.52f, by - ch * 0.07f), Size(cw * 1.04f, ch * 0.12f))
+        drawImage(carImg, dstOffset = dst, dstSize = dstSize, filterQuality = androidx.compose.ui.graphics.FilterQuality.High)
+        if (brakeAlpha > 0.01f) {
+            drawImage(brakeImg, dstOffset = dst, dstSize = dstSize, alpha = brakeAlpha,
+                filterQuality = androidx.compose.ui.graphics.FilterQuality.High)
+        }
     }
 }
 
