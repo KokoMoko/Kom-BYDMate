@@ -1,5 +1,10 @@
 package com.bydmate.app.ui.dashboard
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.compose.ui.platform.LocalConfiguration
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -59,9 +64,10 @@ fun MyDashboardTileContent(
     modifier: Modifier = Modifier,
     appActive: Boolean = false,
     inForeground: Boolean = true,
+    inSplit: Boolean = false,
 ) {
     when (tile.type) {
-        TileType.APP -> AppTile(tile, appActive, inForeground, modifier)
+        TileType.APP -> AppTile(tile, appActive, inForeground, inSplit, modifier)
         TileType.WIDGET -> DashboardWidgetSlot(
             slot = tile.slot,
             emptyHint = stringResource(R.string.kom_widget_hint_generic),
@@ -100,7 +106,7 @@ fun MyDashboardTileContent(
  * (տես [AppTileController])։ Սալիկն ինքը միայն տեղապահ է՝ icon և անուն (երևում է խմբագրելիս)։
  */
 @Composable
-private fun AppTile(tile: Tile, active: Boolean, inForeground: Boolean, modifier: Modifier) {
+private fun AppTile(tile: Tile, active: Boolean, inForeground: Boolean, inSplit: Boolean, modifier: Modifier) {
     val context = LocalContext.current
     val rootView = LocalView.current
     var rect by remember { mutableStateOf<android.graphics.Rect?>(null) }
@@ -128,13 +134,16 @@ private fun AppTile(tile: Tile, active: Boolean, inForeground: Boolean, modifier
                     modifier = Modifier.size(64.dp))
             }
             Text(label, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Text(stringResource(R.string.kom_tile_app_hint), color = TextMuted, fontSize = 13.sp)
+            Text(stringResource(if (inSplit) R.string.kom_tile_app_split else R.string.kom_tile_app_hint),
+                color = TextMuted, fontSize = 13.sp)
         }
     }
 
     val r = rect
     LaunchedEffect(active, r, tile.pkg) {
         if (tile.pkg.isEmpty()) return@LaunchedEffect
+        // Փոքր դադար՝ կարճ փոփոխությունները (էջի swipe, պատուհանի resize) պատուհանը չթրթռացնեն
+        delay(400)
         if (active && r != null && r.width() > 0 && r.height() > 0) {
             AppTileController.show(context, tile.pkg, r)
         } else if (!active) {
@@ -143,6 +152,18 @@ private fun AppTile(tile: Tile, active: Boolean, inForeground: Boolean, modifier
     }
     DisposableEffect(tile.pkg) {
         onDispose { if (tile.pkg.isNotEmpty()) AppTileController.hide(context, tile.pkg, bringUsToFront = foreground) }
+    }
+}
+
+/** true, երբ MainActivity-ն multi-window (DiLink split) ռեժիմում է։ Թարմանում է կոնֆիգուրացիայի փոփոխությամբ։ */
+@Composable
+fun rememberInMultiWindow(): Boolean {
+    val context = LocalContext.current
+    val config = LocalConfiguration.current
+    return remember(config) {
+        var c: Context? = context
+        while (c is ContextWrapper && c !is Activity) c = c.baseContext
+        (c as? Activity)?.isInMultiWindowMode == true
     }
 }
 

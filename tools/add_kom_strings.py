@@ -59,6 +59,10 @@ STRINGS = {
     "kom_about_inspired_prefix": ("Вдохновлено\\u0020", "Inspired by\\u0020"),
     "kom_tile_app_pick": ("Выберите приложение", "Choose an application"),
     "kom_tile_app_hint": ("Откроется здесь после «Готово»", "Opens here after “Done”"),
+    "kom_tile_app_split": (
+        "В режиме split недоступно — откройте на весь экран",
+        "Not available in split — open full screen",
+    ),
     "kom_settings_welcome_name": ("Имя для приветствия", "Welcome name"),
     "kom_settings_welcome_hint": (
         "Показывается вверху Главной вместо MyBYD, например «Привет, Kom». Пусто — MyBYD.",

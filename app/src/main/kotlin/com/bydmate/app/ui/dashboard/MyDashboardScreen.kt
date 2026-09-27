@@ -83,14 +83,19 @@ fun MyDashboardScreen(
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { viewModel.refresh() }
     }
 
-    // Առաջին պլանում ենք (RESUMED)՝ «Application» սալիկի պատուհանը ցույց տալու համար
-    var resumed by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    // Էկրանին երևում ենք (STARTED)՝ «Application» սալիկի պատուհանը ցույց տալու համար։
+    // RESUMED չէ․ freeform պատուհանը ֆոկուսը վերցնելիս մենք PAUSED ենք դառնում, և RESUMED-ով
+    // ստացվում էր ցիկլ՝ show → pause → hide → resume → show … (էկրանի «թրթռոց»)։
+    var visible by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
     DisposableEffect(lifecycleOwner) {
-        val obs = LifecycleEventObserver { _, _ -> resumed = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
+        val obs = LifecycleEventObserver { _, _ -> visible = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) }
         lifecycleOwner.lifecycle.addObserver(obs)
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
-    val appActive = pageVisible && !editing && resumed
+    // DiLink-ի split-ում (multi-window) freeform պատուհանը կոնֆլիկտ է տալիս split-ի հետ․ այնտեղ սալիկն անջատված է
+    val inSplit = rememberInMultiWindow()
+    val appActive = pageVisible && !editing && visible && !inSplit
+    val resumed = visible && !inSplit
 
     var tiles by remember { mutableStateOf(MyDashboardStore.load(context)) }
     var showAdd by remember { mutableStateOf(false) }
@@ -149,7 +154,7 @@ fun MyDashboardScreen(
                             if (t.type == TileType.WIDGET && t.slot.startsWith("tile_")) DashboardWidgets.clear(context, t.slot)
                             update(tiles.filter { it.id != t.id })
                         },
-                    ) { mod -> MyDashboardTileContent(t, state, requestGrant, mod, appActive = appActive, inForeground = resumed) }
+                    ) { mod -> MyDashboardTileContent(t, state, requestGrant, mod, appActive = appActive, inForeground = resumed, inSplit = inSplit) }
                 }
             }
         }

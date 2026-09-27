@@ -1955,4 +1955,6 @@
     <string name="kom_about_inspired">Inspired by AndyShaman BYDMate</string>
     <!-- Kom-BYDMate -->
     <string name="kom_about_inspired_prefix">Inspired by\u0020</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_tile_app_split">Not available in split — open full screen</string>
 </resources>
