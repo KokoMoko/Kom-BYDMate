@@ -56,7 +56,7 @@ object KomPrefs {
     // Մեքենան միացնելիս՝ split Navigator-ով և Yandex Music-ի միացում (տես KomAutostart)
     fun autostartNavi(ctx: Context) = prefs(ctx).getBoolean("autostart_navi", true)
     fun setAutostartNavi(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_navi", v).apply()
-    fun autostartMusicPlay(ctx: Context) = prefs(ctx).getBoolean("autostart_music_play", false)
+    fun autostartMusicPlay(ctx: Context) = prefs(ctx).getBoolean("autostart_music_play", true)
     fun setAutostartMusicPlay(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_music_play", v).apply()
     fun autostartMusic(ctx: Context) = prefs(ctx).getBoolean("autostart_music", true)
     fun setAutostartMusic(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_music", v).apply()
