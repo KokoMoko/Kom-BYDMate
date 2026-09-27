@@ -119,6 +119,8 @@ class BYDMateApp : Application(), Configuration.Provider {
         registerActivityLifecycleCallbacks(WidgetLifecycleCallbacks(this, splitOverlayController))
         // Start split-screen overlay observers (mirrors WidgetController init pattern).
         splitOverlayController.start(appScope)
+        // Kom-BYDMate: մեքենան միացնելիս՝ Panel (Navigator) և Yandex Music (առանց նվագարկման)
+        com.bydmate.app.ui.dashboard.KomAutostart.start(this, appScope)
     }
 
     /**

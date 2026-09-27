@@ -53,6 +53,12 @@ object KomPrefs {
         runCatching { file(ctx).writeText(v) }
     }
 
+    // Մեքենան միացնելիս՝ split Navigator-ով և Yandex Music-ի միացում (տես KomAutostart)
+    fun autostartSplit(ctx: Context) = prefs(ctx).getBoolean("autostart_split", true)
+    fun setAutostartSplit(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_split", v).apply()
+    fun autostartMusic(ctx: Context) = prefs(ctx).getBoolean("autostart_music", true)
+    fun setAutostartMusic(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_music", v).apply()
+
     /** Վերնագիրը՝ ըստ պահված անվան (օգտագործվում է և՛ Dashboard-ում, և՛ Settings-ի նախադիտման մեջ)։ */
     fun titleFor(name: String): String? =
         name.trim().removePrefix("Welcome ").removePrefix("welcome ").trim().ifEmpty { null }
@@ -105,6 +111,35 @@ fun KomWelcomeNameBlock() {
                     "  (saved: “" + saved + "”)",
                 color = TextPrimary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp),
             )
+        }
+    }
+}
+
+/** Settings → Application՝ մեքենան միացնելիս ինչ բացել։ */
+@Composable
+fun KomAutostartBlock() {
+    val context = LocalContext.current
+    var split by remember { mutableStateOf(KomPrefs.autostartSplit(context)) }
+    var music by remember { mutableStateOf(KomPrefs.autostartMusic(context)) }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text(stringResource(R.string.kom_autostart_title), color = TextPrimary, fontSize = 16.sp)
+            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(stringResource(R.string.kom_autostart_split), color = TextPrimary, fontSize = 14.sp,
+                    modifier = Modifier.weight(1f))
+                androidx.compose.material3.Switch(checked = split, onCheckedChange = { split = it; KomPrefs.setAutostartSplit(context, it) })
+            }
+            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(stringResource(R.string.kom_autostart_music), color = TextPrimary, fontSize = 14.sp,
+                    modifier = Modifier.weight(1f))
+                androidx.compose.material3.Switch(checked = music, onCheckedChange = { music = it; KomPrefs.setAutostartMusic(context, it) })
+            }
+            Text(stringResource(R.string.kom_autostart_hint), color = TextMuted, fontSize = 13.sp,
+                modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
