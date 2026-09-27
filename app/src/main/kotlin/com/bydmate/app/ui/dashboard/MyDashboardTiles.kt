@@ -68,7 +68,8 @@ fun MyDashboardTileContent(
     when (tile.type) {
         TileType.APP -> AppTile(tile, onOpenApp, modifier)
         TileType.WIDGET -> DashboardWidgetSlot(
-            slot = tile.slot,
+            // Classic-ի ընդհանուր սլոտները My Dashboard-ում՝ առանձին (իր widget-ն ու չափը)
+            slot = if (tile.slot.startsWith("tile_")) tile.slot else DashboardWidgets.scoped("my", tile.slot),
             emptyHint = stringResource(R.string.kom_widget_hint_generic),
             requestGrant = requestGrant,
             modifier = modifier,

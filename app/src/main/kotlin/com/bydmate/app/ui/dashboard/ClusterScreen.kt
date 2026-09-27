@@ -158,11 +158,11 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                 ClusterTop(state, Modifier.fillMaxWidth().height(topH))
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    DashboardWidgetSlot(DashboardWidgets.SLOT_PHONE, stringResource(R.string.kom_widget_hint_phone),
+                    DashboardWidgetSlot(DashboardWidgets.scoped("cluster", DashboardWidgets.SLOT_PHONE), stringResource(R.string.kom_widget_hint_phone),
                         requestGrant, Modifier.weight(1f).fillMaxHeight())
-                    DashboardWidgetSlot(DashboardWidgets.SLOT_LEFT, stringResource(R.string.kom_widget_hint_music),
+                    DashboardWidgetSlot(DashboardWidgets.scoped("cluster", DashboardWidgets.SLOT_LEFT), stringResource(R.string.kom_widget_hint_music),
                         requestGrant, Modifier.weight(1f).fillMaxHeight())
-                    DashboardWidgetSlot(DashboardWidgets.SLOT_RIGHT, stringResource(R.string.kom_widget_hint_weather),
+                    DashboardWidgetSlot(DashboardWidgets.scoped("cluster", DashboardWidgets.SLOT_RIGHT), stringResource(R.string.kom_widget_hint_weather),
                         requestGrant, Modifier.weight(1f).fillMaxHeight())
                 }
             }

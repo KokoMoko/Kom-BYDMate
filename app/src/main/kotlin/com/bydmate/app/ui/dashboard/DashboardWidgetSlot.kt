@@ -83,24 +83,48 @@ object DashboardWidgets {
             host ?: AppWidgetHost(ctx.applicationContext, HOST_ID).also { host = it }
         }
 
-    fun get(ctx: Context, slot: String): Int =
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(slot, -1)
+    /**
+     * Էջի սեփական սլոտ՝ «էջ:հիմք» (օր․ «cluster:right»)։ Ամեն էջ իր widget-ն ու չափն ունի․
+     * քանի դեռ էջի սլոտում ոչինչ չի ընտրվել, այն ժառանգում է հիմքի (Classic-ի) widget-ը և չափը։
+     */
+    fun scoped(page: String, slot: String): String = "$page:$slot"
+    private fun parent(slot: String): String? = slot.substringAfter(':', "").ifEmpty { null }
+
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    fun get(ctx: Context, slot: String): Int {
+        val own = prefs(ctx).getInt(slot, -1)
+        if (own == EMPTY) return -1  // էջում widget-ը հեռացված է՝ չժառանգել
+        if (own != -1) return own
+        return parent(slot)?.let { get(ctx, it) } ?: -1
+    }
 
     fun set(ctx: Context, slot: String, id: Int) =
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(slot, id).apply()
+        prefs(ctx).edit().putInt(slot, id).apply()
 
-    /** Widget-ի մասշտաբը տոկոսներով (100 = գոտու իրական չափը)։ */
-    fun getScale(ctx: Context, slot: String): Int =
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("${slot}_scale", 100)
+    /** Widget-ի մասշտաբը տոկոսներով (100 = գոտու իրական չափը)։ Էջինը չկա՝ ժառանգում է հիմքից։ */
+    fun getScale(ctx: Context, slot: String): Int {
+        val p = prefs(ctx)
+        if (p.contains("${slot}_scale")) return p.getInt("${slot}_scale", 100)
+        return parent(slot)?.let { getScale(ctx, it) } ?: 100
+    }
 
     fun setScale(ctx: Context, slot: String, pct: Int) =
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt("${slot}_scale", pct).apply()
+        prefs(ctx).edit().putInt("${slot}_scale", pct).apply()
 
+    /** Հեռացնում է սլոտի widget-ը․ widget id-ն ջնջվում է միայն եթե այլ սլոտ (էջ) այն չի օգտագործում։ */
     fun clear(ctx: Context, slot: String) {
-        val id = get(ctx, slot)
-        if (id != -1) runCatching { host(ctx).deleteAppWidgetId(id) }
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(slot).apply()
+        val id = prefs(ctx).getInt(slot, -1)
+        // Էջի սլոտը նշում ենք «դատարկ» (որ նորից չժառանգի), հիմքինը՝ ուղղակի հեռացնում
+        if (parent(slot) != null) prefs(ctx).edit().putInt(slot, EMPTY).apply()
+        else prefs(ctx).edit().remove(slot).apply()
+        if (id > 0 && !isUsedElsewhere(ctx, id)) runCatching { host(ctx).deleteAppWidgetId(id) }
     }
+
+    private const val EMPTY = -2
+
+    private fun isUsedElsewhere(ctx: Context, id: Int): Boolean =
+        prefs(ctx).all.any { (k, v) -> v == id && !k.endsWith("_scale") && !k.startsWith("speedo_") }
 }
 
 /**
