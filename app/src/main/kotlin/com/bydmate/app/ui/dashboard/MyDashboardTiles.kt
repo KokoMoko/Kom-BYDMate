@@ -63,10 +63,11 @@ fun MyDashboardTileContent(
     state: DashboardUiState,
     requestGrant: ((Boolean) -> Unit) -> Unit,
     modifier: Modifier = Modifier,
-    onOpenApp: () -> Unit = {},
+    appActive: Boolean = false,
+    appVisibleOnScreen: Boolean = true,
 ) {
     when (tile.type) {
-        TileType.APP -> AppTile(tile, onOpenApp, modifier)
+        TileType.APP -> AppTile(tile, appActive, appVisibleOnScreen, modifier)
         TileType.WIDGET -> DashboardWidgetSlot(
             // Classic-ի ընդհանուր սլոտները My Dashboard-ում՝ առանձին (իր widget-ն ու չափը)
             slot = if (tile.slot.startsWith("tile_")) tile.slot else DashboardWidgets.scoped("my", tile.slot),
@@ -102,49 +103,64 @@ fun MyDashboardTileContent(
 }
 
 /**
- * «Application» սալիկ․ հավելվածը (օր․ Waze, Navigator) աշխատում է վիրտուալ էկրանի վրա և երևում
- * է հենց սալիկի ներսում (տես [VirtualAppTile])։ Սեղմելիս բացվում է լիաէկրան (հասցե մուտքագրելու
- * համար), իսկ Kom վերադառնալիս նորից «մտնում» է սալիկի մեջ։
+ * «Application» սալիկ․ հավելվածը (օր․ Waze, Navigator) բացվում է «լողացող» պատուհանով հենց սալիկի
+ * տեղում և չափով (տես [AppTileController])՝ ամբողջովին ինտերակտիվ, իսկ Kom-ը մնում է լիաէկրան։
+ * [active]՝ My Dashboard-ը երևում է և խմբագրում չէ․ այդ ժամանակ պատուհանը բացվում է ինքնաբերաբար։
  */
 @Composable
-private fun AppTile(tile: Tile, onOpen: () -> Unit, modifier: Modifier) {
+private fun AppTile(tile: Tile, active: Boolean, visibleOnScreen: Boolean, modifier: Modifier) {
     val context = LocalContext.current
+    val rootView = LocalView.current
+    var rect by remember { mutableStateOf<android.graphics.Rect?>(null) }
+    val stillVisible by rememberUpdatedState(visibleOnScreen)
     val pm = context.packageManager
     val label = remember(tile.pkg) {
         runCatching { pm.getApplicationLabel(pm.getApplicationInfo(tile.pkg, 0)).toString() }.getOrDefault(tile.pkg)
     }
     val icon = remember(tile.pkg) { runCatching { pm.getApplicationIcon(tile.pkg) }.getOrNull() }
-    val dpi = (context.resources.displayMetrics.densityDpi * 0.85f).toInt()
 
-    TileCard(modifier) {
-        // Տեղապահ՝ մինչև հավելվածի պատկերը կհայտնվի
+    TileCard(
+        modifier
+            .onGloballyPositioned { c ->
+                // Սալիկի սահմանները էկրանի px-ով (պատուհանի դիրք + դիրքը պատուհանում)
+                val loc = IntArray(2)
+                rootView.getLocationOnScreen(loc)
+                val b = c.boundsInWindow()
+                rect = android.graphics.Rect(
+                    loc[0] + b.left.toInt(), loc[1] + b.top.toInt(), loc[0] + b.right.toInt(), loc[1] + b.bottom.toInt(),
+                )
+            }
+            .clickable(enabled = tile.pkg.isNotEmpty()) {
+                rect?.let { AppTileController.show(context, tile.pkg, it) }
+            }
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (icon != null) {
                 AndroidView(factory = { android.widget.ImageView(it).apply { setImageDrawable(icon) } },
                     modifier = Modifier.size(64.dp))
             }
             Text(label, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.kom_tile_app_hint), color = TextMuted, fontSize = 13.sp)
         }
-        if (tile.pkg.isNotEmpty()) {
-            AndroidView(
-                factory = { ctx ->
-                    android.view.SurfaceView(ctx).apply {
-                        holder.addCallback(object : android.view.SurfaceHolder.Callback {
-                            override fun surfaceCreated(h: android.view.SurfaceHolder) {}
-                            override fun surfaceChanged(h: android.view.SurfaceHolder, format: Int, w: Int, hh: Int) {
-                                if (w > 0 && hh > 0) VirtualAppTile.attach(ctx, tile.pkg, h.surface, w, hh, dpi)
-                            }
-                            override fun surfaceDestroyed(h: android.view.SurfaceHolder) {}
-                        })
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
+    }
+
+    val r = rect
+    LaunchedEffect(active, r, tile.pkg) {
+        if (tile.pkg.isEmpty()) return@LaunchedEffect
+        // Փոքր դադար՝ կարճ փոփոխությունները (էջի swipe, չափի փոփոխություն) պատուհանը չթրթռացնեն
+        delay(400)
+        if (active && r != null && r.width() > 0 && r.height() > 0) {
+            AppTileController.show(context, tile.pkg, r)
+        } else if (!active && AppTileController.isShown(tile.pkg)) {
+            AppTileController.hide(context, tile.pkg, bringUsToFront = stillVisible)
         }
-        // Հպումները սալիկին՝ բացել լիաէկրան
-        Box(Modifier.fillMaxSize().clickable(enabled = tile.pkg.isNotEmpty(), onClick = onOpen))
-        Text(stringResource(R.string.kom_tile_app_open_hint), color = TextMuted, fontSize = 12.sp,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp))
+    }
+    DisposableEffect(tile.pkg) {
+        onDispose {
+            if (tile.pkg.isNotEmpty() && AppTileController.isShown(tile.pkg)) {
+                AppTileController.hide(context, tile.pkg, bringUsToFront = stillVisible)
+            }
+        }
     }
 }
 

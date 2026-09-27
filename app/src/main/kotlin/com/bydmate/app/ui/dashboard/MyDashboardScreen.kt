@@ -134,7 +134,12 @@ fun MyDashboardScreen(
                     onClick = { onEditingChange(false) },
                     colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
                 ) { Text(stringResource(R.string.kom_done)) }
-            } else if (!inSplit) {
+            } else if (inSplit) {
+                // Split-ից դուրս՝ վերադառնալ լիաէկրան dashboard-ներին
+                TextButton(onClick = { KomPanel.close(context) }) {
+                    Text("⤢ " + stringResource(R.string.kom_panel_exit), color = TextSecondary)
+                }
+            } else {
                 TextButton(onClick = { onEditingChange(true) }) {
                     Text("✏️ " + stringResource(R.string.kom_mydash_edit), color = TextSecondary)
                 }
@@ -165,7 +170,7 @@ fun MyDashboardScreen(
                             if (t.type == TileType.WIDGET && t.slot.startsWith("tile_")) DashboardWidgets.clear(context, t.slot)
                             update(tiles.filter { it.id != t.id })
                         },
-                    ) { mod -> MyDashboardTileContent(orig, state, requestGrant, mod, onOpenApp = { VirtualAppTile.openFull(context, orig.pkg) }) }
+                    ) { mod -> MyDashboardTileContent(orig, state, requestGrant, mod, appActive = pageVisible && !editing && visible && !inSplit, appVisibleOnScreen = visible) }
                 }
             }
         }

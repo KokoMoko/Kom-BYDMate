@@ -30,12 +30,15 @@ class PaneTypePolicy(fingerprint: String = Build.FINGERPRINT ?: "") {
 
     /** activityType handed to the daemon for pane launches / raises / mode flips. */
     val paneType: Int =
-        if (knownGood) HelperBinderProtocol.PANE_TYPE_STANDARD else HelperBinderProtocol.PANE_TYPE_RECENTS
+        if (knownGood || forceStandard) HelperBinderProtocol.PANE_TYPE_STANDARD else HelperBinderProtocol.PANE_TYPE_RECENTS
 
     /** Journal label: which type was chosen and which branch of the policy chose it. */
     val label: String = if (knownGood) "standard(known-good)" else "recents(fallback)"
 
     companion object {
+        /** Kom-BYDMate փորձ՝ STANDARD պատուհաններ (ամեն պատուհանը հպում է ստանում)։ */
+        @Volatile var forceStandard: Boolean = false
+
         /** Firmware builds where STANDARD panes passed on-car acceptance. */
         val KNOWN_GOOD_BUILDS = listOf("eng.build.20260106")
 

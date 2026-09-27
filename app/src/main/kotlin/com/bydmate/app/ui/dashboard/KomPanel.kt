@@ -59,6 +59,12 @@ object KomPanel {
     private const val TAG = "KomPanel"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    /** Split-ից դուրս գալ․ Kom-ը վերադառնում է լիաէկրան։ */
+    fun close(ctx: Context) {
+        val mgr = EntryPointAccessors.fromApplication(ctx.applicationContext, KomEntryPoint::class.java).splitSessionManager()
+        scope.launch { runCatching { mgr.exit() }.onFailure { Log.w(TAG, "split exit failed: ${it.message}") } }
+    }
+
     /** [appOnRight]՝ սալիկը ցանցի աջ կեսում է → Kom-ը ձախ (նեղ), հավելվածը աջ (լայն)։ */
     fun open(ctx: Context, pkg: String, appOnRight: Boolean, onResult: (SplitStartResult?) -> Unit = {}) {
         val mgr = EntryPointAccessors.fromApplication(ctx.applicationContext, KomEntryPoint::class.java).splitSessionManager()

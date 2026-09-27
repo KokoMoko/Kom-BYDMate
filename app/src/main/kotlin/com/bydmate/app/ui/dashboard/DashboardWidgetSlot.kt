@@ -93,7 +93,18 @@ object DashboardWidgets {
 
     fun host(ctx: Context): AppWidgetHost =
         host ?: synchronized(this) {
-            host ?: AppWidgetHost(ctx.applicationContext, HOST_ID).also { host = it }
+            host ?: object : AppWidgetHost(ctx.applicationContext, HOST_ID) {
+                // Ախտորոշում՝ որ widget id-ին ինչ layout է գալիս (widget-ների «տեղափոխվելու» խնդրի համար)
+                override fun onCreateView(context: Context, appWidgetId: Int, appWidget: AppWidgetProviderInfo?): AppWidgetHostView =
+                    object : AppWidgetHostView(context) {
+                        override fun updateAppWidget(remoteViews: android.widget.RemoteViews?) {
+                            android.util.Log.i("KomWidget", "update id=$appWidgetId view=${System.identityHashCode(this)} " +
+                                "layout=${remoteViews?.layoutId?.let { runCatching { context.packageManager
+                                    .getResourcesForApplication(remoteViews.`package`).getResourceEntryName(it) }.getOrNull() }}")
+                            super.updateAppWidget(remoteViews)
+                        }
+                    }
+            }.also { host = it }
         }
 
     /**
@@ -185,6 +196,7 @@ fun DashboardWidgetSlot(
     }
 
     fun finishAdd(id: Int) {
+        android.util.Log.i("KomWidget", "finishAdd slot=$slot id=$id")
         DashboardWidgets.clear(context, slot)
         DashboardWidgets.set(context, slot, id)
         widgetId = id
@@ -298,6 +310,7 @@ fun DashboardWidgetSlot(
                             android.widget.FrameLayout(ctx).apply {
                                 clipChildren = true
                                 val hv = host.createView(context.applicationContext, widgetId, info)
+                                android.util.Log.i("KomWidget", "createView slot=$slot id=$widgetId view=${System.identityHashCode(hv)}")
                                 addView(hv)
                                 centerWidgetContentVertically(hv)
                             }
