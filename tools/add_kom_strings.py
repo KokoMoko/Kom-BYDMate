@@ -56,6 +56,7 @@ STRINGS = {
     "kom_tile_app": ("Приложение", "Application"),
     "kom_about_copyright": ("© 2026 KomS", "© 2026 KomS"),
     "kom_about_inspired": ("Вдохновлено BYDMate от AndyShaman", "Inspired by AndyShaman BYDMate"),
+    "kom_about_inspired_prefix": ("Вдохновлено\\u0020", "Inspired by\\u0020"),
     "kom_tile_app_pick": ("Выберите приложение", "Choose an application"),
     "kom_tile_app_hint": ("Откроется здесь после «Готово»", "Opens here after “Done”"),
     "kom_settings_welcome_name": ("Имя для приветствия", "Welcome name"),

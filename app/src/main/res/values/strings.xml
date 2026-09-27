@@ -2120,4 +2120,6 @@
     <!-- Kom-BYDMate -->
     <string name="kom_about_copyright">© 2026 KomS</string>
     <string name="kom_about_inspired">Вдохновлено BYDMate от AndyShaman</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_about_inspired_prefix">Вдохновлено\u0020</string>
 </resources>

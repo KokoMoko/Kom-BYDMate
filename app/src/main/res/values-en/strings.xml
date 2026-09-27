@@ -1953,4 +1953,6 @@
     <!-- Kom-BYDMate -->
     <string name="kom_about_copyright">© 2026 KomS</string>
     <string name="kom_about_inspired">Inspired by AndyShaman BYDMate</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_about_inspired_prefix">Inspired by\u0020</string>
 </resources>

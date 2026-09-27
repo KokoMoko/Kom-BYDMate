@@ -2977,31 +2977,35 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Kom-BYDMate: հեղինակ, հղում և «inspired by»․ AndyShaman-ի copyright-ը և հղումը մնում են
-            // (PolyForm Noncommercial-ի Required Notice)
-            Text(stringResource(R.string.kom_about_copyright), color = TextPrimary, fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold)
-            Text(
-                text = "github.com/KokoMoko",
-                color = AccentBlue,
-                fontSize = 14.sp,
-                textDecoration = TextDecoration.Underline,
-                modifier = Modifier.clickable {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/KokoMoko")))
-                }
-            )
-            Text(stringResource(R.string.kom_about_inspired), color = TextSecondary, fontSize = 14.sp)
-            Text(stringResource(R.string.settings_copyright), color = TextSecondary, fontSize = 14.sp)
-            Text(
-                text = "github.com/AndyShaman/BYDMate",
-                color = AccentBlue,
-                fontSize = 14.sp,
-                textDecoration = TextDecoration.Underline,
-                modifier = Modifier.clickable {
-                    context.startActivity(Intent(Intent.ACTION_VIEW,
-                        Uri.parse("https://github.com/AndyShaman/BYDMate")))
-                }
-            )
+            // Kom-BYDMate: «© 2026 KomS | github.com/KokoMoko» և «Inspired by AndyShaman BYDMate»
+            // (վերջինը՝ հղում բնօրինակին)։ Required Notice-ը մնում է repo-ի LICENSE/README-ում։
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.kom_about_copyright), color = TextPrimary, fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold)
+                Text("  |  ", color = TextMuted, fontSize = 15.sp)
+                Text(
+                    text = "github.com/KokoMoko",
+                    color = AccentBlue,
+                    fontSize = 15.sp,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/KokoMoko")))
+                    }
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.kom_about_inspired_prefix), color = TextSecondary, fontSize = 14.sp)
+                Text(
+                    text = "AndyShaman BYDMate",
+                    color = AccentBlue,
+                    fontSize = 14.sp,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/AndyShaman/BYDMate")))
+                    }
+                )
+            }
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = stringResource(R.string.settings_weather_attribution),
                 color = TextSecondary,
