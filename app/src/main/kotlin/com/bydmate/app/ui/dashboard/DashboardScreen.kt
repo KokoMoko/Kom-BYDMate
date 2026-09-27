@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -167,40 +168,40 @@ fun DashboardScreen(
                     alignment = Alignment.Center
                 )
                 // Kom-BYDMate: կոմպակտ տող (SOC | պաշար | ջերմաստիճան) + Phone widget + ինսայթ + Music widget
+                // Նույն համամասնությունները, ինչ աջ սյունակում (36% / 64%)․ վերևի քարտերը հավասար
+                // բարձրության են, իսկ Music-ի և եղանակի ներքևի եզրերը համընկնում են։
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(scrollState)
-                        .padding(vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    DashboardTopRow(state = state)
+                    DashboardTopRow(state = state, modifier = Modifier.weight(0.36f))
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        modifier = Modifier.fillMaxWidth().weight(0.64f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        DashboardWidgetSlot(
-                            slot = DashboardWidgets.SLOT_PHONE,
-                            emptyHint = stringResource(R.string.kom_widget_hint_phone),
-                            requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
-                            modifier = Modifier.fillMaxWidth().height(84.dp),
-                        )
-                        val insightColor = when (state.effectiveInsightTone) {
-                            "critical" -> SocRed
-                            "warning" -> SocYellow
-                            else -> AccentGreen
+                        // Երկու սլոտ մեկ տողում՝ Phone | երկրորդ widget
+                        Row(
+                            modifier = Modifier.fillMaxWidth().height(88.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            DashboardWidgetSlot(
+                                slot = DashboardWidgets.SLOT_PHONE,
+                                emptyHint = stringResource(R.string.kom_widget_hint_phone),
+                                requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                            )
+                            DashboardWidgetSlot(
+                                slot = DashboardWidgets.SLOT_PHONE2,
+                                emptyHint = stringResource(R.string.kom_widget_hint_generic),
+                                requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                            )
                         }
-                        InsightCard(
-                            title = state.insightTitle,
-                            summary = state.insightSummary,
-                            borderColor = insightColor,
-                            onClick = { viewModel.toggleInsightExpanded() }
-                        )
                         DashboardWidgetSlot(
                             slot = DashboardWidgets.SLOT_LEFT,
                             emptyHint = stringResource(R.string.kom_widget_hint_music),
                             requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
-                            modifier = Modifier.fillMaxWidth().height(190.dp),
+                            modifier = Modifier.fillMaxWidth().weight(1f),
                         )
                     }
 
@@ -326,7 +327,11 @@ fun DashboardScreen(
                 modifier = Modifier.weight(0.6f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                DashboardContextCard(state = state, modifier = Modifier.fillMaxWidth().weight(0.36f))
+                DashboardContextCard(
+                    state = state,
+                    modifier = Modifier.fillMaxWidth().weight(0.36f),
+                    onInsightClick = { viewModel.toggleInsightExpanded() },
+                )
                 DashboardWidgetSlot(
                     slot = DashboardWidgets.SLOT_RIGHT,
                     emptyHint = stringResource(R.string.kom_widget_hint_weather),
@@ -522,7 +527,7 @@ private fun TopBar(
 // ============================================================================
 
 @Composable
-private fun InsightCard(
+internal fun InsightCard(  // Kom-BYDMate: internal՝ B քարտում օգտագործելու համար
     title: String?,
     summary: String?,
     borderColor: Color,

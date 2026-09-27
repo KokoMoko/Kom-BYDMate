@@ -1,6 +1,12 @@
 package com.bydmate.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.min
+import com.bydmate.app.ui.theme.CardSurface
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,25 +46,41 @@ import com.bydmate.app.ui.theme.TextSecondary
  */
 @Composable
 fun DashboardTopRow(state: DashboardUiState, modifier: Modifier = Modifier) {
-    Row(modifier = modifier.fillMaxWidth().height(112.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(0.34f), contentAlignment = Alignment.Center) {
-            SocGauge(soc = state.soc ?: 0, modifier = Modifier.size(104.dp), isCharging = state.isCharging)
+    // Քարտ՝ շրջանակով, որը լրացնում է իրեն տրված բարձրությունը (հավասար աջ վերևի քարտին)
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .fillMaxHeight()
+            .clip(shape)
+            .background(CardSurface)
+            .border(1.dp, CardBorder, shape)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BoxWithConstraints(Modifier.weight(0.34f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+            SocGauge(soc = state.soc ?: 0, modifier = Modifier.size(min(maxWidth, maxHeight) * 0.9f),
+                isCharging = state.isCharging)
         }
         Divider()
         Column(Modifier.weight(0.38f), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(state.estimatedRangeKm?.let { "~${"%.0f".format(it)}" } ?: "—", color = AccentGreen,
-                    fontSize = 32.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    fontSize = 38.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 Spacer(Modifier.width(4.dp))
-                Text(stringResource(R.string.dashboard_unit_km), color = AccentGreen.copy(alpha = 0.7f), fontSize = 18.sp,
-                    modifier = Modifier.padding(bottom = 4.dp))
+                Text(stringResource(R.string.dashboard_unit_km), color = AccentGreen.copy(alpha = 0.7f), fontSize = 20.sp,
+                    modifier = Modifier.padding(bottom = 5.dp))
             }
-            Text(stringResource(R.string.dashboard_range_label), color = TextMuted, fontSize = 12.sp)
+            // «Estimated range»-ի փոխարեն՝ պարզապես «Range»
+            Text(stringResource(R.string.kom_tile_range), color = TextSecondary, fontSize = 16.sp)
         }
         Divider()
-        Column(Modifier.weight(0.28f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            TempRow(state.insideTemp, Icons.Outlined.DirectionsCar)
-            TempRow(state.exteriorTemp, Icons.Outlined.WbSunny)
+        // Կենտրոնացված իր մասում (գծից սիմետրիկ հեռու), ինչպես պաշարը
+        Box(Modifier.weight(0.28f), contentAlignment = Alignment.Center) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                TempRow(state.insideTemp, Icons.Outlined.DirectionsCar)
+                TempRow(state.exteriorTemp, Icons.Outlined.WbSunny)
+            }
         }
     }
 }

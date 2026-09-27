@@ -30,8 +30,8 @@ android {
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
-        versionCode = 49102  // Kom-BYDMate: upstream versionCode (491) * 100 + kom build
-        versionName = "3.18.2-kom.2"
+        versionCode = 49103  // Kom-BYDMate: upstream versionCode (491) * 100 + kom build
+        versionName = "3.18.2-kom.3"
         // Kom-BYDMate: միայն ru (լռելյայն) և en․ գրադարանների մյուս թարգմանությունները APK-ում չեն
         resourceConfigurations += listOf("ru", "en")
 

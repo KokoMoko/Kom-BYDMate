@@ -66,6 +66,7 @@ object DashboardWidgets {
     const val SLOT_LEFT = "left"    // A՝ ձախ ներքև (Yandex Music)
     const val SLOT_RIGHT = "right"  // աջ ներքև (եղանակ)
     const val SLOT_PHONE = "phone"  // ձախ՝ կոմպակտ տողի տակ (օր․ Bluetooth Phone)
+    const val SLOT_PHONE2 = "phone2"  // Phone-ի կողքին՝ օգտատիրոջ ընտրությամբ
     private const val PREFS = "kom_dashboard_widgets"
 
     /**

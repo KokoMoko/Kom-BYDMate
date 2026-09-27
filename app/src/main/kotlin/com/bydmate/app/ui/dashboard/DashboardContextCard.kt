@@ -46,20 +46,40 @@ import kotlinx.coroutines.delay
  * լիցքավորում → լիցքի առաջընթաց, ընթացք → արագություն և ընթացիկ ուղևորություն, կայանված → պաշար։
  */
 @Composable
-fun DashboardContextCard(state: DashboardUiState, modifier: Modifier = Modifier) {
+fun DashboardContextCard(
+    state: DashboardUiState,
+    modifier: Modifier = Modifier,
+    onInsightClick: () -> Unit = {},
+) {
     val shape = RoundedCornerShape(12.dp)
+    // Ինսայթը (օր․ «Consumption up 29%») վերաբերում է ուղևորություններին՝ դրա համար այստեղ է․
+    // ընթացքի ժամանակ՝ Trip/Odometer սյունակների տակ, մյուս վիճակներում՝ ներքևում։
+    val insight: @Composable () -> Unit = {
+        if (state.insightTitle != null) {
+            val tone = when (state.effectiveInsightTone) {
+                "critical" -> SocRed
+                "warning" -> SocYellow
+                else -> AccentGreen
+            }
+            InsightCard(title = state.insightTitle, summary = state.insightSummary, borderColor = tone, onClick = onInsightClick)
+        }
+    }
     Box(
         modifier = modifier
             .clip(shape)
             .background(CardSurface)
             .border(1.dp, CardBorder, shape)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 10.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         when {
-            state.isCharging -> ChargingContent(state)
-            state.sessionStartedAt != null -> DrivingContent(state)
-            else -> ParkedContent(state)
+            state.isCharging -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                ChargingContent(state); insight()
+            }
+            state.sessionStartedAt != null -> DrivingContent(state, insight)
+            else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                ParkedContent(state); insight()
+            }
         }
     }
 }
@@ -96,7 +116,7 @@ private fun ChargingContent(state: DashboardUiState) {
 }
 
 @Composable
-private fun DrivingContent(state: DashboardUiState) {
+private fun DrivingContent(state: DashboardUiState, insight: @Composable () -> Unit) {
     val minutes by produceState(initialValue = elapsedMin(state.sessionStartedAt), state.sessionStartedAt) {
         while (true) {
             value = elapsedMin(state.sessionStartedAt)
@@ -105,22 +125,28 @@ private fun DrivingContent(state: DashboardUiState) {
     }
     Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
         // Սպիդոմետր (swipe՝ ոճեր, ⋮՝ կարգավորումներ) | ուղևորություն | երթուղի կամ վազք
+        // Սպիդոմետրը՝ ամբողջ բարձրությամբ, աջում՝ Trip | Odometer, իսկ դրանց տակ՝ ինսայթը
         DashboardSpeedometer(speed = state.speed ?: 0, modifier = Modifier.weight(0.5f).fillMaxHeight())
         ColumnDivider()
-        Column(modifier = Modifier.weight(0.25f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            val km = stringResource(R.string.kom_ctx_km, state.tripDistanceKm?.let { "%.1f".format(it) } ?: "—")
-            val time = if (minutes >= 60) {
-                stringResource(R.string.kom_ctx_hours_min, (minutes / 60).toInt(), (minutes % 60).toInt())
-            } else {
-                stringResource(R.string.kom_ctx_min, minutes.toInt())
+        Column(modifier = Modifier.weight(0.5f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    val km = stringResource(R.string.kom_ctx_km, state.tripDistanceKm?.let { "%.1f".format(it) } ?: "—")
+                    val time = if (minutes >= 60) {
+                        stringResource(R.string.kom_ctx_hours_min, (minutes / 60).toInt(), (minutes % 60).toInt())
+                    } else {
+                        stringResource(R.string.kom_ctx_min, minutes.toInt())
+                    }
+                    Stat(stringResource(R.string.kom_ctx_trip), "$km · $time")
+                    val cons = state.consumption?.let { stringResource(R.string.kom_ctx_kwh100, "%.1f".format(it)) } ?: "—"
+                    Stat(stringResource(R.string.kom_ctx_consumption), cons,
+                        color = state.consumption?.let { consumptionTint(it) } ?: TextMuted)
+                }
+                ColumnDivider()
+                RouteOrOdometer(state, Modifier.weight(1f))
             }
-            Stat(stringResource(R.string.kom_ctx_trip), "$km · $time")
-            val cons = state.consumption?.let { stringResource(R.string.kom_ctx_kwh100, "%.1f".format(it)) } ?: "—"
-            Stat(stringResource(R.string.kom_ctx_consumption), cons,
-                color = state.consumption?.let { consumptionTint(it) } ?: TextMuted)
+            insight()
         }
-        ColumnDivider()
-        RouteOrOdometer(state, Modifier.weight(0.25f))
     }
 }
 
