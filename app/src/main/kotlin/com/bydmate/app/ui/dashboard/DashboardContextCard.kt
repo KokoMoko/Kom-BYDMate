@@ -1,6 +1,8 @@
 package com.bydmate.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,7 +63,7 @@ fun DashboardContextCard(
                 "warning" -> SocYellow
                 else -> AccentGreen
             }
-            InsightCard(title = state.insightTitle, summary = state.insightSummary, borderColor = tone, onClick = onInsightClick)
+            CompactInsight(title = state.insightTitle, summary = state.insightSummary, tone = tone, onClick = onInsightClick)
         }
     }
     Box(
@@ -130,7 +132,7 @@ private fun DrivingContent(state: DashboardUiState, insight: @Composable () -> U
         ColumnDivider()
         Column(modifier = Modifier.weight(0.5f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     val km = stringResource(R.string.kom_ctx_km, state.tripDistanceKm?.let { "%.1f".format(it) } ?: "—")
                     val time = if (minutes >= 60) {
                         stringResource(R.string.kom_ctx_hours_min, (minutes / 60).toInt(), (minutes % 60).toInt())
@@ -146,6 +148,32 @@ private fun DrivingContent(state: DashboardUiState, insight: @Composable () -> U
                 RouteOrOdometer(state, Modifier.weight(1f))
             }
             insight()
+        }
+    }
+}
+
+/** Կոմպակտ ինսայթ B քարտի համար՝ երկու տող, առանց մեծ լուսանցքների (սեղմելիս՝ մանրամասներ)։ */
+@Composable
+private fun CompactInsight(title: String, summary: String?, tone: Color, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .border(1.5.dp, tone.copy(alpha = 0.6f), shape)
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("✦", color = tone, fontSize = 15.sp)
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(title, color = tone, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (!summary.isNullOrBlank()) {
+                Text(summary, color = tone.copy(alpha = 0.85f), fontSize = 12.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }
@@ -169,7 +197,7 @@ private fun RouteOrOdometer(state: DashboardUiState, modifier: Modifier) {
             delay(2_000L)
         }
     }
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (nav.active && nav.totalDistMeters > 0) {
             val km = nav.totalDistMeters / 1000.0
             val min = nav.etaSeconds / 60
@@ -219,8 +247,9 @@ private fun ParkedContent(state: DashboardUiState) {
 private fun Stat(label: String, value: String, color: Color = TextPrimary) {
     // Պիտակը վերևում, արժեքը տակը՝ նեղ աջ սյունակում տեղավորվելու համար
     Column {
-        Text(label, color = TextMuted, fontSize = 13.sp)
-        Text(value, color = color, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(value, color = color, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+            overflow = TextOverflow.Ellipsis)
     }
 }
 
