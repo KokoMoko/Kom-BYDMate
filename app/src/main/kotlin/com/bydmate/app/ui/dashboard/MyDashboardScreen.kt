@@ -112,14 +112,6 @@ fun MyDashboardScreen(
             if (r != SplitStartResult.OK) message = context.getString(R.string.kom_panel_failed, r?.name ?: "error")
         }
     }
-    // Ինքնաբերաբար՝ մեկ անգամ ծրագրի գործարկումից հետո (որ split-ից դուրս գալուց հետո նորից չբացվի)
-    LaunchedEffect(appTile?.pkg, pageVisible, editing, visible, inSplit) {
-        val t = appTile ?: return@LaunchedEffect
-        if (!pageVisible || editing || !visible || inSplit || KomPanelAuto.done) return@LaunchedEffect
-        delay(600)
-        KomPanelAuto.done = true
-        openPanel(t)
-    }
 
     Column(
         modifier = Modifier

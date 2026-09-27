@@ -54,8 +54,8 @@ object KomPrefs {
     }
 
     // Մեքենան միացնելիս՝ split Navigator-ով և Yandex Music-ի միացում (տես KomAutostart)
-    fun autostartSplit(ctx: Context) = prefs(ctx).getBoolean("autostart_split", true)
-    fun setAutostartSplit(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_split", v).apply()
+    fun autostartNavi(ctx: Context) = prefs(ctx).getBoolean("autostart_navi", true)
+    fun setAutostartNavi(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_navi", v).apply()
     fun autostartMusic(ctx: Context) = prefs(ctx).getBoolean("autostart_music", true)
     fun setAutostartMusic(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_music", v).apply()
 
@@ -119,7 +119,7 @@ fun KomWelcomeNameBlock() {
 @Composable
 fun KomAutostartBlock() {
     val context = LocalContext.current
-    var split by remember { mutableStateOf(KomPrefs.autostartSplit(context)) }
+    var navi by remember { mutableStateOf(KomPrefs.autostartNavi(context)) }
     var music by remember { mutableStateOf(KomPrefs.autostartMusic(context)) }
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -129,9 +129,9 @@ fun KomAutostartBlock() {
         Column(Modifier.padding(12.dp)) {
             Text(stringResource(R.string.kom_autostart_title), color = TextPrimary, fontSize = 16.sp)
             androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(stringResource(R.string.kom_autostart_split), color = TextPrimary, fontSize = 14.sp,
+                Text(stringResource(R.string.kom_autostart_navi), color = TextPrimary, fontSize = 14.sp,
                     modifier = Modifier.weight(1f))
-                androidx.compose.material3.Switch(checked = split, onCheckedChange = { split = it; KomPrefs.setAutostartSplit(context, it) })
+                androidx.compose.material3.Switch(checked = navi, onCheckedChange = { navi = it; KomPrefs.setAutostartNavi(context, it) })
             }
             androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Text(stringResource(R.string.kom_autostart_music), color = TextPrimary, fontSize = 14.sp,

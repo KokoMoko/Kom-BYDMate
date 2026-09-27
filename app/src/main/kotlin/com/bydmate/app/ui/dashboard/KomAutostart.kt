@@ -7,7 +7,10 @@ import android.media.browse.MediaBrowser
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.bydmate.app.MainActivity
+import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.service.TrackingService
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -16,9 +19,8 @@ import kotlinx.coroutines.launch
  * Kom-BYDMate: մեքենան միացնելիս՝
  *  1. Yandex Music-ին միանում ենք MediaBrowser-ով (հավելվածը և widget-ը «արթնանում» են),
  *     բայց նվագարկում ՉԵՆՔ սկսում;
- *  2. բացում ենք Panel-ը (split)՝ Kom-ը 1/3, Navigator-ը 2/3 (My Dashboard-ի «Application»
- *     սալիկի հավելվածը, իսկ եթե այն չկա՝ Yandex Navigator)։ Navigator-ը երևալով է նաև
- *     արագության սահմանափակումը հասանելի դառնում։
+ *  2. գործարկում ենք Yandex Navigator-ը և մի քանի վայրկյան հետո Kom-ը վերադարձնում ենք
+ *     առաջին պլան․ Navigator-ը մնում է աշխատած հետին պլանում (split չենք բացում)։
  *
  * «Միացում»՝ powerState-ի անցումը OFF-ից ON/DRIVE, կամ պրոցեսի առաջին տվյալը արդեն միացված
  * մեքենայից (DiLink-ը սովորաբար հենց միացնելիս է գործարկվում)։
@@ -50,17 +52,11 @@ object KomAutostart {
         if (now - lastRunMs < MIN_INTERVAL_MS) return
         lastRunMs = now
         scope.launch {
-            Log.i(TAG, "car on -> autostart (music=${KomPrefs.autostartMusic(ctx)}, split=${KomPrefs.autostartSplit(ctx)})")
+            Log.i(TAG, "car on -> autostart (music=${KomPrefs.autostartMusic(ctx)}, navi=${KomPrefs.autostartNavi(ctx)})")
             if (KomPrefs.autostartMusic(ctx)) connectMusic(ctx)
-            if (KomPrefs.autostartSplit(ctx)) {
+            if (KomPrefs.autostartNavi(ctx) && isInstalled(ctx, NAVI_PKG)) {
                 delay(4_000L)  // թող համակարգը և helper-ը պատրաստ լինեն
-                val tilePkg = MyDashboardStore.load(ctx)
-                    .firstOrNull { it.type == TileType.APP && it.pkg.isNotEmpty() }?.pkg
-                val pkg = tilePkg ?: NAVI_PKG
-                if (isInstalled(ctx, pkg)) {
-                    KomPanelAuto.done = true  // My Dashboard-ը երկրորդ անգամ չբացի
-                    KomPanel.open(ctx, pkg, appOnRight = true)
-                }
+                launchInBackground(ctx, NAVI_PKG)
             }
         }
     }
@@ -84,6 +80,28 @@ object KomAutostart {
                 b.connect()
             }.onFailure { Log.w(TAG, "music connect error: ${it.message}") }
         }
+    }
+
+    /** Գործարկում է [pkg]-ը, հետո Kom-ը վերադարձնում առաջին պլան (հավելվածը մնում է հետին պլանում)։ */
+    private suspend fun launchInBackground(ctx: Context, pkg: String) {
+        val helper = runCatching {
+            EntryPointAccessors.fromApplication(ctx, ClusterEntryPoint::class.java).helperClient()
+        }.getOrNull()
+        val launched = runCatching { helper?.launchApp(pkg) == true }.getOrDefault(false) ||
+            runCatching {
+                ctx.packageManager.getLaunchIntentForPackage(pkg)?.let {
+                    ctx.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true
+                } ?: false
+            }.getOrDefault(false)
+        Log.i(TAG, "launch $pkg -> $launched")
+        if (!launched) return
+        delay(3_000L)  // Navigator-ը հասցնի սկսել
+        runCatching {
+            ctx.startActivity(
+                Intent(ctx, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            )
+        }.onFailure { Log.w(TAG, "bring Kom to front failed: ${it.message}") }
     }
 
     private fun isInstalled(ctx: Context, pkg: String) =
