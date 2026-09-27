@@ -14,6 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -36,28 +38,40 @@ object KomPrefs {
     // (localized / device-protected context), և այդ դեպքում կկարդային տարբեր ֆայլեր։
     fun prefs(ctx: Context): SharedPreferences =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    fun welcomeName(ctx: Context): String = prefs(ctx).getString(KEY_WELCOME_NAME, "") ?: ""
-    fun setWelcomeName(ctx: Context, name: String) {
-        prefs(ctx).edit().putString(KEY_WELCOME_NAME, name.take(MAX_NAME)).commit()
+    // Կրկնօրինակ՝ պարզ ֆայլում (filesDir)․ եթե prefs-ը ինչ-որ պատճառով դատարկ է, կարդում ենք ֆայլից
+    private fun file(ctx: Context) = java.io.File(ctx.applicationContext.filesDir, "kom_welcome_name.txt")
+
+    fun welcomeName(ctx: Context): String {
+        val fromPrefs = prefs(ctx).getString(KEY_WELCOME_NAME, null)
+        if (!fromPrefs.isNullOrEmpty()) return fromPrefs
+        return runCatching { file(ctx).takeIf { it.exists() }?.readText() }.getOrNull().orEmpty()
     }
+
+    fun setWelcomeName(ctx: Context, name: String) {
+        val v = name.take(MAX_NAME)
+        prefs(ctx).edit().putString(KEY_WELCOME_NAME, v).commit()
+        runCatching { file(ctx).writeText(v) }
+    }
+
+    /** Վերնագիրը՝ ըստ պահված անվան (օգտագործվում է և՛ Dashboard-ում, և՛ Settings-ի նախադիտման մեջ)։ */
+    fun titleFor(name: String): String? =
+        name.trim().removePrefix("Welcome ").removePrefix("welcome ").trim().ifEmpty { null }
 }
 
 /** Главная-ի վերնագիրը․ «Welcome <անուն>», իսկ անուն չլինելիս՝ «MyBYD»։ Թարմանում է անմիջապես։ */
 @Composable
 fun rememberDashboardTitle(): String {
     val context = LocalContext.current
-    var name by remember { mutableStateOf(KomPrefs.welcomeName(context)) }
-    DisposableEffect(context) {
-        val prefs = KomPrefs.prefs(context)
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KomPrefs.KEY_WELCOME_NAME) name = KomPrefs.welcomeName(context)
+    // Կարդում ենք պահոցից 2 վայրկյանը մեկ (listener-ից անկախ՝ ավելի հուսալի)
+    val name by produceState(initialValue = KomPrefs.welcomeName(context)) {
+        while (true) {
+            value = KomPrefs.welcomeName(context)
+            delay(2_000L)
         }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     // Եթե օգտատերը ինքն է գրել «Welcome …», կրկին չենք ավելացնում
-    val trimmed = name.trim().removePrefix("Welcome ").removePrefix("welcome ").trim()
-    return if (trimmed.isEmpty()) "MyBYD" else stringResource(R.string.kom_welcome_title, trimmed)
+    val trimmed = KomPrefs.titleFor(name)
+    return if (trimmed == null) "MyBYD" else stringResource(R.string.kom_welcome_title, trimmed)
 }
 
 /** Settings → Application՝ «Welcome name» դաշտը։ */
@@ -83,6 +97,14 @@ fun KomWelcomeNameBlock() {
             )
             Text(stringResource(R.string.kom_settings_welcome_hint), color = TextMuted, fontSize = 13.sp,
                 modifier = Modifier.padding(top = 6.dp))
+            // Նախադիտում՝ ինչ է իրականում պահված (ստուգման համար)
+            val saved = remember(value) { KomPrefs.welcomeName(context) }
+            val t = KomPrefs.titleFor(saved)
+            Text(
+                "Dashboard: " + (if (t == null) "MyBYD" else stringResource(R.string.kom_welcome_title, t)) +
+                    "  (saved: “" + saved + "”)",
+                color = TextPrimary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp),
+            )
         }
     }
 }
