@@ -2124,4 +2124,11 @@
     <string name="kom_about_inspired_prefix">Вдохновлено\u0020</string>
     <!-- Kom-BYDMate -->
     <string name="kom_tile_app_split">В режиме split недоступно — откройте на весь экран</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_settings">Кластер</string>
+    <string name="kom_cluster_top_height">Высота верхней части: %1$d%%</string>
+    <string name="kom_cluster_style_hint">Нажмите на прибор, чтобы сменить его стиль: стрелка, дуга, цифры, полоса.</string>
+    <string name="kom_cluster_power">мощность</string>
+    <string name="kom_cluster_regen">рекуперация</string>
+    <string name="kom_cluster_charging">зарядка</string>
 </resources>

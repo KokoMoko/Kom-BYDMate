@@ -59,6 +59,15 @@ STRINGS = {
     "kom_about_inspired_prefix": ("Вдохновлено\\u0020", "Inspired by\\u0020"),
     "kom_tile_app_pick": ("Выберите приложение", "Choose an application"),
     "kom_tile_app_hint": ("Откроется здесь после «Готово»", "Opens here after “Done”"),
+    "kom_cluster_settings": ("Кластер", "Cluster"),
+    "kom_cluster_top_height": ("Высота верхней части: %1$d%%", "Top area height: %1$d%%"),
+    "kom_cluster_style_hint": (
+        "Нажмите на прибор, чтобы сменить его стиль: стрелка, дуга, цифры, полоса.",
+        "Tap a gauge to change its style: needle, arc, digital, bar.",
+    ),
+    "kom_cluster_power": ("мощность", "power"),
+    "kom_cluster_regen": ("рекуперация", "regen"),
+    "kom_cluster_charging": ("зарядка", "charging"),
     "kom_tile_app_split": (
         "В режиме split недоступно — откройте на весь экран",
         "Not available in split — open full screen",

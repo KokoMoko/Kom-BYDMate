@@ -17,31 +17,31 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 /**
- * Kom-BYDMate: Главная-ի երկու էջ՝ 0 = «My Dashboard» (լռելյայն), 1 = Classic։
- * Փոխվում է swipe-ով կամ «MyBYD ● ○» կետերով․ խմբագրման ժամանակ swipe-ը անջատված է։
+ * Kom-BYDMate: Главная-ի էջերը՝ 0 = «My Dashboard» (լռելյայն), 1 = «Cluster», 2 = Classic։
+ * Փոխվում է swipe-ով կամ «● ○ ○» կետերով․ խմբագրման ժամանակ swipe-ը անջատված է։
  */
 @Composable
 fun DashboardHost(onOpenTechPanel: () -> Unit, onOpenSettings: () -> Unit) {
     var editing by remember { mutableStateOf(false) }
-    val pager = rememberPagerState(initialPage = 0) { 2 }
+    val pager = rememberPagerState(initialPage = 0) { 3 }
     val scope = rememberCoroutineScope()
 
     Box(Modifier.fillMaxSize()) {
         HorizontalPager(state = pager, userScrollEnabled = !editing, modifier = Modifier.fillMaxSize()) { page ->
-            if (page == 0) {
-                MyDashboardScreen(
+            when (page) {
+                0 -> MyDashboardScreen(
                     editing = editing,
                     onEditingChange = { editing = it },
                     // «Application» սալիկի պատուհանը՝ միայն երբ My Dashboard-ը հանգիստ վիճակում է
                     pageVisible = pager.currentPage == 0 && !pager.isScrollInProgress,
                 )
-            } else {
-                DashboardScreen(onOpenTechPanel = onOpenTechPanel, onOpenSettings = onOpenSettings)
+                1 -> ClusterScreen()
+                else -> DashboardScreen(onOpenTechPanel = onOpenTechPanel, onOpenSettings = onOpenSettings)
             }
         }
         // Վերևի կենտրոնում (վերնագիրը «Welcome <անուն>» կարող է երկար լինել)
         DashboardPageDots(
-            count = 2,
+            count = 3,
             current = pager.currentPage,
             onSelect = { i -> if (!editing) scope.launch { pager.animateScrollToPage(i) } },
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 11.dp),

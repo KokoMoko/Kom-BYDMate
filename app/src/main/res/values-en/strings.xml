@@ -1957,4 +1957,11 @@
     <string name="kom_about_inspired_prefix">Inspired by\u0020</string>
     <!-- Kom-BYDMate -->
     <string name="kom_tile_app_split">Not available in split — open full screen</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_settings">Cluster</string>
+    <string name="kom_cluster_top_height">Top area height: %1$d%%</string>
+    <string name="kom_cluster_style_hint">Tap a gauge to change its style: needle, arc, digital, bar.</string>
+    <string name="kom_cluster_power">power</string>
+    <string name="kom_cluster_regen">regen</string>
+    <string name="kom_cluster_charging">charging</string>
 </resources>
