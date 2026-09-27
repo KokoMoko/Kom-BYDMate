@@ -64,7 +64,8 @@ STRINGS = {
     "kom_panel_failed": ("Не удалось открыть split: %1$s", "Couldn't open split: %1$s"),
     "kom_autostart_title": ("При включении машины", "When the car starts"),
     "kom_autostart_navi": ("Запустить Яндекс Навигатор в фоне", "Start Yandex Navigator in the background"),
-    "kom_autostart_music": ("Подключить Яндекс Музыку (без воспроизведения)", "Connect Yandex Music (no playback)"),
+    "kom_autostart_music": ("Подключить Яндекс Музыку", "Connect Yandex Music"),
+    "kom_autostart_music_play": ("…и начать воспроизведение", "…and start playback"),
     "kom_autostart_hint": (
         "Приложения запускаются и остаются в фоне, на экране остаётся Главная.",
         "The apps start and stay in the background; the dashboard stays on screen.",

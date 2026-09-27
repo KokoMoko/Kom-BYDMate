@@ -56,6 +56,8 @@ object KomPrefs {
     // Մեքենան միացնելիս՝ split Navigator-ով և Yandex Music-ի միացում (տես KomAutostart)
     fun autostartNavi(ctx: Context) = prefs(ctx).getBoolean("autostart_navi", true)
     fun setAutostartNavi(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_navi", v).apply()
+    fun autostartMusicPlay(ctx: Context) = prefs(ctx).getBoolean("autostart_music_play", false)
+    fun setAutostartMusicPlay(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_music_play", v).apply()
     fun autostartMusic(ctx: Context) = prefs(ctx).getBoolean("autostart_music", true)
     fun setAutostartMusic(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_music", v).apply()
 
@@ -121,6 +123,7 @@ fun KomAutostartBlock() {
     val context = LocalContext.current
     var navi by remember { mutableStateOf(KomPrefs.autostartNavi(context)) }
     var music by remember { mutableStateOf(KomPrefs.autostartMusic(context)) }
+    var play by remember { mutableStateOf(KomPrefs.autostartMusicPlay(context)) }
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -137,6 +140,12 @@ fun KomAutostartBlock() {
                 Text(stringResource(R.string.kom_autostart_music), color = TextPrimary, fontSize = 14.sp,
                     modifier = Modifier.weight(1f))
                 androidx.compose.material3.Switch(checked = music, onCheckedChange = { music = it; KomPrefs.setAutostartMusic(context, it) })
+            }
+            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(stringResource(R.string.kom_autostart_music_play), color = if (music) TextPrimary else TextMuted,
+                    fontSize = 14.sp, modifier = Modifier.weight(1f).padding(start = 16.dp))
+                androidx.compose.material3.Switch(checked = play, enabled = music,
+                    onCheckedChange = { play = it; KomPrefs.setAutostartMusicPlay(context, it) })
             }
             Text(stringResource(R.string.kom_autostart_hint), color = TextMuted, fontSize = 13.sp,
                 modifier = Modifier.padding(top = 4.dp))

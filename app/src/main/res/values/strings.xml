@@ -2139,8 +2139,10 @@
     <!-- Kom-BYDMate -->
     <string name="kom_autostart_title">При включении машины</string>
     <string name="kom_autostart_split">Открыть split: Kom 1/3 + навигатор 2/3</string>
-    <string name="kom_autostart_music">Подключить Яндекс Музыку (без воспроизведения)</string>
+    <string name="kom_autostart_music">Подключить Яндекс Музыку</string>
     <string name="kom_autostart_hint">Приложения запускаются и остаются в фоне, на экране остаётся Главная.</string>
     <!-- Kom-BYDMate -->
     <string name="kom_autostart_navi">Запустить Яндекс Навигатор в фоне</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_autostart_music_play">…и начать воспроизведение</string>
 </resources>

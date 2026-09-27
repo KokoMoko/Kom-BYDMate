@@ -1972,8 +1972,10 @@
     <!-- Kom-BYDMate -->
     <string name="kom_autostart_title">When the car starts</string>
     <string name="kom_autostart_split">Open split: Kom 1/3 + navigator 2/3</string>
-    <string name="kom_autostart_music">Connect Yandex Music (no playback)</string>
+    <string name="kom_autostart_music">Connect Yandex Music</string>
     <string name="kom_autostart_hint">The apps start and stay in the background; the dashboard stays on screen.</string>
     <!-- Kom-BYDMate -->
     <string name="kom_autostart_navi">Start Yandex Navigator in the background</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_autostart_music_play">…and start playback</string>
 </resources>

@@ -72,8 +72,15 @@ object KomAutostart {
         Handler(Looper.getMainLooper()).post {
             runCatching {
                 browser?.disconnect()
+                val play = KomPrefs.autostartMusicPlay(ctx)
                 val b = MediaBrowser(ctx, ComponentName(svc.packageName, svc.name), object : MediaBrowser.ConnectionCallback() {
-                    override fun onConnected() { Log.i(TAG, "music connected (no playback)") }
+                    override fun onConnected() {
+                        Log.i(TAG, "music connected (play=$play)")
+                        // «Playback - yes»՝ նվագարկում ենք նույն սեսիայի միջոցով
+                        if (play) runCatching {
+                            android.media.session.MediaController(ctx, browser!!.sessionToken).transportControls.play()
+                        }.onFailure { Log.w(TAG, "music play failed: ${it.message}") }
+                    }
                     override fun onConnectionFailed() { Log.w(TAG, "music connection failed") }
                 }, null)
                 browser = b
