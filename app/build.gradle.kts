@@ -30,8 +30,8 @@ android {
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
-        versionCode = 49318  // Kom-BYDMate: upstream versionCode (493) * 100 + kom build
-        versionName = "3.19.0-kom.18"
+        versionCode = 49320  // Kom-BYDMate: upstream versionCode (493) * 100 + kom build
+        versionName = "3.19.0-kom.20"
         // Kom-BYDMate: միայն ru (լռելյայն) և en․ գրադարանների մյուս թարգմանությունները APK-ում չեն
         resourceConfigurations += listOf("ru", "en")
 
@@ -54,7 +54,8 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.findByName("release")
-            isMinifyEnabled = true
+            // Kom-BYDMate: -PkomFast՝ տեղական արագ կառուցում առանց R8-ի (CI-ն միշտ R8-ով է)
+            isMinifyEnabled = !project.hasProperty("komFast")
             isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

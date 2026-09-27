@@ -102,8 +102,9 @@ fun MyDashboardTileContent(
 }
 
 /**
- * «Application» սալիկ (Panel ռեժիմ)։ Սեղմելիս հավելվածը բացվում է split-ով՝ Kom-ը 1/3, հավելվածը
- * 2/3 (տես [KomPanel])։ My Dashboard-ը split-ը բացում է նաև ինքնաբերաբար։
+ * «Application» սալիկ․ հավելվածը (օր․ Waze, Navigator) աշխատում է վիրտուալ էկրանի վրա և երևում
+ * է հենց սալիկի ներսում (տես [VirtualAppTile])։ Սեղմելիս բացվում է լիաէկրան (հասցե մուտքագրելու
+ * համար), իսկ Kom վերադառնալիս նորից «մտնում» է սալիկի մեջ։
  */
 @Composable
 private fun AppTile(tile: Tile, onOpen: () -> Unit, modifier: Modifier) {
@@ -113,16 +114,37 @@ private fun AppTile(tile: Tile, onOpen: () -> Unit, modifier: Modifier) {
         runCatching { pm.getApplicationLabel(pm.getApplicationInfo(tile.pkg, 0)).toString() }.getOrDefault(tile.pkg)
     }
     val icon = remember(tile.pkg) { runCatching { pm.getApplicationIcon(tile.pkg) }.getOrNull() }
+    val dpi = (context.resources.displayMetrics.densityDpi * 0.85f).toInt()
 
-    TileCard(modifier.clickable(enabled = tile.pkg.isNotEmpty(), onClick = onOpen)) {
+    TileCard(modifier) {
+        // Տեղապահ՝ մինչև հավելվածի պատկերը կհայտնվի
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (icon != null) {
                 AndroidView(factory = { android.widget.ImageView(it).apply { setImageDrawable(icon) } },
                     modifier = Modifier.size(64.dp))
             }
             Text(label, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Text(stringResource(R.string.kom_tile_app_panel_hint), color = TextMuted, fontSize = 13.sp)
         }
+        if (tile.pkg.isNotEmpty()) {
+            AndroidView(
+                factory = { ctx ->
+                    android.view.SurfaceView(ctx).apply {
+                        holder.addCallback(object : android.view.SurfaceHolder.Callback {
+                            override fun surfaceCreated(h: android.view.SurfaceHolder) {}
+                            override fun surfaceChanged(h: android.view.SurfaceHolder, format: Int, w: Int, hh: Int) {
+                                if (w > 0 && hh > 0) VirtualAppTile.attach(ctx, tile.pkg, h.surface, w, hh, dpi)
+                            }
+                            override fun surfaceDestroyed(h: android.view.SurfaceHolder) {}
+                        })
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        // Հպումները սալիկին՝ բացել լիաէկրան
+        Box(Modifier.fillMaxSize().clickable(enabled = tile.pkg.isNotEmpty(), onClick = onOpen))
+        Text(stringResource(R.string.kom_tile_app_open_hint), color = TextMuted, fontSize = 12.sp,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp))
     }
 }
 
@@ -139,7 +161,7 @@ fun rememberInMultiWindow(): Boolean {
 }
 
 @Composable
-private fun TileCard(modifier: Modifier, content: @Composable () -> Unit) {
+private fun TileCard(modifier: Modifier, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
     val shape = RoundedCornerShape(12.dp)
     Box(
         modifier = modifier.clip(shape).background(CardSurface).border(1.dp, CardBorder, shape),

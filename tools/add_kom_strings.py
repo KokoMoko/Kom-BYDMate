@@ -77,6 +77,7 @@ STRINGS = {
     ),
     "kom_capture_saved": ("Сохранено: %1$s", "Saved: %1$s"),
     "kom_capture_failed": ("Не удалось сделать снимок (ADB)", "Screenshot failed (ADB)"),
+    "kom_tile_app_open_hint": ("Нажмите — открыть на весь экран", "Tap to open full screen"),
     "kom_cluster_settings": ("Кластер", "Cluster"),
     "kom_cluster_top_height": ("Высота верхней части: %1$d%%", "Top area height: %1$d%%"),
     "kom_cluster_style_hint": (

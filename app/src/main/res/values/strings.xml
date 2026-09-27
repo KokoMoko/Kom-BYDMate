@@ -2150,4 +2150,6 @@
     <string name="kom_capture_wait">Откройте главный экран DiLink с машиной (вид сзади) — снимок через 10 с…</string>
     <string name="kom_capture_saved">Сохранено: %1$s</string>
     <string name="kom_capture_failed">Не удалось сделать снимок (ADB)</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_tile_app_open_hint">Нажмите — открыть на весь экран</string>
 </resources>

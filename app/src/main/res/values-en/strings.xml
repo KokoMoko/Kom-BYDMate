@@ -1983,4 +1983,6 @@
     <string name="kom_capture_wait">Open the DiLink home screen with the car (rear view) — screenshot in 10 s…</string>
     <string name="kom_capture_saved">Saved: %1$s</string>
     <string name="kom_capture_failed">Screenshot failed (ADB)</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_tile_app_open_hint">Tap to open full screen</string>
 </resources>

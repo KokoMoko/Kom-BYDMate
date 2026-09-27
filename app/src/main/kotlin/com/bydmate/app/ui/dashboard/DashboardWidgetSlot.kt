@@ -78,6 +78,19 @@ object DashboardWidgets {
 
     @Volatile private var host: AppWidgetHost? = null
 
+    private var listeners = 0
+
+    @Synchronized
+    fun acquireListening(ctx: Context) {
+        if (listeners++ == 0) runCatching { host(ctx).startListening() }
+    }
+
+    @Synchronized
+    fun releaseListening(ctx: Context) {
+        listeners = (listeners - 1).coerceAtLeast(0)
+        if (listeners == 0) runCatching { host(ctx).stopListening() }
+    }
+
     fun host(ctx: Context): AppWidgetHost =
         host ?: synchronized(this) {
             host ?: AppWidgetHost(ctx.applicationContext, HOST_ID).also { host = it }
@@ -93,10 +106,19 @@ object DashboardWidgets {
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun get(ctx: Context, slot: String): Int {
-        val own = prefs(ctx).getInt(slot, -1)
-        if (own == EMPTY) return -1  // էջում widget-ը հեռացված է՝ չժառանգել
-        if (own != -1) return own
-        return parent(slot)?.let { get(ctx, it) } ?: -1
+        val p = prefs(ctx)
+        val parentSlot = parent(slot)
+        // Էջի սլոտը առաջին անգամ՝ «պատճենում» ենք հիմքի widget-ը և չափը, այդ պահից այն անկախ է
+        // (առաջ ժառանգումը մշտական էր, և Classic-ում փոխելիս այս էջի widget-ն էլ «ինքն իրեն» փոխվում էր)
+        if (parentSlot != null && !p.contains(slot)) {
+            val inherited = get(ctx, parentSlot)
+            p.edit()
+                .putInt(slot, if (inherited > 0) inherited else EMPTY)
+                .putInt("${slot}_scale", getScale(ctx, parentSlot))
+                .commit()
+        }
+        val own = p.getInt(slot, -1)
+        return if (own == EMPTY) -1 else own
     }
 
     fun set(ctx: Context, slot: String, id: Int) =
@@ -156,8 +178,10 @@ fun DashboardWidgetSlot(
     var showSize by remember { mutableStateOf(false) }
 
     DisposableEffect(host) {
-        runCatching { host.startListening() }
-        onDispose { runCatching { host.stopListening() } }
+        // Host-ը ընդհանուր է բոլոր էջերի համար․ լսումը անջատվում է միայն երբ ոչ մի սլոտ չի մնացել
+        // (առաջ էջը փոխելիս հին էջը անջատում էր լսումը բոլորի համար, և widget-ները չէին թարմանում)
+        DashboardWidgets.acquireListening(context)
+        onDispose { DashboardWidgets.releaseListening(context) }
     }
 
     fun finishAdd(id: Int) {
@@ -279,7 +303,14 @@ fun DashboardWidgetSlot(
                             }
                         },
                         update = { frame ->
-                            val hv = frame.getChildAt(0) as? AppWidgetHostView ?: return@AndroidView
+                            var hv = frame.getChildAt(0) as? AppWidgetHostView ?: return@AndroidView
+                            // Ապահովություն՝ View-ն պետք է ցույց տա հենց այս սլոտի widget-ը
+                            if (hv.appWidgetId != widgetId) {
+                                frame.removeAllViews()
+                                hv = host.createView(context.applicationContext, widgetId, info)
+                                frame.addView(hv)
+                                centerWidgetContentVertically(hv)
+                            }
                             hv.layoutParams = android.widget.FrameLayout.LayoutParams(vwPx, vhPx)
                             hv.pivotX = 0f
                             hv.pivotY = 0f

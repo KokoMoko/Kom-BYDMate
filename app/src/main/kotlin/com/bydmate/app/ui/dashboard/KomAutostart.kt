@@ -33,6 +33,26 @@ object KomAutostart {
 
     @Volatile private var lastRunMs = 0L
     private var browser: MediaBrowser? = null  // պահում ենք՝ որ կապը չկտրվի
+    @Volatile private var controller: android.media.session.MediaController? = null
+
+    /**
+     * «Play»՝ Yandex Music-ի սեսիայով։ [restartIfPlaying]՝ եթե սեսիան արդեն «PLAYING» է, բայց
+     * ձայն չկա (միացնելու պահին ձայնային ուղին դեռ պատրաստ չէր), pause → play՝ ձայնը վերագործարկելու համար։
+     */
+    private suspend fun startPlayback(restartIfPlaying: Boolean) {
+        val c = controller ?: return
+        val playing = c.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING
+        Log.i(TAG, "startPlayback playing=$playing restart=$restartIfPlaying")
+        runCatching {
+            if (playing && restartIfPlaying) {
+                c.transportControls.pause()
+                delay(800L)
+                c.transportControls.play()
+            } else if (!playing) {
+                c.transportControls.play()
+            }
+        }.onFailure { Log.w(TAG, "music play failed: ${it.message}") }
+    }
 
     fun start(ctx: Context, scope: CoroutineScope) {
         val app = ctx.applicationContext
@@ -58,6 +78,14 @@ object KomAutostart {
                 delay(4_000L)  // թող համակարգը և helper-ը պատրաստ լինեն
                 launchInBackground(ctx, NAVI_PKG)
             }
+            // Նվագարկումը՝ միայն երբ Navigator-ը արդեն գործարկվել է և ձայնային համակարգը պատրաստ է
+            // (միացնելուց անմիջապես հետո «play»-ը ընդունվում էր, բայց ձայն չէր գալիս)
+            if (KomPrefs.autostartMusic(ctx) && KomPrefs.autostartMusicPlay(ctx)) {
+                delay(5_000L)
+                startPlayback(restartIfPlaying = true)
+                delay(10_000L)
+                startPlayback(restartIfPlaying = false)  // երկրորդ փորձ, եթե դեռ չի նվագում
+            }
         }
     }
 
@@ -72,14 +100,10 @@ object KomAutostart {
         Handler(Looper.getMainLooper()).post {
             runCatching {
                 browser?.disconnect()
-                val play = KomPrefs.autostartMusicPlay(ctx)
                 val b = MediaBrowser(ctx, ComponentName(svc.packageName, svc.name), object : MediaBrowser.ConnectionCallback() {
                     override fun onConnected() {
-                        Log.i(TAG, "music connected (play=$play)")
-                        // «Playback - yes»՝ նվագարկում ենք նույն սեսիայի միջոցով
-                        if (play) runCatching {
-                            android.media.session.MediaController(ctx, browser!!.sessionToken).transportControls.play()
-                        }.onFailure { Log.w(TAG, "music play failed: ${it.message}") }
+                        Log.i(TAG, "music connected")
+                        controller = runCatching { android.media.session.MediaController(ctx, browser!!.sessionToken) }.getOrNull()
                     }
                     override fun onConnectionFailed() { Log.w(TAG, "music connection failed") }
                 }, null)

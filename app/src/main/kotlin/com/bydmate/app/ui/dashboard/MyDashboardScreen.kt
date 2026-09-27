@@ -165,7 +165,7 @@ fun MyDashboardScreen(
                             if (t.type == TileType.WIDGET && t.slot.startsWith("tile_")) DashboardWidgets.clear(context, t.slot)
                             update(tiles.filter { it.id != t.id })
                         },
-                    ) { mod -> MyDashboardTileContent(orig, state, requestGrant, mod, onOpenApp = { openPanel(orig) }) }
+                    ) { mod -> MyDashboardTileContent(orig, state, requestGrant, mod, onOpenApp = { VirtualAppTile.openFull(context, orig.pkg) }) }
                 }
             }
         }
