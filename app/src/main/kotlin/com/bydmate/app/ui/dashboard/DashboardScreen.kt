@@ -461,7 +461,7 @@ private fun TopBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "MyBYD",  // Kom-BYDMate
+            text = rememberDashboardTitle(),  // Kom-BYDMate: «Welcome <անուն>» կամ «MyBYD»
             color = TextPrimary,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,

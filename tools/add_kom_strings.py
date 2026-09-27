@@ -52,6 +52,12 @@ STRINGS = {
     "kom_tile_range": ("Запас хода", "Range"),
     "kom_tile_temps": ("Температура", "Temperature"),
     "kom_widget_hint_generic": ("Добавить виджет", "Add a widget"),
+    "kom_welcome_title": ("Привет, %1$s", "Welcome %1$s"),
+    "kom_settings_welcome_name": ("Имя для приветствия", "Welcome name"),
+    "kom_settings_welcome_hint": (
+        "Показывается вверху Главной вместо MyBYD, например «Привет, Kom». Пусто — MyBYD.",
+        "Shown at the top of the dashboard instead of MyBYD, e.g. “Welcome Kom”. Empty — MyBYD.",
+    ),
     "kom_cancel": ("Отмена", "Cancel"),
     "kom_ctx_charging": ("🔌 Зарядка", "🔌 Charging"),
     "kom_ctx_range_left": ("≈ %1$s км запаса", "≈ %1$s km range"),

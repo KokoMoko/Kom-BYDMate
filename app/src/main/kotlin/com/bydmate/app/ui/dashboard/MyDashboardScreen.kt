@@ -94,7 +94,7 @@ fun MyDashboardScreen(
     ) {
         // Վերնագիր․ MyBYD (+ էջի կետերը DashboardHost-ում) և խմբագրման կոճակները
         Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("MyBYD", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(rememberDashboardTitle(), color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
             if (editing) {
                 TextButton(onClick = { MyDashboardStore.reset(context); tiles = MyDashboardStore.load(context) }) {

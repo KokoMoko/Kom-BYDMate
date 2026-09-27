@@ -34,12 +34,12 @@ fun DashboardHost(onOpenTechPanel: () -> Unit, onOpenSettings: () -> Unit) {
                 DashboardScreen(onOpenTechPanel = onOpenTechPanel, onOpenSettings = onOpenSettings)
             }
         }
-        // «MyBYD» վերնագրի կողքին
+        // Վերևի կենտրոնում (վերնագիրը «Welcome <անուն>» կարող է երկար լինել)
         DashboardPageDots(
             count = 2,
             current = pager.currentPage,
             onSelect = { i -> if (!editing) scope.launch { pager.animateScrollToPage(i) } },
-            modifier = Modifier.align(Alignment.TopStart).padding(start = 100.dp, top = 11.dp),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 11.dp),
         )
     }
 }

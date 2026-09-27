@@ -1772,4 +1772,8 @@
     <string name="kom_tile_range">Range</string>
     <string name="kom_tile_temps">Temperature</string>
     <string name="kom_widget_hint_generic">Add a widget</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_welcome_title">Welcome %1$s</string>
+    <string name="kom_settings_welcome_name">Welcome name</string>
+    <string name="kom_settings_welcome_hint">Shown at the top of the dashboard instead of MyBYD, e.g. “Welcome Kom”. Empty — MyBYD.</string>
 </resources>

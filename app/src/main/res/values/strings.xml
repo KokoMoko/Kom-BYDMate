@@ -1939,4 +1939,8 @@
     <string name="kom_tile_range">Запас хода</string>
     <string name="kom_tile_temps">Температура</string>
     <string name="kom_widget_hint_generic">Добавить виджет</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_welcome_title">Привет, %1$s</string>
+    <string name="kom_settings_welcome_name">Имя для приветствия</string>
+    <string name="kom_settings_welcome_hint">Показывается вверху Главной вместо MyBYD, например «Привет, Kom». Пусто — MyBYD.</string>
 </resources>
