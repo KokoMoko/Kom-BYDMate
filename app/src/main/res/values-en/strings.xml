@@ -1776,4 +1776,8 @@
     <string name="kom_welcome_title">Welcome %1$s</string>
     <string name="kom_settings_welcome_name">Welcome name</string>
     <string name="kom_settings_welcome_hint">Shown at the top of the dashboard instead of MyBYD, e.g. “Welcome Kom”. Empty — MyBYD.</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_tile_app">Application</string>
+    <string name="kom_tile_app_pick">Choose an application</string>
+    <string name="kom_tile_app_hint">Opens here after “Done”</string>
 </resources>

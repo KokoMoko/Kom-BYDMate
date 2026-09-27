@@ -12,6 +12,7 @@ enum class TileType(val labelRes: Int, val defW: Int, val defH: Int) {
     SOC(R.string.kom_tile_soc, 2, 2),
     RANGE(R.string.kom_tile_range, 3, 2),
     TEMPS(R.string.kom_tile_temps, 2, 2),
+    APP(R.string.kom_tile_app, 6, 4),  // իսկական հավելված freeform պատուհանում (տես AppTileController)
 }
 
 /**
@@ -26,6 +27,8 @@ data class Tile(
     val w: Int,
     val h: Int,
     val slot: String = "tile_$id",
+    /** APP սալիկի հավելվածի փաթեթը (օր․ ru.yandex.yandexnavi)։ */
+    val pkg: String = "",
 ) {
     fun overlaps(o: Tile): Boolean =
         x < o.x + o.w && o.x < x + w && y < o.y + o.h && o.y < y + h
@@ -64,6 +67,7 @@ object MyDashboardStore {
                     type = TileType.valueOf(o.getString("type")),
                     x = o.getInt("x"), y = o.getInt("y"), w = o.getInt("w"), h = o.getInt("h"),
                     slot = o.optString("slot", "tile_" + o.getString("id")),
+                    pkg = o.optString("pkg", ""),
                 )
             }.filter { it.fits(COLS, ROWS) }
         }.getOrElse { defaultFull() }
@@ -73,7 +77,8 @@ object MyDashboardStore {
         val arr = JSONArray()
         tiles.forEach {
             arr.put(JSONObject().put("id", it.id).put("type", it.type.name)
-                .put("x", it.x).put("y", it.y).put("w", it.w).put("h", it.h).put("slot", it.slot))
+                .put("x", it.x).put("y", it.y).put("w", it.w).put("h", it.h).put("slot", it.slot)
+                .put("pkg", it.pkg))
         }
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(layout, arr.toString()).apply()
     }

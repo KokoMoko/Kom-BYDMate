@@ -29,7 +29,12 @@ fun DashboardHost(onOpenTechPanel: () -> Unit, onOpenSettings: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         HorizontalPager(state = pager, userScrollEnabled = !editing, modifier = Modifier.fillMaxSize()) { page ->
             if (page == 0) {
-                MyDashboardScreen(editing = editing, onEditingChange = { editing = it })
+                MyDashboardScreen(
+                    editing = editing,
+                    onEditingChange = { editing = it },
+                    // «Application» սալիկի պատուհանը՝ միայն երբ My Dashboard-ը հանգիստ վիճակում է
+                    pageVisible = pager.currentPage == 0 && !pager.isScrollInProgress,
+                )
             } else {
                 DashboardScreen(onOpenTechPanel = onOpenTechPanel, onOpenSettings = onOpenSettings)
             }

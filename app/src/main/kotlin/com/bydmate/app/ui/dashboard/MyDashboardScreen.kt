@@ -24,7 +24,13 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import android.content.Intent
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +73,7 @@ import kotlin.math.roundToInt
 fun MyDashboardScreen(
     editing: Boolean,
     onEditingChange: (Boolean) -> Unit,
+    pageVisible: Boolean = true,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -76,8 +83,18 @@ fun MyDashboardScreen(
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { viewModel.refresh() }
     }
 
+    // Առաջին պլանում ենք (RESUMED)՝ «Application» սալիկի պատուհանը ցույց տալու համար
+    var resumed by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, _ -> resumed = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+    val appActive = pageVisible && !editing && resumed
+
     var tiles by remember { mutableStateOf(MyDashboardStore.load(context)) }
     var showAdd by remember { mutableStateOf(false) }
+    var showAppPicker by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val requestGrant: ((Boolean) -> Unit) -> Unit = { cb -> viewModel.grantWidgetBind(cb) }
 
@@ -132,7 +149,7 @@ fun MyDashboardScreen(
                             if (t.type == TileType.WIDGET && t.slot.startsWith("tile_")) DashboardWidgets.clear(context, t.slot)
                             update(tiles.filter { it.id != t.id })
                         },
-                    ) { mod -> MyDashboardTileContent(t, state, requestGrant, mod) }
+                    ) { mod -> MyDashboardTileContent(t, state, requestGrant, mod, appActive = appActive, inForeground = resumed) }
                 }
             }
         }
@@ -149,6 +166,7 @@ fun MyDashboardScreen(
                             stringResource(type.labelRes), color = TextPrimary, fontSize = 17.sp,
                             modifier = Modifier.fillMaxWidth().clickable {
                                 showAdd = false
+                                if (type == TileType.APP) { showAppPicker = true; return@clickable }
                                 val spot = MyDashboardStore.findFreeSpot(tiles, type.defW, type.defH)
                                     ?: MyDashboardStore.findFreeSpot(tiles, 1, 1)
                                 if (spot == null) {
@@ -168,6 +186,46 @@ fun MyDashboardScreen(
             containerColor = CardSurface,
         )
     }
+    if (showAppPicker) {
+        val pm = context.packageManager
+        val apps = remember {
+            pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+                .map { it.activityInfo.packageName }
+                .distinct()
+                .filter { it != context.packageName }
+                .map { pkg -> pkg to runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg) }
+                .sortedBy { it.second.lowercase() }
+        }
+        AlertDialog(
+            onDismissRequest = { showAppPicker = false },
+            title = { Text(stringResource(R.string.kom_tile_app_pick), color = TextPrimary) },
+            text = {
+                LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                    items(apps) { (pkg, name) ->
+                        Text(
+                            name, color = TextPrimary, fontSize = 17.sp,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                showAppPicker = false
+                                val type = TileType.APP
+                                val fits = MyDashboardStore.findFreeSpot(tiles, type.defW, type.defH)
+                                val spot = fits ?: MyDashboardStore.findFreeSpot(tiles, 1, 1)
+                                if (spot == null) {
+                                    message = context.getString(R.string.kom_mydash_no_space)
+                                } else {
+                                    val w = if (fits != null) type.defW else 1
+                                    val h = if (fits != null) type.defH else 1
+                                    update(tiles + Tile(MyDashboardStore.newId(), type, spot.first, spot.second, w, h, pkg = pkg))
+                                }
+                            }.padding(vertical = 12.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showAppPicker = false }) { Text(stringResource(R.string.kom_cancel)) } },
+            containerColor = CardSurface,
+        )
+    }
+
     message?.let { text ->
         AlertDialog(
             onDismissRequest = { message = null },
