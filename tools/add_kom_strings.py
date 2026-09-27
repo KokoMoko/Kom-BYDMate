@@ -60,6 +60,8 @@ STRINGS = {
     "kom_tile_app_pick": ("Выберите приложение", "Choose an application"),
     "kom_tile_app_hint": ("Откроется здесь после «Готово»", "Opens here after “Done”"),
     "kom_speedo_tolerance_kmh": ("Допуск: +%1$d км/ч (до %2$d км/ч)", "Tolerance: +%1$d km/h (up to %2$d km/h)"),
+    "kom_tile_app_panel_hint": ("Нажмите — откроется рядом (1/3 + 2/3)", "Tap to open side by side (1/3 + 2/3)"),
+    "kom_panel_failed": ("Не удалось открыть split: %1$s", "Couldn't open split: %1$s"),
     "kom_cluster_settings": ("Кластер", "Cluster"),
     "kom_cluster_top_height": ("Высота верхней части: %1$d%%", "Top area height: %1$d%%"),
     "kom_cluster_style_hint": (

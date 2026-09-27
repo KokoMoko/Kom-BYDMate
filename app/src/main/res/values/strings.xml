@@ -2133,4 +2133,7 @@
     <string name="kom_cluster_charging">зарядка</string>
     <!-- Kom-BYDMate -->
     <string name="kom_speedo_tolerance_kmh">Допуск: +%1$d км/ч (до %2$d км/ч)</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_tile_app_panel_hint">Нажмите — откроется рядом (1/3 + 2/3)</string>
+    <string name="kom_panel_failed">Не удалось открыть split: %1$s</string>
 </resources>

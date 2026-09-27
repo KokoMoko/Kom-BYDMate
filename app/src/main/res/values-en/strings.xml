@@ -1966,4 +1966,7 @@
     <string name="kom_cluster_charging">charging</string>
     <!-- Kom-BYDMate -->
     <string name="kom_speedo_tolerance_kmh">Tolerance: +%1$d km/h (up to %2$d km/h)</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_tile_app_panel_hint">Tap to open side by side (1/3 + 2/3)</string>
+    <string name="kom_panel_failed">Couldn\'t open split: %1$s</string>
 </resources>

@@ -64,6 +64,8 @@ import com.bydmate.app.ui.theme.SocRed
 import com.bydmate.app.ui.theme.TextPrimary
 import com.bydmate.app.ui.theme.TextSecondary
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import com.bydmate.app.split.SplitStartResult
 
 /**
  * Kom-BYDMate «My Dashboard»՝ 12×6 ցանց, որտեղ օգտատերը ինքն է դասավորում սալիկները։
@@ -83,19 +85,14 @@ fun MyDashboardScreen(
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { viewModel.refresh() }
     }
 
-    // Էկրանին երևում ենք (STARTED)՝ «Application» սալիկի պատուհանը ցույց տալու համար։
-    // RESUMED չէ․ freeform պատուհանը ֆոկուսը վերցնելիս մենք PAUSED ենք դառնում, և RESUMED-ով
-    // ստացվում էր ցիկլ՝ show → pause → hide → resume → show … (էկրանի «թրթռոց»)։
     var visible by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
     DisposableEffect(lifecycleOwner) {
         val obs = LifecycleEventObserver { _, _ -> visible = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) }
         lifecycleOwner.lifecycle.addObserver(obs)
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
-    // DiLink-ի split-ում (multi-window) freeform պատուհանը կոնֆլիկտ է տալիս split-ի հետ․ այնտեղ սալիկն անջատված է
+    // Split-ում (Kom-ը 1/3 մասում) ցույց ենք տալիս միայն widget-ները՝ առանց «Application» սալիկի
     val inSplit = rememberInMultiWindow()
-    val appActive = pageVisible && !editing && visible && !inSplit
-    val resumed = visible && !inSplit
 
     var tiles by remember { mutableStateOf(MyDashboardStore.load(context)) }
     var showAdd by remember { mutableStateOf(false) }
@@ -106,6 +103,22 @@ fun MyDashboardScreen(
     fun update(newTiles: List<Tile>) {
         tiles = newTiles
         MyDashboardStore.save(context, newTiles)
+    }
+
+    // «Application» սալիկ → Panel (split)՝ Kom-ը նեղ մասում, հավելվածը լայն մասում
+    val appTile = tiles.firstOrNull { it.type == TileType.APP && it.pkg.isNotEmpty() }
+    fun openPanel(t: Tile) {
+        KomPanel.open(context, t.pkg, appOnRight = t.x * 2 + t.w >= MyDashboardStore.COLS) { r ->
+            if (r != SplitStartResult.OK) message = context.getString(R.string.kom_panel_failed, r?.name ?: "error")
+        }
+    }
+    // Ինքնաբերաբար՝ մեկ անգամ ծրագրի գործարկումից հետո (որ split-ից դուրս գալուց հետո նորից չբացվի)
+    LaunchedEffect(appTile?.pkg, pageVisible, editing, visible, inSplit) {
+        val t = appTile ?: return@LaunchedEffect
+        if (!pageVisible || editing || !visible || inSplit || KomPanelAuto.done) return@LaunchedEffect
+        delay(600)
+        KomPanelAuto.done = true
+        openPanel(t)
     }
 
     Column(
@@ -129,7 +142,7 @@ fun MyDashboardScreen(
                     onClick = { onEditingChange(false) },
                     colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
                 ) { Text(stringResource(R.string.kom_done)) }
-            } else {
+            } else if (!inSplit) {
                 TextButton(onClick = { onEditingChange(true) }) {
                     Text("✏️ " + stringResource(R.string.kom_mydash_edit), color = TextSecondary)
                 }
@@ -137,9 +150,15 @@ fun MyDashboardScreen(
         }
 
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val cellW = maxWidth / MyDashboardStore.COLS
+            // Split-ում՝ միայն ոչ-Application սալիկները, և նրանց զբաղեցրած սյուները ձգվում են ամբողջ լայնքով
+            val shown = if (inSplit && !editing) tiles.filter { it.type != TileType.APP } else tiles
+            val minX = if (inSplit && !editing) shown.minOfOrNull { it.x } ?: 0 else 0
+            val cols = if (inSplit && !editing) ((shown.maxOfOrNull { it.x + it.w } ?: MyDashboardStore.COLS) - minX).coerceAtLeast(1)
+                else MyDashboardStore.COLS
+            val cellW = maxWidth / cols
             val cellH = maxHeight / MyDashboardStore.ROWS
-            tiles.forEach { t ->
+            shown.forEach { orig ->
+                val t = if (minX != 0) orig.copy(x = orig.x - minX) else orig
                 key(t.id) {
                     TileBox(
                         tile = t,
@@ -154,7 +173,7 @@ fun MyDashboardScreen(
                             if (t.type == TileType.WIDGET && t.slot.startsWith("tile_")) DashboardWidgets.clear(context, t.slot)
                             update(tiles.filter { it.id != t.id })
                         },
-                    ) { mod -> MyDashboardTileContent(t, state, requestGrant, mod, appActive = appActive, inForeground = resumed, inSplit = inSplit) }
+                    ) { mod -> MyDashboardTileContent(orig, state, requestGrant, mod, onOpenApp = { openPanel(orig) }) }
                 }
             }
         }
@@ -346,4 +365,9 @@ fun DashboardPageDots(count: Int, current: Int, onSelect: (Int) -> Unit, modifie
             if (i < count - 1) Spacer(Modifier.width(2.dp))
         }
     }
+}
+
+/** Panel-ի ինքնաբերաբար բացումը՝ մեկ անգամ ծրագրի պրոցեսի ընթացքում։ */
+internal object KomPanelAuto {
+    @Volatile var done = false
 }
