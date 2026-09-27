@@ -21,6 +21,31 @@ import kotlinx.coroutines.withContext
 @InstallIn(SingletonComponent::class)
 interface KomEntryPoint {
     fun splitSessionManager(): SplitSessionManager
+    fun adbOnDeviceClient(): com.bydmate.app.data.autoservice.AdbOnDeviceClient
+}
+
+/**
+ * Kom-BYDMate: էկրանի մաքուր screenshot ADB-ով (screencap)՝ [delayMs] հետո, որ օգտատերը հասցնի
+ * բացել DiLink-ի 3D մեքենայի էկրանը։ Պահվում է /sdcard/Download/kom_car_<ժամ>.png։
+ */
+object KomScreenCapture {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    fun captureLater(ctx: Context, delayMs: Long, onDone: (String?) -> Unit) {
+        val adb = EntryPointAccessors.fromApplication(ctx.applicationContext, KomEntryPoint::class.java).adbOnDeviceClient()
+        scope.launch {
+            kotlinx.coroutines.delay(delayMs)
+            val name = "/sdcard/Download/kom_car_" +
+                java.text.SimpleDateFormat("HHmmss", java.util.Locale.US).format(java.util.Date()) + ".png"
+            val ok = runCatching {
+                if (!adb.isConnected()) adb.connect()
+                adb.exec("screencap -p $name")
+                adb.exec("ls $name")?.contains("kom_car_") == true
+            }.getOrDefault(false)
+            Log.i("KomCapture", "screencap $name -> $ok")
+            withContext(Dispatchers.Main) { onDone(if (ok) name else null) }
+        }
+    }
 }
 
 /**

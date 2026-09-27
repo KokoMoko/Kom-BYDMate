@@ -1978,4 +1978,9 @@
     <string name="kom_autostart_navi">Start Yandex Navigator in the background</string>
     <!-- Kom-BYDMate -->
     <string name="kom_autostart_music_play">…and start playback</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_capture_button">📷 Screenshot in 10 s</string>
+    <string name="kom_capture_wait">Open the DiLink home screen with the car (rear view) — screenshot in 10 s…</string>
+    <string name="kom_capture_saved">Saved: %1$s</string>
+    <string name="kom_capture_failed">Screenshot failed (ADB)</string>
 </resources>

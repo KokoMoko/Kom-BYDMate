@@ -183,6 +183,17 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                         valueRange = 50f..75f,
                     )
                     Text(stringResource(R.string.kom_cluster_style_hint), color = TextMuted, fontSize = 13.sp)
+                    // Ժամանակավոր՝ DiLink-ի 3D մեքենայի մաքուր screenshot (Cluster-ի մեքենայի պատկերի համար)
+                    var captureMsg by remember { mutableStateOf<String?>(null) }
+                    TextButton(onClick = {
+                        captureMsg = context.getString(R.string.kom_capture_wait)
+                        KomScreenCapture.captureLater(context, 10_000L) { path ->
+                            captureMsg = path?.let { context.getString(R.string.kom_capture_saved, it) }
+                                ?: context.getString(R.string.kom_capture_failed)
+                            android.widget.Toast.makeText(context, captureMsg, android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }) { Text(stringResource(R.string.kom_capture_button)) }
+                    captureMsg?.let { Text(it, color = TextMuted, fontSize = 12.sp) }
                     // Ախտորոշում՝ մեքենայի տեսախցիկի նշանների ազդանշանները (TSR)
                     val tsrStatus by CarSignReader.status.collectAsStateWithLifecycle()
                     val tsrRaw by CarSignReader.raw.collectAsStateWithLifecycle()

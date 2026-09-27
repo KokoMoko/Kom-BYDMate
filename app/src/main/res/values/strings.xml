@@ -2145,4 +2145,9 @@
     <string name="kom_autostart_navi">Запустить Яндекс Навигатор в фоне</string>
     <!-- Kom-BYDMate -->
     <string name="kom_autostart_music_play">…и начать воспроизведение</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_capture_button">📷 Снимок экрана через 10 с</string>
+    <string name="kom_capture_wait">Откройте главный экран DiLink с машиной (вид сзади) — снимок через 10 с…</string>
+    <string name="kom_capture_saved">Сохранено: %1$s</string>
+    <string name="kom_capture_failed">Не удалось сделать снимок (ADB)</string>
 </resources>

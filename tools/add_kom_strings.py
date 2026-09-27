@@ -70,6 +70,13 @@ STRINGS = {
         "Приложения запускаются и остаются в фоне, на экране остаётся Главная.",
         "The apps start and stay in the background; the dashboard stays on screen.",
     ),
+    "kom_capture_button": ("📷 Снимок экрана через 10 с", "📷 Screenshot in 10 s"),
+    "kom_capture_wait": (
+        "Откройте главный экран DiLink с машиной (вид сзади) — снимок через 10 с…",
+        "Open the DiLink home screen with the car (rear view) — screenshot in 10 s…",
+    ),
+    "kom_capture_saved": ("Сохранено: %1$s", "Saved: %1$s"),
+    "kom_capture_failed": ("Не удалось сделать снимок (ADB)", "Screenshot failed (ADB)"),
     "kom_cluster_settings": ("Кластер", "Cluster"),
     "kom_cluster_top_height": ("Высота верхней части: %1$d%%", "Top area height: %1$d%%"),
     "kom_cluster_style_hint": (
