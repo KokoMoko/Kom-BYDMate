@@ -181,6 +181,15 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                         valueRange = 50f..75f,
                     )
                     Text(stringResource(R.string.kom_cluster_style_hint), color = TextMuted, fontSize = 13.sp)
+                    // Ախտորոշում՝ մեքենայի տեսախցիկի նշանների ազդանշանները (TSR)
+                    val tsrStatus by CarSignReader.status.collectAsStateWithLifecycle()
+                    val tsrRaw by CarSignReader.raw.collectAsStateWithLifecycle()
+                    Text(
+                        "TSR: $tsrStatus\n" + tsrRaw.entries.joinToString("\n") {
+                            it.key.removePrefix("Instrument.INSTRUMENT_") + " = " + (it.value ?: "—")
+                        },
+                        color = TextMuted, fontSize = 12.sp,
+                    )
                 }
             },
             confirmButton = {

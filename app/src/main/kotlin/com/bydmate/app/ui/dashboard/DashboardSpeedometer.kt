@@ -399,7 +399,7 @@ fun LimitSign(limit: Int, fresh: Boolean = true, modifier: Modifier = Modifier) 
  * մեր էկրանի հետևում է, NavGuidanceHub-ը 30 վրկ հետո սահմանափակումը «մոռանում» էր․ դրա համար
  * վերջին արժեքը պահում ենք [HOLD_MS]՝ մինչև Navigator-ը նորը ցույց տա։
  */
-data class NavLimit(val limit: Int, val fresh: Boolean)
+data class NavLimit(val limit: Int, val fresh: Boolean, val fromCar: Boolean = false)
 
 object NavLimitHolder {
     const val HOLD_MS = 5 * 60_000L
@@ -407,6 +407,13 @@ object NavLimitHolder {
     @Volatile private var lastMs = 0L
 
     fun read(nowMs: Long = System.currentTimeMillis()): NavLimit {
+        // Առաջնահերթ՝ մեքենայի տեսախցիկի ճանաչած նշանը (նույնը, ինչ HUD-ում)
+        val car = CarSignReader.limit.value
+        if (car > 0) {
+            last = car
+            lastMs = nowMs
+            return NavLimit(car, fresh = true, fromCar = true)
+        }
         val live = runCatching { NavGuidanceHub.snapshot(nowMs).speedLimit }.getOrDefault(0)
         if (live > 0) {
             last = live
@@ -419,6 +426,8 @@ object NavLimitHolder {
 
 @Composable
 fun rememberNavSpeedLimit(): NavLimit {
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { CarSignReader.start(context) }
     val state = produceState(initialValue = NavLimitHolder.read()) {
         while (true) {
             value = NavLimitHolder.read()
