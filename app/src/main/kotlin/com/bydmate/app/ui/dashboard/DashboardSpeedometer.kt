@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -81,9 +82,9 @@ object SpeedoPrefs {
     private const val PREFS = "kom_dashboard_widgets"
     private const val KEY_STYLE = "speedo_style"
     private const val KEY_MAX = "speedo_max_speed"
-    private const val KEY_TOL = "speedo_tolerance_pct"
+    private const val KEY_TOL = "speedo_tolerance_kmh"
     const val DEFAULT_MAX = 90     // Հայաստան՝ 90 կմ/ժ
-    const val DEFAULT_TOL = 10     // +10% թույլատրելի շեղում
+    const val DEFAULT_TOL = 10     // +10 կմ/ժ թույլատրելի շեղում (60 → 70, 90 → 100)
 
     private fun p(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -120,14 +121,10 @@ fun DashboardSpeedometer(speed: Int, modifier: Modifier = Modifier) {
     var maxSpeed by remember { mutableIntStateOf(SpeedoPrefs.maxSpeed(context)) }
     var tolerance by remember { mutableIntStateOf(SpeedoPrefs.tolerance(context)) }
     var showSettings by remember { mutableStateOf(false) }
-    val navLimit by produceState(initialValue = 0) {
-        while (true) {
-            value = runCatching { NavGuidanceHub.snapshot().speedLimit }.getOrDefault(0)
-            delay(1_000L)
-        }
-    }
+    val nav = rememberNavSpeedLimit()
+    val navLimit = nav.limit
     val limit = if (navLimit > 0) navLimit else maxSpeed
-    val th = Thresholds(limit.toFloat(), limit * (1f + tolerance / 100f), fromNav = navLimit > 0)
+    val th = Thresholds(limit.toFloat(), (limit + tolerance).toFloat(), fromNav = navLimit > 0)
     val v by animateFloatAsState(
         targetValue = speed.coerceIn(0, VMAX.toInt()).toFloat(),
         animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
@@ -155,7 +152,7 @@ fun DashboardSpeedometer(speed: Int, modifier: Modifier = Modifier) {
                 }
                 if (th.fromNav) {
                     Spacer(Modifier.width(8.dp))
-                    LimitSign(navLimit)
+                    LimitSign(navLimit, fresh = nav.fresh)
                 }
             }
             // Էջերի կետեր
@@ -195,7 +192,7 @@ fun DashboardSpeedometer(speed: Int, modifier: Modifier = Modifier) {
                         onValueChangeFinished = { SpeedoPrefs.setMaxSpeed(context, maxSpeed) },
                         valueRange = 30f..150f,
                     )
-                    Text(stringResource(R.string.kom_speedo_tolerance, tolerance, (maxSpeed * (1 + tolerance / 100f)).roundToInt()),
+                    Text(stringResource(R.string.kom_speedo_tolerance_kmh, tolerance, maxSpeed + tolerance),
                         color = TextPrimary, fontSize = 16.sp)
                     Slider(
                         value = tolerance.toFloat(),
@@ -385,12 +382,48 @@ private fun MinimalRing(v: Float, th: Thresholds) {
 
 /** Navigator-ի սահմանափակման ճանապարհային նշանը։ */
 @Composable
-private fun LimitSign(limit: Int) {
-    Box(modifier = Modifier.size(54.dp), contentAlignment = Alignment.Center) {
+fun LimitSign(limit: Int, fresh: Boolean = true, modifier: Modifier = Modifier) {
+    // Հին (վերջերս չթարմացված) սահմանափակումը՝ կիսաթափանցիկ
+    Box(modifier = modifier.size(54.dp).alpha(if (fresh) 1f else 0.55f), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             drawCircle(Color.White)
             drawCircle(SocRed, radius = size.minDimension / 2 * 0.9f, style = Stroke(size.minDimension * 0.11f))
         }
         Text("$limit", color = Color(0xFF111111), fontSize = 19.sp, fontWeight = FontWeight.Bold)
     }
+}
+
+/**
+ * Navigator-ի արագության սահմանափակումը։ [fresh]՝ Navigator-ը վերջին 30 վրկ-ում կարդացվել է։
+ * Navigator-ը տվյալ ուղարկում է միայն երբ իր պատուհանը փոխվում է (accessibility), և երբ այն
+ * մեր էկրանի հետևում է, NavGuidanceHub-ը 30 վրկ հետո սահմանափակումը «մոռանում» էր․ դրա համար
+ * վերջին արժեքը պահում ենք [HOLD_MS]՝ մինչև Navigator-ը նորը ցույց տա։
+ */
+data class NavLimit(val limit: Int, val fresh: Boolean)
+
+object NavLimitHolder {
+    const val HOLD_MS = 5 * 60_000L
+    @Volatile private var last = 0
+    @Volatile private var lastMs = 0L
+
+    fun read(nowMs: Long = System.currentTimeMillis()): NavLimit {
+        val live = runCatching { NavGuidanceHub.snapshot(nowMs).speedLimit }.getOrDefault(0)
+        if (live > 0) {
+            last = live
+            lastMs = nowMs
+            return NavLimit(live, fresh = true)
+        }
+        return if (last > 0 && nowMs - lastMs < HOLD_MS) NavLimit(last, fresh = false) else NavLimit(0, fresh = false)
+    }
+}
+
+@Composable
+fun rememberNavSpeedLimit(): NavLimit {
+    val state = produceState(initialValue = NavLimitHolder.read()) {
+        while (true) {
+            value = NavLimitHolder.read()
+            delay(1_000L)
+        }
+    }
+    return state.value
 }

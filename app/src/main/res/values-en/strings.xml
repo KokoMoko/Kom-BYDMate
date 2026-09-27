@@ -1964,4 +1964,6 @@
     <string name="kom_cluster_power">power</string>
     <string name="kom_cluster_regen">regen</string>
     <string name="kom_cluster_charging">charging</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_speedo_tolerance_kmh">Tolerance: +%1$d km/h (up to %2$d km/h)</string>
 </resources>

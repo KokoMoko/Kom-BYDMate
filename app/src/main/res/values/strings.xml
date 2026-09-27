@@ -2131,4 +2131,6 @@
     <string name="kom_cluster_power">мощность</string>
     <string name="kom_cluster_regen">рекуперация</string>
     <string name="kom_cluster_charging">зарядка</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_speedo_tolerance_kmh">Допуск: +%1$d км/ч (до %2$d км/ч)</string>
 </resources>

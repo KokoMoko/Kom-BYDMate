@@ -200,14 +200,10 @@ private fun ClusterTop(state: DashboardUiState, modifier: Modifier) {
     var speedStyle by remember { mutableStateOf(ClusterPrefs.speedStyle(context)) }
 
     // Արագության գույնը՝ նույն կանոնով, ինչ Classic-ի արագաչափում (Navigator-ի սահմանափակում կամ Max speed + շեղում)
-    val navLimit by produceState(initialValue = 0) {
-        while (true) {
-            value = runCatching { NavGuidanceHub.snapshot().speedLimit }.getOrDefault(0)
-            delay(1_000L)
-        }
-    }
+    val nav = rememberNavSpeedLimit()
+    val navLimit = nav.limit
     val limit = (if (navLimit > 0) navLimit else SpeedoPrefs.maxSpeed(context)).toFloat()
-    val upper = limit * (1f + SpeedoPrefs.tolerance(context) / 100f)
+    val upper = limit + SpeedoPrefs.tolerance(context)
 
     val charging = state.isCharging
     val rawPower = (state.powerKw ?: 0.0).toFloat()
@@ -253,12 +249,16 @@ private fun ClusterTop(state: DashboardUiState, modifier: Modifier) {
             RoadScene(speedKmh = speed, braking = power < -1f || (speed < 0.5f && state.gear != 1),
                 modifier = Modifier.fillMaxWidth().weight(1f))
         }
-        Gauge(
-            value = speed, min = 0f, max = S_MAX, step = 20f, unit = "km/h", label = stringResource(R.string.kom_speedo_speed_label),
-            color = speedColor, style = speedStyle,
-            onTap = { speedStyle = next(speedStyle); ClusterPrefs.setSpeedStyle(context, speedStyle) },
-            modifier = Modifier.weight(0.3f).fillMaxHeight(),
-        )
+        Box(Modifier.weight(0.3f).fillMaxHeight()) {
+            Gauge(
+                value = speed, min = 0f, max = S_MAX, step = 20f, unit = "km/h", label = stringResource(R.string.kom_speedo_speed_label),
+                color = speedColor, style = speedStyle,
+                onTap = { speedStyle = next(speedStyle); ClusterPrefs.setSpeedStyle(context, speedStyle) },
+                modifier = Modifier.fillMaxSize(),
+            )
+            // Navigator-ի սահմանափակման նշանը
+            if (navLimit > 0) LimitSign(navLimit, fresh = nav.fresh, modifier = Modifier.align(Alignment.TopEnd))
+        }
     }
 }
 
