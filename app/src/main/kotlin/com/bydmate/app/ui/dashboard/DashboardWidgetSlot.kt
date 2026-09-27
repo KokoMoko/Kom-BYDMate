@@ -249,7 +249,9 @@ fun DashboardWidgetSlot(
                         factory = { ctx ->
                             android.widget.FrameLayout(ctx).apply {
                                 clipChildren = true
-                                addView(host.createView(context.applicationContext, widgetId, info))
+                                val hv = host.createView(context.applicationContext, widgetId, info)
+                                addView(hv)
+                                centerWidgetContentVertically(hv)
                             }
                         },
                         update = { frame ->
@@ -390,4 +392,38 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is android.content.ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+/**
+ * Widget-ների մեծ մասը իր բովանդակությունը դնում է վերևում, և շրջանակում ներքևից մեծ դատարկ տեղ
+ * էր մնում։ Ամեն layout-ից հետո գտնում ենք իրական բովանդակության սահմանները (առանց ամբողջ
+ * բարձրությամբ կոնտեյներների) և hv-ն տեղաշարժում ենք այնպես, որ վերևից և ներքևից բացատները հավասար լինեն։
+ */
+private fun centerWidgetContentVertically(hv: AppWidgetHostView) {
+    val listener = android.view.ViewTreeObserver.OnGlobalLayoutListener {
+        val h = hv.height
+        if (h <= 0) return@OnGlobalLayoutListener
+        var top = Int.MAX_VALUE
+        var bottom = Int.MIN_VALUE
+        fun walk(v: android.view.View, offsetY: Int) {
+            if (v.visibility != android.view.View.VISIBLE || v.height <= 0) return
+            val y = offsetY + v.top
+            // Գրեթե ամբողջ բարձրությամբ կոնտեյները «լցնող» է․ նայում ենք ներսը
+            if (v is android.view.ViewGroup && v.height >= h * 0.95f && v.childCount > 0) {
+                for (i in 0 until v.childCount) walk(v.getChildAt(i), y)
+            } else {
+                top = minOf(top, y)
+                bottom = maxOf(bottom, y + v.height)
+            }
+        }
+        for (i in 0 until hv.childCount) walk(hv.getChildAt(i), 0)
+        val dy = if (top == Int.MAX_VALUE) 0f else ((h - bottom) - top) / 2f
+        // hv-ի ներսի px-ները scale-ից առաջ են, translationY-ը՝ scale-ից հետո
+        val t = (dy * hv.scaleY).coerceAtLeast(0f)
+        if (kotlin.math.abs(hv.translationY - t) > 0.5f) hv.translationY = t
+    }
+    hv.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(v: android.view.View) { v.viewTreeObserver.addOnGlobalLayoutListener(listener) }
+        override fun onViewDetachedFromWindow(v: android.view.View) { v.viewTreeObserver.removeOnGlobalLayoutListener(listener) }
+    })
 }
