@@ -67,7 +67,9 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
@@ -388,18 +390,18 @@ private fun Gauge(
             }
             else -> Box(Modifier.size(side), contentAlignment = Alignment.Center) {
                 Canvas(Modifier.fillMaxSize()) { drawDial(value, min, max, step, color, style == GaugeStyle.NEEDLE) }
-                if (style == GaugeStyle.NEEDLE) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(value.roundToInt().toString(), color = TextPrimary, fontSize = (side.value * 0.11f).sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(side * 0.1f))
-                        Text(unit, color = TextSecondary, fontSize = (side.value * 0.06f).sp)
-                    }
-                } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(value.roundToInt().toString(), color = TextPrimary, fontSize = (side.value * 0.22f).sp, fontWeight = FontWeight.Bold)
-                        Text(unit, color = TextSecondary, fontSize = (side.value * 0.07f).sp)
-                    }
-                }
+                // Թիվը՝ ճիշտ կենտրոնում (սլաքի առանցքի շրջանում), միավորը՝ առանձին, կենտրոնից ներքև
+                val needle = style == GaugeStyle.NEEDLE
+                Text(
+                    value.roundToInt().toString(), color = TextPrimary, fontWeight = FontWeight.Bold,
+                    fontSize = (side.value * if (needle) 0.11f else 0.22f).sp,
+                    style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
+                    modifier = Modifier.align(Alignment.Center),
+                )
+                Text(
+                    unit, color = TextSecondary, fontSize = (side.value * if (needle) 0.065f else 0.07f).sp,
+                    modifier = Modifier.align(Alignment.Center).offset(y = side * if (needle) 0.21f else 0.17f),
+                )
             }
         }
     }
@@ -494,40 +496,89 @@ private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier) {
     }
 }
 
-/** Կրոսովեր հետևից (Sealion 06-ի ոճով՝ ամբողջ լայնքով լույսի գիծ)։ */
+/**
+ * BYD Sealion 06-ը հետևից․ բարձր կրոսովեր՝ կլորացված ուսերով, տանիքի սփոյլեր, նեղ հետևի ապակի,
+ * ամբողջ լայնքով լույսի գիծ՝ մեջտեղում «BYD», ներքևում մուգ բամպեր։ Արգելակելիս լույսերը պայծառ են։
+ */
 private fun DrawScope.drawCar(cx: Float, bottom: Float, cw: Float, braking: Boolean) {
-    val ch = cw * 0.66f
-    val top = bottom - ch - 4f
-    val left = cx - cw / 2
-    drawOval(Color.Black.copy(alpha = 0.35f), Offset(cx - cw * 0.58f, bottom - ch * 0.12f), Size(cw * 1.16f, ch * 0.2f))
-    // Անիվներ
-    drawRoundRect(Color(0xFF111A28), Offset(left + cw * 0.05f, top + ch * 0.72f), Size(cw * 0.16f, ch * 0.28f), CornerRadius(4f))
-    drawRoundRect(Color(0xFF111A28), Offset(left + cw * 0.79f, top + ch * 0.72f), Size(cw * 0.16f, ch * 0.28f), CornerRadius(4f))
-    // Սրահ (տանիք դեպի վեր նեղանում է)
+    val ch = cw * 0.72f
+    val top = bottom - ch
+    val l = cx - cw / 2
+    fun x(f: Float) = l + cw * f
+    fun y(f: Float) = top + ch * f
+    val bodyLight = Color(0xFFE3E9F2)
+    val bodyShade = Color(0xFFB9C4D4)
+    val glass = Color(0xFF1B2C47)
+    val dark = Color(0xFF151F2E)
+    val lampOn = Color(0xFFFF2D2D)
+    val lampOff = Color(0xFF7A1C1C)
+    val lamp = if (braking) lampOn else lampOff
+
+    // Ստվեր ճանապարհին
+    drawOval(Color.Black.copy(alpha = 0.4f), Offset(x(-0.06f), y(0.9f)), Size(cw * 1.12f, ch * 0.16f))
+    // Անիվներ (երևում են թափքի տակից)
+    drawRoundRect(dark, Offset(x(0.05f), y(0.72f)), Size(cw * 0.17f, ch * 0.26f), CornerRadius(ch * 0.05f))
+    drawRoundRect(dark, Offset(x(0.78f), y(0.72f)), Size(cw * 0.17f, ch * 0.26f), CornerRadius(ch * 0.05f))
+
+    // Թափք (ուսերը կլորացված, ներքևում մի փոքր նեղանում է)
+    val body = Path().apply {
+        moveTo(x(0.02f), y(0.46f))
+        cubicTo(x(0.0f), y(0.40f), x(0.03f), y(0.34f), x(0.10f), y(0.33f))
+        lineTo(x(0.90f), y(0.33f))
+        cubicTo(x(0.97f), y(0.34f), x(1.0f), y(0.40f), x(0.98f), y(0.46f))
+        lineTo(x(0.97f), y(0.80f))
+        quadraticBezierTo(x(0.96f), y(0.86f), x(0.90f), y(0.86f))
+        lineTo(x(0.10f), y(0.86f))
+        quadraticBezierTo(x(0.04f), y(0.86f), x(0.03f), y(0.80f))
+        close()
+    }
+    drawPath(body, Brush.verticalGradient(listOf(bodyLight, bodyShade), startY = y(0.33f), endY = y(0.86f)))
+
+    // Սրահ՝ սյուներ և տանիք (վերևում նեղ)
     val cabin = Path().apply {
-        moveTo(left + cw * 0.1f, top + ch * 0.42f)
-        lineTo(left + cw * 0.2f, top + ch * 0.04f)
-        quadraticBezierTo(cx, top - ch * 0.04f, left + cw * 0.8f, top + ch * 0.04f)
-        lineTo(left + cw * 0.9f, top + ch * 0.42f)
+        moveTo(x(0.12f), y(0.36f))
+        cubicTo(x(0.15f), y(0.20f), x(0.19f), y(0.08f), x(0.27f), y(0.06f))
+        lineTo(x(0.73f), y(0.06f))
+        cubicTo(x(0.81f), y(0.08f), x(0.85f), y(0.20f), x(0.88f), y(0.36f))
         close()
     }
-    drawPath(cabin, Color(0xFFC9D4E3))
-    val glass = Path().apply {
-        moveTo(left + cw * 0.17f, top + ch * 0.38f)
-        lineTo(left + cw * 0.25f, top + ch * 0.1f)
-        lineTo(left + cw * 0.75f, top + ch * 0.1f)
-        lineTo(left + cw * 0.83f, top + ch * 0.38f)
+    drawPath(cabin, bodyShade)
+    // Տանիքի սփոյլեր
+    drawRoundRect(dark, Offset(x(0.24f), y(0.03f)), Size(cw * 0.52f, ch * 0.05f), CornerRadius(ch * 0.025f))
+    // Հետևի ապակի
+    val window = Path().apply {
+        moveTo(x(0.19f), y(0.33f))
+        lineTo(x(0.26f), y(0.11f))
+        lineTo(x(0.74f), y(0.11f))
+        lineTo(x(0.81f), y(0.33f))
         close()
     }
-    drawPath(glass, Color(0xFF223756))
-    // Թափք
-    drawRoundRect(Color(0xFFDFE6F0), Offset(left, top + ch * 0.38f), Size(cw, ch * 0.42f), CornerRadius(ch * 0.12f))
-    // Լույսի գիծ ամբողջ լայնքով
-    val lamp = if (braking) Color(0xFFFF3B30) else Color(0xFF8A1F1F)
-    drawRoundRect(lamp, Offset(left + cw * 0.03f, top + ch * 0.47f), Size(cw * 0.94f, ch * 0.05f), CornerRadius(3f))
-    drawRoundRect(lamp, Offset(left + cw * 0.03f, top + ch * 0.45f), Size(cw * 0.16f, ch * 0.09f), CornerRadius(3f))
-    drawRoundRect(lamp, Offset(left + cw * 0.81f, top + ch * 0.45f), Size(cw * 0.16f, ch * 0.09f), CornerRadius(3f))
-    // Համարանիշ և ներքևի դիֆուզոր
-    drawRoundRect(Color(0xFFB5C0CF), Offset(cx - cw * 0.14f, top + ch * 0.6f), Size(cw * 0.28f, ch * 0.1f), CornerRadius(3f))
-    drawRoundRect(Color(0xFF2A3A55), Offset(left + cw * 0.08f, top + ch * 0.74f), Size(cw * 0.84f, ch * 0.06f), CornerRadius(3f))
+    drawPath(window, glass)
+    drawLine(Color.White.copy(alpha = 0.12f), Offset(x(0.30f), y(0.14f)), Offset(x(0.24f), y(0.31f)), strokeWidth = cw * 0.012f)
+
+    // Լույսի գիծ ամբողջ լայնքով (ծայրերում հաստ, կողքերին թեքվող)
+    drawRoundRect(lamp, Offset(x(0.04f), y(0.435f)), Size(cw * 0.92f, ch * 0.028f), CornerRadius(ch * 0.014f))
+    val leftLamp = Path().apply {
+        moveTo(x(0.02f), y(0.41f)); lineTo(x(0.21f), y(0.41f)); lineTo(x(0.19f), y(0.50f)); lineTo(x(0.04f), y(0.52f)); close()
+    }
+    val rightLamp = Path().apply {
+        moveTo(x(0.98f), y(0.41f)); lineTo(x(0.79f), y(0.41f)); lineTo(x(0.81f), y(0.50f)); lineTo(x(0.96f), y(0.52f)); close()
+    }
+    drawPath(leftLamp, lamp)
+    drawPath(rightLamp, lamp)
+    if (braking) {
+        drawRoundRect(lampOn.copy(alpha = 0.25f), Offset(x(0.0f), y(0.37f)), Size(cw, ch * 0.2f), CornerRadius(ch * 0.08f))
+    }
+    // «BYD» լույսի գծի տակ
+    val paint = android.graphics.Paint().apply {
+        color = Color(0xFF5B6B82).toArgb(); textSize = ch * 0.085f; isFakeBoldText = true
+        textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true; letterSpacing = 0.25f
+    }
+    drawContext.canvas.nativeCanvas.drawText("BYD", cx, y(0.60f), paint)
+
+    // Բամպեր՝ մուգ դիֆուզոր, համարանիշ, ռեֆլեկտորներ
+    drawRoundRect(dark, Offset(x(0.07f), y(0.74f)), Size(cw * 0.86f, ch * 0.09f), CornerRadius(ch * 0.04f))
+    drawRoundRect(Color(0xFFCBD3DF), Offset(cx - cw * 0.13f, y(0.64f)), Size(cw * 0.26f, ch * 0.08f), CornerRadius(ch * 0.015f))
+    drawRoundRect(lamp.copy(alpha = 0.8f), Offset(x(0.09f), y(0.77f)), Size(cw * 0.08f, ch * 0.025f), CornerRadius(ch * 0.01f))
+    drawRoundRect(lamp.copy(alpha = 0.8f), Offset(x(0.83f), y(0.77f)), Size(cw * 0.08f, ch * 0.025f), CornerRadius(ch * 0.01f))
 }

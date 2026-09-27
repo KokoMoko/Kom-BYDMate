@@ -26,8 +26,12 @@ fun DashboardHost(onOpenTechPanel: () -> Unit, onOpenSettings: () -> Unit) {
     val pager = rememberPagerState(initialPage = 0) { 3 }
     val scope = rememberCoroutineScope()
 
+    // Split-ում (Panel)՝ միայն My Dashboard-ը, առանց swipe-ի և կետերի
+    val inSplit = rememberInMultiWindow()
+    androidx.compose.runtime.LaunchedEffect(inSplit) { if (inSplit && pager.currentPage != 0) pager.scrollToPage(0) }
+
     Box(Modifier.fillMaxSize()) {
-        HorizontalPager(state = pager, userScrollEnabled = !editing, modifier = Modifier.fillMaxSize()) { page ->
+        HorizontalPager(state = pager, userScrollEnabled = !editing && !inSplit, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
                 0 -> MyDashboardScreen(
                     editing = editing,
@@ -40,7 +44,7 @@ fun DashboardHost(onOpenTechPanel: () -> Unit, onOpenSettings: () -> Unit) {
             }
         }
         // Վերևի կենտրոնում (վերնագիրը «Welcome <անուն>» կարող է երկար լինել)
-        DashboardPageDots(
+        if (!inSplit) DashboardPageDots(
             count = 3,
             current = pager.currentPage,
             onSelect = { i -> if (!editing) scope.launch { pager.animateScrollToPage(i) } },

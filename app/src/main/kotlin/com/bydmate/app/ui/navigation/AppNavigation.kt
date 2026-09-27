@@ -213,10 +213,13 @@ fun AppNavigation(
         with(density) { MaterialTheme.typography.labelMedium.lineHeight.toDp() } + NavBarItemChrome,
     ) + with(density) { NavigationBarDefaults.windowInsets.getBottom(density).toDp() }
 
+    // Kom-BYDMate: split-ում (Panel, 1/3) Главная-ն միայն widget-ների վահանակ է՝ առանց ներքևի մենյուի
+    val komPanel = com.bydmate.app.ui.dashboard.rememberInMultiWindow() &&
+        currentDestination?.route == Screen.Dashboard.route
     Scaffold(
         containerColor = NavyDark,
         bottomBar = {
-            if (!isWelcome) {
+            if (!isWelcome && !komPanel) {
                 NavigationBar(
                     modifier = Modifier.height(navBarHeight),
                     containerColor = NavBarBackground
