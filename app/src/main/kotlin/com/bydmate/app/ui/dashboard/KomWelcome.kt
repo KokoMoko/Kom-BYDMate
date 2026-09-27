@@ -32,10 +32,14 @@ object KomPrefs {
     const val KEY_WELCOME_NAME = "welcome_name"
     const val MAX_NAME = 20
 
-    fun prefs(ctx: Context): SharedPreferences = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    // Միշտ applicationContext-ով․ Settings-ի և Главная-ի LocalContext-ները կարող են տարբեր լինել
+    // (localized / device-protected context), և այդ դեպքում կկարդային տարբեր ֆայլեր։
+    fun prefs(ctx: Context): SharedPreferences =
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     fun welcomeName(ctx: Context): String = prefs(ctx).getString(KEY_WELCOME_NAME, "") ?: ""
-    fun setWelcomeName(ctx: Context, name: String) =
-        prefs(ctx).edit().putString(KEY_WELCOME_NAME, name.take(MAX_NAME)).apply()
+    fun setWelcomeName(ctx: Context, name: String) {
+        prefs(ctx).edit().putString(KEY_WELCOME_NAME, name.take(MAX_NAME)).commit()
+    }
 }
 
 /** Главная-ի վերնագիրը․ «Welcome <անուն>», իսկ անուն չլինելիս՝ «MyBYD»։ Թարմանում է անմիջապես։ */
@@ -51,7 +55,8 @@ fun rememberDashboardTitle(): String {
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
-    val trimmed = name.trim()
+    // Եթե օգտատերը ինքն է գրել «Welcome …», կրկին չենք ավելացնում
+    val trimmed = name.trim().removePrefix("Welcome ").removePrefix("welcome ").trim()
     return if (trimmed.isEmpty()) "MyBYD" else stringResource(R.string.kom_welcome_title, trimmed)
 }
 

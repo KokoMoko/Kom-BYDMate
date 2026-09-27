@@ -8,11 +8,11 @@ import java.util.UUID
 
 /** Kom-BYDMate «My Dashboard»՝ սալիկի տեսակը, անունը ⊕ ցանկում և լռելյայն չափը (վանդակներով)։ */
 enum class TileType(val labelRes: Int, val defW: Int, val defH: Int) {
-    WIDGET(R.string.kom_tile_widget, 4, 2),
+    WIDGET(R.string.kom_tile_widget, 4, 3),
     SOC(R.string.kom_tile_soc, 2, 2),
     RANGE(R.string.kom_tile_range, 3, 2),
     TEMPS(R.string.kom_tile_temps, 2, 2),
-    APP(R.string.kom_tile_app, 6, 4),  // իսկական հավելված freeform պատուհանում (տես AppTileController)
+    APP(R.string.kom_tile_app, 6, 6),  // իսկական հավելված freeform պատուհանում (տես AppTileController)
 }
 
 /**
@@ -38,7 +38,7 @@ data class Tile(
 
 object MyDashboardStore {
     const val COLS = 12
-    const val ROWS = 6
+    const val ROWS = 8  // 12×8 (նախկինում 12×6․ հին դասավորությունները load()-ում փոխարկվում են)
     const val LAYOUT_FULL = "full"
     private const val PREFS = "kom_my_dashboard"
 
@@ -51,25 +51,37 @@ object MyDashboardStore {
         Tile("range", TileType.RANGE, 2, 0, 3, 2),
         Tile("temps", TileType.TEMPS, 5, 0, 2, 2),
         Tile("phone", TileType.WIDGET, 7, 0, 5, 2, slot = DashboardWidgets.SLOT_PHONE),
-        Tile("music", TileType.WIDGET, 0, 2, 6, 4, slot = DashboardWidgets.SLOT_LEFT),
-        Tile("weather", TileType.WIDGET, 6, 2, 6, 4, slot = DashboardWidgets.SLOT_RIGHT),
+        Tile("music", TileType.WIDGET, 0, 2, 6, 6, slot = DashboardWidgets.SLOT_LEFT),
+        Tile("weather", TileType.WIDGET, 6, 2, 6, 6, slot = DashboardWidgets.SLOT_RIGHT),
     )
 
     fun load(ctx: Context, layout: String = LAYOUT_FULL): List<Tile> {
-        val raw = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(layout, null)
-            ?: return defaultFull()
+        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val raw = p.getString(layout, null) ?: return defaultFull()
+        // Քանի տողով է պահվել (մինչև 12×8՝ 6)․ տարբերվելու դեպքում y/h-ը փոխարկում ենք համամասնորեն
+        val savedRows = p.getInt("${layout}_rows", 6)
         return runCatching {
             val arr = JSONArray(raw)
-            List(arr.length()) { i ->
+            val tiles = List(arr.length()) { i ->
                 val o = arr.getJSONObject(i)
+                var y = o.getInt("y")
+                var h = o.getInt("h")
+                if (savedRows != ROWS) {
+                    val top = Math.round(y * ROWS / savedRows.toFloat())
+                    val bottom = Math.round((y + h) * ROWS / savedRows.toFloat())
+                    y = top
+                    h = (bottom - top).coerceAtLeast(1)
+                }
                 Tile(
                     id = o.getString("id"),
                     type = TileType.valueOf(o.getString("type")),
-                    x = o.getInt("x"), y = o.getInt("y"), w = o.getInt("w"), h = o.getInt("h"),
+                    x = o.getInt("x"), y = y, w = o.getInt("w"), h = h,
                     slot = o.optString("slot", "tile_" + o.getString("id")),
                     pkg = o.optString("pkg", ""),
                 )
             }.filter { it.fits(COLS, ROWS) }
+            if (savedRows != ROWS) save(ctx, tiles, layout)
+            tiles
         }.getOrElse { defaultFull() }
     }
 
@@ -80,11 +92,14 @@ object MyDashboardStore {
                 .put("x", it.x).put("y", it.y).put("w", it.w).put("h", it.h).put("slot", it.slot)
                 .put("pkg", it.pkg))
         }
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(layout, arr.toString()).apply()
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(layout, arr.toString())
+            .putInt("${layout}_rows", ROWS)
+            .apply()
     }
 
     fun reset(ctx: Context, layout: String = LAYOUT_FULL) =
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(layout).apply()
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(layout).remove("${layout}_rows").apply()
 
     /** Առաջին ազատ տեղը w×h սալիկի համար (վերևից ներքև, ձախից աջ)․ null, եթե տեղ չկա։ */
     fun findFreeSpot(tiles: List<Tile>, w: Int, h: Int): Pair<Int, Int>? {

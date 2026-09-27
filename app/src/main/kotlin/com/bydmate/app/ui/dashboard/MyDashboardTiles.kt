@@ -83,7 +83,7 @@ fun MyDashboardTileContent(
                     Text(stringResource(R.string.dashboard_unit_km), color = AccentGreen.copy(alpha = 0.7f),
                         fontSize = 18.sp, modifier = Modifier.padding(bottom = 4.dp))
                 }
-                Text(stringResource(R.string.dashboard_range_label), color = TextMuted, fontSize = 12.sp)
+                Text(stringResource(R.string.kom_tile_range), color = TextSecondary, fontSize = 14.sp)
             }
         }
         TileType.TEMPS -> TileCard(modifier) {
