@@ -2117,4 +2117,7 @@
     <string name="auto_ui_test_park">Не выполнено: правило работает только на парковке. Включите P.</string>
     <string name="auto_ui_confirm_rule">Правило «%1$s»</string>
     <string name="auto_ui_confirm_countdown">Отменится через %1$d с</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_about_copyright">© 2026 KomS</string>
+    <string name="kom_about_inspired">Вдохновлено BYDMate от AndyShaman</string>
 </resources>

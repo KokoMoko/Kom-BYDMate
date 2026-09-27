@@ -2977,6 +2977,20 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Kom-BYDMate: հեղինակ, հղում և «inspired by»․ AndyShaman-ի copyright-ը և հղումը մնում են
+            // (PolyForm Noncommercial-ի Required Notice)
+            Text(stringResource(R.string.kom_about_copyright), color = TextPrimary, fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold)
+            Text(
+                text = "github.com/KokoMoko",
+                color = AccentBlue,
+                fontSize = 14.sp,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/KokoMoko")))
+                }
+            )
+            Text(stringResource(R.string.kom_about_inspired), color = TextSecondary, fontSize = 14.sp)
             Text(stringResource(R.string.settings_copyright), color = TextSecondary, fontSize = 14.sp)
             Text(
                 text = "github.com/AndyShaman/BYDMate",

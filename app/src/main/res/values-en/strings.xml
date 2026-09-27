@@ -1950,4 +1950,7 @@
     <string name="auto_ui_test_park">Not run: this rule works only when parked. Shift to P.</string>
     <string name="auto_ui_confirm_rule">Rule «%1$s»</string>
     <string name="auto_ui_confirm_countdown">Cancels in %1$d s</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_about_copyright">© 2026 KomS</string>
+    <string name="kom_about_inspired">Inspired by AndyShaman BYDMate</string>
 </resources>
