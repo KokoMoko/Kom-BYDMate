@@ -1,11 +1,16 @@
 package com.bydmate.app.ui.settings
 
 import android.content.Context
+import android.content.pm.PackageManager
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.automation.RouteNavigatorUris
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
+import com.bydmate.app.diagnostics.TraceRecorder
 import com.bydmate.app.data.autoservice.AdbConnectFailure
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.backup.BackupManager
+import com.bydmate.app.data.charging.ChargeConnector
 import com.bydmate.app.data.local.EnergyDataDeadDetector
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.EnergyDataReader
@@ -54,6 +59,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import com.bydmate.app.data.vehicle.DumpFidsResult
 import com.bydmate.app.data.vehicle.SeatChannel
@@ -81,6 +87,8 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [29])
 class SettingsViewModelTest {
+
+    @get:Rule val trace = TraceRecorder()
 
     private val testDispatcher = StandardTestDispatcher()
     private val seatChannelStore: SeatChannelStore = mockk(relaxed = true)
@@ -408,6 +416,20 @@ class SettingsViewModelTest {
         assertEquals(SettingsRepository.DEFAULT_HOME_TARIFF, vm.uiState.value.homeTariff)
     }
 
+    // «Разъём для зарядки»: GB/T until the driver picks another, the pick is saved.
+    @Test
+    fun `charge connector starts as GB-T and a pick is saved`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(ChargeConnector.GBT, vm.uiState.value.chargeConnector)
+
+        vm.saveChargeConnector(ChargeConnector.CHADEMO)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(ChargeConnector.CHADEMO, vm.uiState.value.chargeConnector)
+        assertEquals("chademo", settingsDao.map[SettingsRepository.KEY_CHARGE_CONNECTOR])
+    }
+
     // Issue #23: pressing "Close" while an update is downloading must cancel the
     // download coroutine and clear the Downloading state. Without cancellation the
     // progress callback keeps re-emitting Downloading (re-opening the dialog) and
@@ -456,6 +478,147 @@ class SettingsViewModelTest {
 
         assertTrue(vm.uiState.value.disableNativeAssistant)
         coVerify { helperClient.setAppHidden("com.byd.autovoice", true) }
+    }
+
+    @Test fun `switching the native assistant toggle on asks first and touches nothing yet`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.toggleDisableNativeAssistant(true)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.showDisableNativeAssistantDialog)
+        assertFalse(vm.uiState.value.disableNativeAssistant)
+        coVerify(exactly = 0) { helperClient.setAppHidden(any(), any()) }
+        assertNull(settingsDao.map[SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT])
+    }
+
+    @Test fun `confirming the native assistant warning disables it`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.toggleDisableNativeAssistant(true)
+        vm.confirmDisableNativeAssistant()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.showDisableNativeAssistantDialog)
+        assertTrue(vm.uiState.value.disableNativeAssistant)
+        assertEquals("true", settingsDao.map[SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT])
+        coVerify { helperClient.setAppHidden("com.byd.autovoice", true) }
+    }
+
+    @Test fun `cancelling the native assistant warning leaves the toggle off and calls nothing`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.toggleDisableNativeAssistant(true)
+        vm.dismissDisableNativeAssistantDialog()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.showDisableNativeAssistantDialog)
+        assertFalse(vm.uiState.value.disableNativeAssistant)
+        coVerify(exactly = 0) { helperClient.setAppHidden(any(), any()) }
+        assertNull(settingsDao.map[SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT])
+    }
+
+    // --- No saved choice (a reinstall after an uninstall that left the assistant disabled): the
+    // toggle shows what the system has; a saved choice keeps ruling as before. ---
+
+    private fun installAssistantPackage(pkg: String, state: Int) {
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        org.robolectric.Shadows.shadowOf(ctx.packageManager).installPackage(
+            android.content.pm.PackageInfo().apply {
+                packageName = pkg
+                applicationInfo = android.content.pm.ApplicationInfo().apply { packageName = pkg }
+            },
+        )
+        ctx.packageManager.setApplicationEnabledSetting(pkg, state, 0)
+    }
+
+    @Test fun `no saved choice and a user-disabled autovoice show the toggle on`() = runTest {
+        installAssistantPackage("com.byd.autovoice", PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER)
+        installAssistantPackage("com.byd.vrassistant", PackageManager.COMPONENT_ENABLED_STATE_DEFAULT)
+
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.disableNativeAssistant)
+        coVerify(exactly = 0) { helperClient.setAppHidden(any(), any()) }
+        assertNull(settingsDao.map[SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT])
+    }
+
+    @Test fun `no saved choice and only a user-disabled vrassistant show the toggle on`() = runTest {
+        installAssistantPackage("com.byd.autovoice", PackageManager.COMPONENT_ENABLED_STATE_DEFAULT)
+        installAssistantPackage("com.byd.vrassistant", PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER)
+
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.disableNativeAssistant)
+    }
+
+    @Test fun `no saved choice and only a user-disabled autovoice engine show the toggle on`() = runTest {
+        installAssistantPackage("com.byd.autovoice", PackageManager.COMPONENT_ENABLED_STATE_DEFAULT)
+        installAssistantPackage("com.byd.autovoice.engine", PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER)
+        installAssistantPackage("com.byd.vrassistant", PackageManager.COMPONENT_ENABLED_STATE_DEFAULT)
+
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.disableNativeAssistant)
+    }
+
+    @Test fun `no saved choice and both packages enabled show the toggle off`() = runTest {
+        installAssistantPackage("com.byd.autovoice", PackageManager.COMPONENT_ENABLED_STATE_DEFAULT)
+        installAssistantPackage("com.byd.vrassistant", PackageManager.COMPONENT_ENABLED_STATE_ENABLED)
+
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.disableNativeAssistant)
+    }
+
+    @Test fun `a saved choice rules over the system state`() = runTest {
+        installAssistantPackage("com.byd.autovoice", PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER)
+
+        val vm = buildViewModel()
+        settingsDao.map[SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT] = "false"
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.disableNativeAssistant)
+        assertTrue(trace.events().none { "native-assistant-from-system" in it })
+    }
+
+    @Test fun `switching off a toggle shown on from the system enables the assistant without the warning`() = runTest {
+        installAssistantPackage("com.byd.autovoice", PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER)
+        installAssistantPackage("com.byd.vrassistant", PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER)
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.uiState.value.disableNativeAssistant)
+
+        vm.toggleDisableNativeAssistant(false)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.showDisableNativeAssistantDialog)
+        assertFalse(vm.uiState.value.disableNativeAssistant)
+        assertEquals("false", settingsDao.map[SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT])
+        coVerify(exactly = 1) { helperClient.setAppHidden("com.byd.autovoice", false) }
+        coVerify(exactly = 1) { helperClient.setAppHidden("com.byd.vrassistant", false) }
+    }
+
+    @Test fun `switching the native assistant toggle off goes without the warning`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.setDisableNativeAssistant(true)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.toggleDisableNativeAssistant(false)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.showDisableNativeAssistantDialog)
+        assertFalse(vm.uiState.value.disableNativeAssistant)
+        assertEquals("false", settingsDao.map[SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT])
+        coVerify { helperClient.setAppHidden("com.byd.autovoice", false) }
     }
 
     @Test fun `setVoiceEnabled persists and mirrors into voice prefs`() = runTest {
@@ -1331,8 +1494,26 @@ class SettingsViewModelTest {
         assertTrue(header, header.contains("parts: auto=tables,keys manual=tables,settings"))
     }
 
-    /** The header lands on the real Dispatchers.IO, which the test scheduler cannot advance. */
-    private fun awaitDiagnosticHeader(timeoutMs: Long = 10_000): String {
+    /** The trace closes the header: what the app did before the recording, newest event last. */
+    @Test fun `the diagnostic header ends with the trace, newest event last`() = runTest {
+        val ptt = Trace.event(TraceArea.USER, "ptt", "listening" to false)
+        Trace.event(TraceArea.VOICE, "session-start", by = ptt)
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.startLogRecording()
+        testDispatcher.scheduler.advanceUntilIdle()
+        val header = awaitDiagnosticHeader(until = "voice  session-start #2 by=#1")
+
+        val section = header.substringAfter("--- trace ---\n").substringBefore("===============================")
+        val events = section.lines().filter { it.isNotBlank() && !it.startsWith("-- ") }.map { it.substringAfter(' ') }
+        assertEquals(listOf("user   ptt listening=false #1", "voice  session-start #2 by=#1"), events)
+        assertTrue(header, header.indexOf("--- last crash ---") < header.indexOf("--- trace ---"))
+    }
+
+    /** The header lands on the real Dispatchers.IO, which the test scheduler cannot advance.
+     *  [until] is a text the finished header contains. */
+    private fun awaitDiagnosticHeader(timeoutMs: Long = 10_000, until: String = "--- settings ---"): String {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             val file = listOf(publicDumpDir(), fallbackDumpDir())
@@ -1340,7 +1521,7 @@ class SettingsViewModelTest {
                 .filter { it.name.startsWith("bydmate_logs_") }
                 .maxByOrNull { it.lastModified() }
             val text = file?.readText().orEmpty()
-            if (text.contains("--- settings ---")) return text
+            if (text.contains(until)) return text
             Thread.sleep(10)
         }
         throw AssertionError("no diagnostic header was written within $timeoutMs ms")

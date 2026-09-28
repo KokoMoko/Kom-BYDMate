@@ -350,6 +350,8 @@ class LogRecorder internal constructor(
             "AudioCapture:*", "SherpaTtsEngine:*", "VoiceController:*",
             // HUD wave: SOME/IP output + cluster projection diagnostics
             "HudController:*", "HudSomeIpBridge:*", "HudPushLoop:*",
+            // HUD navigation status (app and daemon share the tag) and the HUD check's hudprobe lines.
+            "HudArming:*", "HudCheck:*",
             "ClusterProjection:*",
             // Direct projection wave: helper daemon (freeform switch diagnostics; visible
             // only once READ_LOGS is granted AND the app process restarted - the daemon
@@ -406,7 +408,13 @@ class LogRecorder internal constructor(
             // Telegram reports: build (items taken / skipped, length), send, outbox add/drain/drop.
             "TgReport:*",
             // Power-off report in the helper daemon: arm, power off/on, send attempts, outcome.
-            "OffReport:*"
+            "OffReport:*",
+            // Agent tools (where_am_i steps, failed weather requests) and the two Overpass
+            // clients behind where_am_i and find_chargers (per-server failures and answers),
+            // plus the two Belarus charger sources ahead of Overpass.
+            "AgentTools:*", "SettlementSearch:*", "ChargerSearchClient:*", "BetaMapClient:*", "MalankaGateway:*",
+            // The event journal: one line per user action, decision and failure, by=#id links.
+            "Trace:*"
         )
     }
 }

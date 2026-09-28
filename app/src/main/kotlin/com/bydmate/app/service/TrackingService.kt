@@ -42,7 +42,11 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.remote.IternioTelemetryClient
 import com.bydmate.app.data.remote.WebhookTelemetryClient
 import com.bydmate.app.data.repository.ChargeRepository
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.helper.HelperBinderHolder
+import com.bydmate.app.domain.tracker.RecentTrack
+import com.bydmate.app.domain.tracker.TrackPoint
 import com.bydmate.app.domain.tracker.TripState
 import com.bydmate.app.domain.tracker.TripTracker
 import com.bydmate.app.domain.calculator.BigNumberCalculator
@@ -413,6 +417,9 @@ class TrackingService : Service(), LocationListener {
         @Volatile internal var lastLocationFix: LocationFix? = null
             private set
 
+        /** The fixes of the last minutes, for the voice agent's direction of travel. */
+        internal val recentTrack = RecentTrack()
+
         // GPS fix older than this is not forwarded to ABRP: a stale coordinate would
         // pin the car marker to an old position, which is worse than sending none.
         private const val TELEMETRY_LOCATION_FRESH_MS = 60_000L
@@ -547,6 +554,8 @@ class TrackingService : Service(), LocationListener {
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "onCreate: starting TrackingService")
+        Trace.event(TraceArea.APP, "service-start")
+        com.bydmate.app.platform.LegacyHeadUnit.noteServiceStart()
         ChainLog.append(this, "TrackingService onCreate")
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification(appStrings.get(R.string.service_foreground_content_starting)))
@@ -706,7 +715,8 @@ class TrackingService : Service(), LocationListener {
                         com.bydmate.app.data.repository.SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT,
                         "")
                     if (pref.isNotEmpty()) {
-                        helperClient.setAppHidden("com.byd.autovoice", pref == "true")
+                        com.bydmate.app.data.vehicle.NativeAssistant.setDisabled(
+                            helperClient, packageManager, pref == "true")
                     }
                 }
                 // Power down a cluster compositor left "on" by a car shutdown mid-projection —
@@ -1341,6 +1351,7 @@ class TrackingService : Service(), LocationListener {
 
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: stopping TrackingService")
+        Trace.event(TraceArea.APP, "service-stop")
         com.bydmate.app.ui.widget.WidgetController.detach("service_destroy")
         ChainLog.append(this, "TrackingService onDestroy")
         pollingJob?.cancel()
@@ -1409,6 +1420,7 @@ class TrackingService : Service(), LocationListener {
             Log.w(TAG, "Failed to schedule restart: ${e.message}")
         }
 
+        Trace.flush()
         super.onDestroy()
     }
 
@@ -1433,6 +1445,8 @@ class TrackingService : Service(), LocationListener {
     override fun onLocationChanged(location: Location) {
         lastLocationFix = LocationFix(location, isLive = true)
         _lastLocation.value = location
+        recentTrack.add(TrackPoint(android.os.SystemClock.elapsedRealtime(), location.latitude, location.longitude,
+            if (location.hasSpeed()) location.speed * 3.6 else null))
         // AC-06: never log raw coordinates in release — logcat is readable on DiLink
         // and ends up in user-shared diagnostic dumps.
         if (BuildConfig.DEBUG) {

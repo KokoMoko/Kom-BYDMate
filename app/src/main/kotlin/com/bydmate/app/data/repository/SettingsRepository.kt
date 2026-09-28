@@ -3,6 +3,7 @@ package com.bydmate.app.data.repository
 import com.bydmate.app.data.backup.AutoBackupPeriod
 import com.bydmate.app.data.backup.BackupPart
 import com.bydmate.app.data.backup.TgBackupConfig
+import com.bydmate.app.data.charging.ChargeConnector
 import com.bydmate.app.data.telegram.ReportField
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.SettingsDao
@@ -34,6 +35,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_DC_TARIFF = "dc_tariff"
         const val KEY_UNITS = "units" // "km" or "miles"
         const val KEY_CURRENCY = "currency" // "BYN", "RUB", "USD", "EUR", "CNY"
+        /** The car's charging connector the voice agent filters stations by (ChargeConnector.key). */
+        const val KEY_CHARGE_CONNECTOR = "charge_connector"
         const val KEY_TRIP_COST_TARIFF = "trip_cost_tariff" // "home", "dc", or numeric
         const val KEY_CONSUMPTION_GOOD = "consumption_good_threshold"
         const val KEY_CONSUMPTION_BAD = "consumption_bad_threshold"
@@ -116,6 +119,8 @@ open class SettingsRepository @Inject constructor(
         /** Power-off Telegram report (3.19): "true" = on, and its ReportField ids, comma separated. */
         const val KEY_TG_REPORT_OFF_ENABLED = "tg_report_off_enabled"
         const val KEY_TG_REPORT_OFF_FIELDS = "tg_report_off_fields"
+        /** One-shot flag: the odometer was added to a power-off choice saved before it existed. */
+        const val KEY_TG_REPORT_ODOMETER_ADDED = "tg_report_odometer_added"
         /** Telegram reports waiting for the network: a JSON array, see TelegramReporter. */
         const val KEY_TG_REPORT_OUTBOX = "tg_report_outbox"
         const val KEY_DATA_SOURCE = "data_source"
@@ -467,6 +472,13 @@ open class SettingsRepository @Inject constructor(
     fun observeTripAutoResetMode(n: Int): Flow<TripAutoResetMode> =
         observeString("trip${n}_auto_reset").map { TripAutoResetMode.fromKey(it) }
 
+    /** «Разъём для зарядки»; unknown or absent value = GB/T. */
+    suspend fun getChargeConnector(): ChargeConnector =
+        ChargeConnector.fromKey(settingsDao.get(KEY_CHARGE_CONNECTOR))
+
+    suspend fun setChargeConnector(connector: ChargeConnector) =
+        setString(KEY_CHARGE_CONNECTOR, connector.key)
+
     // --- Automatic backup (#237) ---
 
     suspend fun getAutoBackupPeriod(): AutoBackupPeriod =
@@ -562,6 +574,16 @@ open class SettingsRepository @Inject constructor(
 
     fun observeTgReportOffFields(): Flow<Set<ReportField>> =
         observeString(KEY_TG_REPORT_OFF_FIELDS).map { ReportField.parseCsv(it) }
+
+    /**
+     * One-shot (3.19.1): a power-off choice saved before the odometer existed gets it once; an
+     * install with no saved choice already has it through [ReportField.DEFAULT]. Rules keep theirs.
+     */
+    suspend fun addTgReportOdometerOnce() {
+        if (getString(KEY_TG_REPORT_ODOMETER_ADDED, "false") == "true") return
+        settingsDao.get(KEY_TG_REPORT_OFF_FIELDS)?.let { setTgReportOffFields(ReportField.parseCsv(it) + ReportField.ODOMETER) }
+        setString(KEY_TG_REPORT_ODOMETER_ADDED, "true")
+    }
 
     suspend fun getTgReportOutbox(): String = getString(KEY_TG_REPORT_OUTBOX, "")
 

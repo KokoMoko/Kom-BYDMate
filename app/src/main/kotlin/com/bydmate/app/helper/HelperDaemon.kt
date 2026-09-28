@@ -2,8 +2,11 @@
 package com.bydmate.app.helper
 
 import com.bydmate.app.BuildConfig
+import com.bydmate.app.data.vehicle.NativeAssistant
+import com.bydmate.app.helper.push.FID_PUSH_DEVICE_CLASSES
 import com.bydmate.app.helper.push.FidPushRegistry
 import com.bydmate.app.helper.push.FidRecorder
+import com.bydmate.app.helper.push.deviceInstance
 import com.bydmate.app.helper.offreport.OffReport
 import com.bydmate.app.helper.offreport.readOffReportArm
 import com.bydmate.app.helper.offreport.writeOffReportStatus
@@ -537,10 +540,16 @@ fun main(args: Array<String>) {
                     val hidden = data.readInt()    // 1 = disable, 0 = enable
                     // Hardcoded — ONLY the native BYD voice assistant family. Fully reversible
                     // (pm enable) and touches no firmware. NOT a generic package-disable passthrough;
-                    // the caller may only name the launcher package.
+                    // the caller may only name the launcher package or com.byd.vrassistant.
                     // Validate the flag daemon-side too — a privileged shell-uid op must not
                     // trust the caller. Only 0/1 are a defined state; reject anything else.
-                    val ok = if (pkg == "com.byd.autovoice" && hidden in 0..1) {
+                    val ok = if (pkg == "com.byd.vrassistant" && hidden in 0..1) {
+                        // The stock voice UI of Android 10 head units (DiLink 3.0), a single
+                        // package; the app asks for it only there and only when it is installed.
+                        // Same disable-user / enable pair as below, reversible.
+                        val cmd = if (hidden == 1) "pm disable-user --user 0" else "pm enable"
+                        shExec("$cmd \"\$1\"", pkg).code == 0
+                    } else if (pkg == NativeAssistant.AUTOVOICE && hidden in 0..1) {
                         // `pm disable-user --user 0` force-stops the package and disables its
                         // components so the framework stops routing the steering voice button to it.
                         // `pm hide` left the already-running system assistant alive — the wheel
@@ -551,11 +560,12 @@ fun main(args: Array<String>) {
                         // (com.byd.autovoice), the wake/recognition engine (.engine) that actually
                         // services the wheel mic button, and TTS output (.tts). Disabling only the
                         // launcher leaves the wheel button live, so we disable the whole family.
-                        // Siblings are hardcoded literals, never caller input. Success is gated on
-                        // BOTH the launcher and the wake engine; TTS is output-only and best-effort.
+                        // Siblings come from NativeAssistant.AUTOVOICE_FAMILY, never caller input.
+                        // Success is gated on BOTH the launcher and the wake engine; TTS is
+                        // output-only and best-effort.
                         val primaryOk = shExec("$cmd \"\$1\"", pkg).code == 0
-                        val engineOk = shExec("$cmd \"\$1\"", "com.byd.autovoice.engine").code == 0
-                        shExec("$cmd \"\$1\"", "com.byd.autovoice.tts")
+                        val engineOk = shExec("$cmd \"\$1\"", NativeAssistant.AUTOVOICE_ENGINE).code == 0
+                        shExec("$cmd \"\$1\"", NativeAssistant.AUTOVOICE_TTS)
                         primaryOk && engineOk
                     } else false
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
@@ -878,6 +888,9 @@ fun main(args: Array<String>) {
                 HelperBinderProtocol.TX_OFFREPORT_DISARM,
                 HelperBinderProtocol.TX_OFFREPORT_STATUS -> handleOffReportTransact(code, data, reply)
 
+                HelperBinderProtocol.TX_HUD_NAVI_STATUS,
+                HelperBinderProtocol.TX_WRITE_BUFFER -> handleHudTransact(code, data, reply, svc, autoIface)
+
                 else -> super.onTransact(code, data, reply, flags)
             }
         }
@@ -1109,6 +1122,96 @@ private fun autoserviceTransact(
         reply2.recycle()
     }
 }
+
+/**
+ * Buffer sibling of [autoserviceTransact]: autoservice setBuffer (tx 14), whose parcel carries a
+ * byte array instead of an int. [bytes] goes out exactly as given; the instrument's road-name
+ * field wants UTF-16LE without a BOM, and that encoding is the caller's business.
+ *
+ * Same (status, retInt) semantics as [autoserviceTransact].
+ */
+private fun autoserviceTransactBuffer(
+    svc: IBinder,
+    autoIface: String,
+    dev: Int,
+    fid: Int,
+    bytes: ByteArray
+): Pair<Int, Int> {
+    val data2 = Parcel.obtain()
+    val reply2 = Parcel.obtain()
+    return try {
+        data2.writeInterfaceToken(autoIface)
+        data2.writeInt(dev)
+        data2.writeInt(fid)
+        data2.writeByteArray(bytes)
+        svc.transact(14, data2, reply2, 0)
+        val avail = reply2.dataAvail()
+        val status = if (avail >= 4) reply2.readInt() else -999
+        val retInt = if (avail >= 8) reply2.readInt() else 0
+        status to retInt
+    } finally {
+        data2.recycle()
+        reply2.recycle()
+    }
+}
+
+/**
+ * The two HUD verbs, out of line like the recorder's: the SDK navigation status call and the
+ * setBuffer write. Every reply starts with a status int; a failure costs this call only.
+ */
+private fun handleHudTransact(code: Int, data: Parcel, reply: Parcel?, svc: IBinder, autoIface: String): Boolean {
+    if (code == HelperBinderProtocol.TX_HUD_NAVI_STATUS) {
+        val status = runCatching { data.readInt() }.getOrDefault(HelperBinderProtocol.HUD_NAVI_PROBE)
+        val (outcome, sdkReturn) = sendAutoNaviStatusOutcome(status) {
+            deviceInstance(FID_PUSH_DEVICE_CLASSES.getValue(HUD_NAVI_DEVICE))
+        }
+        reply?.writeInt(outcome)
+        reply?.writeInt(sdkReturn)
+        return true
+    }
+    runCatching {
+        val dev = data.readInt()
+        val fid = data.readInt()
+        val bytes = data.createByteArray() ?: ByteArray(0)
+        val (status, _) = autoserviceTransactBuffer(svc, autoIface, dev, fid, bytes)
+        reply?.writeInt(status)
+        reply?.writeInt(0)
+    }.onFailure {
+        reply?.setDataSize(0)
+        reply?.writeInt(-1); reply?.writeInt(0)
+    }
+    return true
+}
+
+/** The instrument device, owner of sendAutoNaviStatus. */
+private const val HUD_NAVI_DEVICE = 1007
+
+/**
+ * TX_HUD_NAVI_STATUS body: `sendAutoNaviStatus(int)` on the device [device] hands back, looked up
+ * by reflection because the SDK class exists only on the head unit. Returns (outcome, sdkReturn):
+ * [HelperBinderProtocol.HUD_NAVI_PROBE] only reports whether the method exists. A throw (no
+ * system Context, the device refusing, the SDK's own SecurityException) is logged by class name
+ * and reported, never propagated: the app then writes the fid raw.
+ */
+internal fun sendAutoNaviStatusOutcome(status: Int, device: () -> Any): Pair<Int, Int> {
+    val target = runCatching(device).getOrElse { e ->
+        android.util.Log.w(HUD_NAVI_TAG, "sendAutoNaviStatus: no device: ${unwrapReflectionCause(e).javaClass.simpleName}")
+        return HelperBinderProtocol.HUD_NAVI_THREW to 0
+    }
+    val method = runCatching {
+        target.javaClass.getMethod("sendAutoNaviStatus", Int::class.javaPrimitiveType)
+    }.getOrNull() ?: return HelperBinderProtocol.HUD_NAVI_ABSENT to 0
+    if (status == HelperBinderProtocol.HUD_NAVI_PROBE) return HelperBinderProtocol.HUD_NAVI_CALLED to 0
+    return runCatching { HelperBinderProtocol.HUD_NAVI_CALLED to (method.invoke(target, status) as? Int ?: 0) }
+        .getOrElse { e ->
+            // The SDK's message is its own verdict ("[setInt] permission deny!"), no user data.
+            val root = unwrapReflectionCause(e)
+            android.util.Log.w(HUD_NAVI_TAG, "sendAutoNaviStatus($status) threw ${root.javaClass.simpleName}: ${root.message}")
+            HelperBinderProtocol.HUD_NAVI_THREW to 0
+        }
+}
+
+private const val HUD_NAVI_TAG = "HudArming"
 
 /**
  * TX_READ_BATCH body. Reads `count` then count × (tx, dev, fid) triples from [data],

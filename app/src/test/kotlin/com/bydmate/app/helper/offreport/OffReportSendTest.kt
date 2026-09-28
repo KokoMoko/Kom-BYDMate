@@ -8,6 +8,8 @@ import org.junit.Test
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.URL
+import java.net.URLDecoder
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 
 /**
@@ -53,6 +55,40 @@ class OffReportSendTest {
         val start = System.nanoTime()
         val result = block()
         return result to (System.nanoTime() - start) / 1_000_000
+    }
+
+    @Test fun `the body asks for Telegram HTML with no link preview`() {
+        val body = OffReport.sendMessageBody(42L, "<b>a & b</b>")
+        val fields = body.split('&').associate { it.substringBefore('=') to URLDecoder.decode(it.substringAfter('='), "UTF-8") }
+        assertEquals("42", fields["chat_id"])
+        assertEquals("HTML", fields["parse_mode"])
+        assertEquals("""{"is_disabled":true}""", fields["link_preview_options"])
+        assertEquals("<b>a & b</b>", fields["text"])
+    }
+
+    @Test fun `the point body carries the chat, both coordinates and no notification`() {
+        val body = OffReport.sendLocationBody(42L, -22.906847, 27.56)
+        val fields = body.split('&').associate { it.substringBefore('=') to URLDecoder.decode(it.substringAfter('='), "UTF-8") }
+        assertEquals(
+            mapOf("chat_id" to "42", "latitude" to "-22.906847", "longitude" to "27.560000", "disable_notification" to "true"),
+            fields,
+        )
+    }
+
+    @Test fun `the point goes to sendLocation of the same bot`() {
+        val requestLine = AtomicReference("")
+        thread(isDaemon = true, name = "answer") {
+            val socket = runCatching { server.accept() }.getOrNull() ?: return@thread
+            synchronized(clients) { clients += socket }
+            requestLine.set(socket.getInputStream().bufferedReader().readLine().orEmpty())
+            socket.getOutputStream().apply {
+                write("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+                flush()
+            }
+        }
+        val result = OffReport.postSendLocation("tok", 42L, 53.9, 27.56, 1_000, 2_000)
+        assertEquals("POST /bottok/sendLocation HTTP/1.1", requestLine.get())
+        assertEquals(AttemptResult.Verdict.SENT, result.verdict)
     }
 
     @Test fun `a status line that never ends is cut at the attempt deadline and retried`() {

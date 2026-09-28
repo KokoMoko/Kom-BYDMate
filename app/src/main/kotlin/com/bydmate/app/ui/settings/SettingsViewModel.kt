@@ -20,6 +20,7 @@ import com.bydmate.app.data.backup.AutoBackupPeriod
 import com.bydmate.app.data.backup.AutoBackupRunner
 import com.bydmate.app.data.backup.AutoBackupScheduler
 import com.bydmate.app.data.backup.BackupPart
+import com.bydmate.app.data.charging.ChargeConnector
 import com.bydmate.app.data.backup.BackupManager
 import com.bydmate.app.data.backup.TelegramBackupSink
 import com.bydmate.app.data.backup.TelegramChat
@@ -31,6 +32,7 @@ import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.diagnostics.LogRecorder
+import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.BuildConfig
 import com.bydmate.app.data.push.fidRecorderEnabled
 import com.bydmate.app.helper.push.FID_REC_NO_ERROR
@@ -80,6 +82,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import com.bydmate.app.data.vehicle.DumpFidsResult
+import com.bydmate.app.data.vehicle.NativeAssistant
 import com.bydmate.app.data.vehicle.SeatChannel
 import com.bydmate.app.data.vehicle.SeatChannelStore
 import com.bydmate.app.service.BootReceiver
@@ -139,6 +142,7 @@ data class SettingsUiState(
     val units: String = SettingsRepository.DEFAULT_UNITS,
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
     val currencySymbol: String = "BYN",
+    val chargeConnector: ChargeConnector = ChargeConnector.GBT,
     val importStatus: String? = null,
     val appVersion: String = "0.0.0",
     val updateStatus: String? = null,
@@ -263,6 +267,8 @@ data class SettingsUiState(
     val gigaAmSpaceShortfall: SpaceShortfall? = null,
     /** When true, the native BYD voice assistant is disabled (pm disable-user). */
     val disableNativeAssistant: Boolean = false,
+    /** The warning shown before [disableNativeAssistant] is switched on. */
+    val showDisableNativeAssistantDialog: Boolean = false,
     // Voice agent (Phase 1, hidden)
     val agentEnabled: Boolean = false,
     val modelTestResult: String? = null,
@@ -488,6 +494,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 SettingsRepository.DEFAULT_UNITS
             )
             val currency = settingsRepository.getCurrency()
+            val chargeConnector = settingsRepository.getChargeConnector()
             val tripCostTariff = settingsRepository.getTripCostTariffKey()
             val consumptionGood = settingsRepository.getString(
                 SettingsRepository.KEY_CONSUMPTION_GOOD,
@@ -524,8 +531,14 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             val webhookSecret = settingsRepository.getString(SettingsRepository.KEY_WEBHOOK_SECRET, "")
             val webhookSendLocation = settingsRepository.getString(SettingsRepository.KEY_WEBHOOK_SEND_LOCATION, "false") == "true"
             val mapTileSource = settingsRepository.getMapTileSource()
+            // Never chosen here (a reinstall after an uninstall with the toggle on): show what the
+            // system has, so switching the toggle off brings the assistant back. The service's
+            // reconcile still leaves the packages alone until the driver chooses.
+            val disableNativeAssistantPref =
+                settingsRepository.getString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, "")
             val disableNativeAssistant =
-                settingsRepository.getString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, "false") == "true"
+                if (disableNativeAssistantPref.isEmpty()) NativeAssistant.disabledInSystem(appContext.packageManager)
+                else disableNativeAssistantPref == "true"
 
             // Voice settings
             val voiceEnabled = settingsRepository.isVoiceEnabled()
@@ -590,6 +603,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     units = units,
                     currency = currency.code,
                     currencySymbol = currency.symbol,
+                    chargeConnector = chargeConnector,
                     tripCostTariff = tripCostTariff,
                     consumptionGood = consumptionGood,
                     consumptionBad = consumptionBad,
@@ -652,8 +666,26 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         _uiState.update { it.copy(disableNativeAssistant = disabled) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, disabled.toString())
-            helperClient.setAppHidden("com.byd.autovoice", disabled)
+            NativeAssistant.setDisabled(helperClient, appContext.packageManager, disabled)
         }
+    }
+
+    /**
+     * The settings toggle. Switching on first shows a warning: the disable outlives BYDMate, so
+     * the driver learns before it how to bring the assistant back. Switching off applies at once.
+     */
+    fun toggleDisableNativeAssistant(checked: Boolean) {
+        if (checked) _uiState.update { it.copy(showDisableNativeAssistantDialog = true) }
+        else setDisableNativeAssistant(false)
+    }
+
+    fun confirmDisableNativeAssistant() {
+        _uiState.update { it.copy(showDisableNativeAssistantDialog = false) }
+        setDisableNativeAssistant(true)
+    }
+
+    fun dismissDisableNativeAssistantDialog() {
+        _uiState.update { it.copy(showDisableNativeAssistantDialog = false) }
     }
 
     /** Save battery capacity setting. */
@@ -792,6 +824,14 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         _uiState.update { it.copy(currency = currency.code, currencySymbol = currency.symbol) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_CURRENCY, code)
+        }
+    }
+
+    /** Save the car's charging connector, the voice agent's station filter. */
+    fun saveChargeConnector(connector: ChargeConnector) {
+        _uiState.update { it.copy(chargeConnector = connector) }
+        viewModelScope.launch {
+            settingsRepository.setChargeConnector(connector)
         }
     }
 
@@ -2178,7 +2218,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 appendLine("disable_native_assistant pref: \"$pref\"")
                 // Same package family the helper daemon disables via TX_SET_APP_HIDDEN.
                 val pm = appContext.packageManager
-                for (pkg in listOf("com.byd.autovoice", "com.byd.autovoice.engine", "com.byd.autovoice.tts")) {
+                for (pkg in listOf("com.byd.autovoice", "com.byd.autovoice.engine", "com.byd.autovoice.tts", "com.byd.vrassistant")) {
                     val state = runCatching { enabledSettingName(pm.getApplicationEnabledSetting(pkg)) }
                         .getOrElse { "not installed" }
                     appendLine("$pkg: $state")
@@ -2344,6 +2384,13 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     }
                 }
             } catch (e: Exception) { appendLine("(failed to gather crash log: ${e.message})") }
+
+            // What the app did before this recording: logcat was cleared when it started.
+            appendLine("--- trace ---")
+            try {
+                val events = Trace.lines()
+                if (events.isEmpty()) appendLine("(none)") else events.forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
 
             appendLine("===============================")
             appendLine()

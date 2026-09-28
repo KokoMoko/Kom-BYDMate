@@ -5,6 +5,7 @@ import android.util.Log
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.navdata.NavA11yFeed
+import com.bydmate.app.navdata.NavGuidanceHub
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -12,6 +13,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,11 +21,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /** HUD output lifecycle. Ordering rules (Codex fixes 1/2/4):
  *  - the SOME/IP package probe runs BEFORE any helper-daemon work: cars without the
  *    factory HUD see zero side effects and KEY_SUPPORTED=false is persisted so the
- *    a11y self-heal never keeps the service alive for HUD alone;
+ *    a11y self-heal never keeps the service alive for HUD alone; a layout a HUD check left
+ *    kept is put back on any car, HUD on or off;
  *  - bind (up to ~71 s of retries) runs OUTSIDE the mutex in a cancellable job, so
  *    toggle-off never blocks on it;
  *  - teardown sends one clear frame, then stopService, then unbind. */
@@ -66,6 +70,17 @@ class HudController @Inject constructor(
     private var startJob: Job? = null
     @Volatile private var bridge: HudSomeIpBridge? = null
     @Volatile private var loop: HudPushLoop? = null
+    @Volatile private var arming: HudArming? = null
+
+    /** HUD check: while set, the product arming treats guidance as absent (disarming if it was
+     *  armed), so the check's own arming session is the only one writing. */
+    @Volatile internal var armingPaused = false
+
+    /** HUD check: the product's bound gateway, borrowed instead of binding a second one. */
+    internal val boundBridge: HudSomeIpBridge? get() = bridge
+
+    /** HUD check: the product's arming loop runs, so a route that starts is armed and closed by it. */
+    internal val armingLive: Boolean get() = arming != null
 
     private val _status = MutableStateFlow(
         if (isEnabled() && !prefs().getBoolean(KEY_SUPPORTED, true)) Status.UNSUPPORTED else Status.OFF)
@@ -110,7 +125,7 @@ class HudController @Inject constructor(
 
     /** TrackingService.onCreate hook. */
     fun startIfEnabled() {
-        if (isEnabled()) scope.launch { startSequence() }
+        if (isEnabled()) scope.launch { startSequence() } else scope.launch { putBackLeftover() }
     }
 
     /** TrackingService.onDestroy hook. */
@@ -127,6 +142,7 @@ class HudController @Inject constructor(
             prefs().edit().putBoolean(KEY_SUPPORTED, false).apply()
             _status.value = Status.UNSUPPORTED
             Log.i(TAG, "SOME/IP gateway absent; HUD output stays unloaded")
+            putBackLeftover()
             return
         }
         prefs().edit().putBoolean(KEY_SUPPORTED, true).apply()
@@ -135,6 +151,15 @@ class HudController @Inject constructor(
         if (helperBootstrap.ensureRunning()) helperClient.enableAccessibilityService()
         // Bind OUTSIDE the mutex: up to ~71 s and must not block toggle-off (Codex fix 2).
         startJob = scope.launch {
+            val arm = HudArming(helperClient, prefs())
+            // A process killed mid-route left our values up. The HUD check's running session owns
+            // the kept layout, so it is left alone then.
+            if (!armingPaused) {
+                withContext(NonCancellable) {
+                    runCatching { arm.disarmLeftover(guided = NavGuidanceHub.snapshot().active) }
+                        .onFailure { Log.w(TAG, "hud disarm: reason=leftover failed: ${it.javaClass.simpleName}") }
+                }
+            }
             val b = bridgeFactory(context) { onBindingLost() }
             try {
                 if (!b.bind()) {
@@ -155,6 +180,11 @@ class HudController @Inject constructor(
                     amap = HudAmapBroadcaster(context),
                     maneuvers = HudManeuverJournal(prefs()))
                     .also { it.start(scope) }
+                // The car's navigation status, only while a route is guided; own coroutine, so
+                // a slow or refused write never delays a frame.
+                arming = arm.also {
+                    it.start(scope, layoutOwned = { !armingPaused }) { !armingPaused && NavGuidanceHub.snapshot().active }
+                }
                 _status.value = Status.ON
                 Log.i(TAG, "HUD output active")
             } catch (ce: CancellationException) {
@@ -162,6 +192,16 @@ class HudController @Inject constructor(
                 throw ce
             }
         }
+    }
+
+    /** A layout the HUD check kept (process killed mid-check, or its put-back deferred at a
+     *  fullscreen cluster) on a car where the HUD output does not start: nothing else would put it
+     *  back. Without the key nothing starts, reads or writes. */
+    private suspend fun putBackLeftover() {
+        if (!prefs().contains(HudArming.KEY_AS_FOUND) || armingPaused || NavGuidanceHub.snapshot().active) return
+        if (!helperBootstrap.ensureRunning()) return
+        runCatching { HudArming(helperClient, prefs()).disarmLeftover(guided = false) }
+            .onFailure { Log.w(TAG, "hud disarm: reason=leftover failed: ${it.javaClass.simpleName}") }
     }
 
     /** Gateway binding died (crash/update). Clean up so the next startIfEnabled()
@@ -174,6 +214,8 @@ class HudController @Inject constructor(
             mutex.withLock {
                 loop?.stop()
                 loop = null
+                arming?.stop()
+                arming = null
                 bridge = null   // the bridge already unbound itself in onBindingDied
                 _status.value = Status.BIND_FAILED
             }
@@ -190,6 +232,9 @@ class HudController @Inject constructor(
             NavA11yFeed.enabled = false
             loop?.stop()
             loop = null
+            // Close the car's navigation status and put the layout back before the channel goes.
+            arming?.stop()
+            arming = null
             bridge?.let {
                 // Leave the HUD clean before tearing the channel down (Codex fix 4).
                 runCatching { it.fireEvent(HudSomeIpBridge.TOPIC_NAVI, HudProtobufBuilder.buildClearFrame(0)) }

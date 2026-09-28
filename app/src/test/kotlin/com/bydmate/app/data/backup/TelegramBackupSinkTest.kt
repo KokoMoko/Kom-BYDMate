@@ -147,6 +147,28 @@ class TelegramBackupSinkTest {
         assertEquals("/bot123:abc/sendMessage", request.path)
         val body = request.body.readUtf8()
         assertTrue(body, body.contains("chat_id=42"))
+        assertFalse(body, body.contains("parse_mode"))
+        assertFalse(body, body.contains("link_preview_options"))
+    }
+
+    @Test fun `sendMessage in HTML without a preview sends both options`() = runTest {
+        server.enqueue(MockResponse().setBody("""{"ok":true,"result":{}}"""))
+
+        assertTrue(sink.sendMessage("123:abc", 42L, "<b>x</b>", "HTML", linkPreview = false).isSuccess)
+        val body = java.net.URLDecoder.decode(server.takeRequest().body.readUtf8(), "UTF-8")
+        assertTrue(body, body.contains("parse_mode=HTML"))
+        assertTrue(body, body.contains("""link_preview_options={"is_disabled":true}"""))
+    }
+
+    @Test fun `sendLocation posts the chat, both coordinates and no notification`() = runTest {
+        server.enqueue(MockResponse().setBody("""{"ok":true,"result":{}}"""))
+
+        assertTrue(sink.sendLocation("123:abc", 42L, 53.9, -27.56).isSuccess)
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/bot123:abc/sendLocation", request.path)
+        val body = java.net.URLDecoder.decode(request.body.readUtf8(), "UTF-8")
+        assertEquals("chat_id=42&latitude=53.900000&longitude=-27.560000&disable_notification=true", body)
     }
 
     @Test fun `sendDocument uploads a multipart zip with chat id and caption`() = runTest {

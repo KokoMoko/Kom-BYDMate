@@ -2,11 +2,13 @@ package com.bydmate.app.agent
 
 import android.util.Log
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.voice.AgentIdentity
 import com.bydmate.app.voice.AgentPersona
 import com.bydmate.app.voice.AgentPersonaPrompt
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -192,7 +194,8 @@ class AgentOrchestrator @Inject constructor(
     ): AgentResult {
         val startedAt = nowMs()
         val rounds = intArrayOf(0)
-        val tracer = AgentTrace({ nowMs() }, { line -> trace(line) })
+        val tracer = AgentTrace({ nowMs() }, toolNames(toolSchemas), { line -> trace(line) })
+        tracer.started(Trace.cause(), detached = !allowAutomationTools)
         var outcome = "cancelled"
         try {
             val result = runLoopTraced(
@@ -209,6 +212,13 @@ class AgentOrchestrator @Inject constructor(
             tracer.turn(nowMs() - startedAt, rounds[0], outcome)
         }
     }
+
+    /** The names offered to the model this turn (OpenAI tool schema: `function.name`), so the
+     *  trace can tell a real tool call from a name the model invented. */
+    private fun toolNames(schemas: JSONArray): Set<String> =
+        (0 until schemas.length()).mapNotNullTo(mutableSetOf()) {
+            schemas.optJSONObject(it)?.optJSONObject("function")?.optString("name")?.takeIf(String::isNotEmpty)
+        }
 
     /** The answer as the driver gets it: trimmed, and marked with [TRUNCATED_MARK] when
      *  max_tokens cut it, so a reply that stops mid-sentence is visibly a cut and not a bug. */
@@ -304,7 +314,8 @@ class AgentOrchestrator @Inject constructor(
                 }
                 callCounts[key] = seen + 1
                 val toolStart = nowMs()
-                val res = tools.execute(call, allowAutomationTools)
+                val toolEvent = tracer.toolStarted(call)
+                val res = withContext(Trace.causedBy(toolEvent)) { tools.execute(call, allowAutomationTools) }
                 // ok = the tool JSON has no "error" key; unparseable output counts as ok
                 // (free-form success payloads like web_search results are not errors).
                 val ok = runCatching { !JSONObject(res).has("error") }.getOrDefault(true)
@@ -393,6 +404,9 @@ class AgentOrchestrator @Inject constructor(
               уровень подогрева, режим обдува), а команда её не уточняет ("включи климат",
               "подогрей сиденье") - примени сохранённое значение и назови его в ответе
               ("Климат на 22, как обычно").
+            - Подогрев или вентиляция сиденья без названного уровня ("включи подогрев водителя")
+              и без привычки в О ВОДИТЕЛЕ - ставь 1 уровень: не на всех машинах есть уровни
+              выше второго.
             - Факты о машине, поездках и зарядках бери ТОЛЬКО из инструментов, не выдумывай.
             - BYDMate видит только электрическую часть машины: расход и запас считаются
               в кВт·ч по батарее, данных о топливе и ДВС у тебя нет. Не рассуждай о типе
@@ -422,10 +436,18 @@ class AgentOrchestrator @Inject constructor(
             - Где машина, какой населённый пункт, что рядом - вызови where_am_i. Называй места
               только из его ответа, не угадывай и не ищи координаты через web_search. Он знает
               расстояние до центров, не границы: не говори, что мы в населённом пункте, говори
-              "примерно N км от X". Если where_am_i вернул error или пустой список -
+              "примерно N км от X". Исключение - ответ с полем address: расстояний в нём нет,
+              говори "мы в X или рядом, улица Y". Если where_am_i вернул error или пустой список -
               скажи, что не знаешь, где мы. Если в ответе есть fix_note - всегда добавь его
               оговорку, даже если машина сейчас стоит: нулевая скорость сейчас не значит, что
               она не ехала после потери сигнала.
+            - Зарядки - find_chargers. Назови 1-3 станции из ответа: имя или адрес, расстояние
+              "по прямой", впереди или в какой стороне, а если поля есть - сколько разъёмов
+              свободно, мощность и цену. status_stale=true - занятость устарела, не говори
+              "свободна сейчас". connector_known=false или status_known=false - скажи, что
+              разъёмы или занятость неизвестны, не придумывай их. Если note говорит, что впереди
+              станций нет или нет станций с разъёмом машины, скажи об этом. Когда водитель
+              выберет станцию, вызови navigate_to с её lat и lon.
 
             АВТОМАТИЗАЦИИ И МЕСТА: у пользователя есть автоматизации (триггер + действия) и
             Места (гео-точки). Для триггеров place_enter/place_exit сначала проверь имя через

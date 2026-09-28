@@ -8,6 +8,8 @@ import android.util.Log
 import android.view.Surface
 import java.io.ByteArrayOutputStream
 import com.bydmate.app.data.autoservice.SentinelDecoder
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.helper.HelperBinderHolder
 import com.bydmate.app.helper.DisplayDevice
 import com.bydmate.app.helper.HelperBinderProtocol
@@ -51,6 +53,15 @@ internal fun helperServiceBinder(): IBinder? = try {
 
 /** One autoservice read request for HelperClient.readBatch: transact code (5=getInt, 7=getFloat bits), device, fid. */
 data class BatchReadItem(val tx: Int, val dev: Int, val fid: Int)
+
+/**
+ * TX_HUD_NAVI_STATUS answer: [outcome] is HelperBinderProtocol.HUD_NAVI_CALLED / _ABSENT / _THREW,
+ * [sdkReturn] what sendAutoNaviStatus returned when it was called.
+ */
+data class HudNaviReply(val outcome: Int, val sdkReturn: Int) {
+    /** The SDK took the status: called, and answered a non-negative code. */
+    val accepted: Boolean get() = outcome == HelperBinderProtocol.HUD_NAVI_CALLED && sdkReturn >= 0
+}
 
 /**
  * Windowing state of a running task as reported by TX_GET_TASK_STATE.
@@ -297,7 +308,8 @@ interface HelperClient {
     suspend fun getGlobalSetting(key: String): Int?
 
     /** Disable ([hidden]=true) or re-enable the native BYD assistant family via `pm disable-user/enable`
-     *  under shell uid. Daemon-whitelisted to com.byd.autovoice (+ .engine/.tts). Reversible. */
+     *  under shell uid. Daemon-whitelisted to com.byd.autovoice (+ .engine/.tts) and
+     *  com.byd.vrassistant. Reversible. */
     suspend fun setAppHidden(packageName: String, hidden: Boolean): Boolean
 
     /**
@@ -546,6 +558,17 @@ interface HelperClient {
 
     /** Where report [id] stands in the daemon (TX_OFFREPORT_STATUS); null when there is no answer. */
     suspend fun offReportStatus(id: String): OffReportStatus?
+
+    /**
+     * BYDAutoInstrumentDevice.sendAutoNaviStatus([status]) inside the daemon (TX_HUD_NAVI_STATUS);
+     * [HelperBinderProtocol.HUD_NAVI_PROBE] only asks whether the firmware has the method. Null
+     * when the daemon is unreachable or too old to know the transaction; [isAlive] tells the two
+     * apart.
+     */
+    suspend fun hudNaviStatus(status: Int): HudNaviReply?
+
+    /** Raw autoservice setBuffer status (transact 14); null when the daemon is unreachable or too old. */
+    suspend fun writeBufferStatus(dev: Int, fid: Int, bytes: ByteArray): Int?
 }
 
 @Singleton
@@ -554,6 +577,8 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     @Volatile private var cached: IBinder? = null
     /** Last transport reported by [noteSource] — kept so the log line is printed only on change. */
     @Volatile private var lastSource: String? = null
+    /** The daemon binder the trace last reported, so it records a change, not every lookup. */
+    @Volatile private var tracedBinder: IBinder? = null
 
     /** Test seam: invoked right before every attempt to acquire [mutex] in [transactParsed],
      *  i.e. right before the write path takes the lock — lets a test observe "about to enter the
@@ -1149,6 +1174,23 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             readOffReportStatus(reply)
         }
 
+    override suspend fun hudNaviStatus(status: Int): HudNaviReply? {
+        val reply = transact(HelperBinderProtocol.TX_HUD_NAVI_STATUS) { it.writeInt(status) }
+            ?.let { (outcome, sdkReturn) -> HudNaviReply(outcome, sdkReturn) }
+        Log.i(TAG, "hudNaviStatus status=$status outcome=${reply?.outcome} ret=${reply?.sdkReturn}")
+        return reply
+    }
+
+    override suspend fun writeBufferStatus(dev: Int, fid: Int, bytes: ByteArray): Int? {
+        val status = transact(HelperBinderProtocol.TX_WRITE_BUFFER) {
+            it.writeInt(dev); it.writeInt(fid); it.writeByteArray(bytes)
+        }?.first
+        // Same raw autoservice status convention as writeStatus, forwarded untouched; null also
+        // covers a daemon too old to know TX_WRITE_BUFFER (transact returns false).
+        Log.i(TAG, "writeBuffer dev=$dev fid=$fid bytes=${bytes.size} status=$status accepted=${status != null && writeAccepted(status)}")
+        return status
+    }
+
     /** (status,value) reply; true iff status == 0. Shared by the boolean projection ops. */
     private suspend fun statusOk(code: Int, writeArgs: (Parcel) -> Unit): Boolean =
         transact(code, writeArgs)?.let { (status, _) -> readAccepted(status) } ?: false
@@ -1253,7 +1295,16 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
     private fun ensureBinder(): IBinder? {
         cached?.takeIf { it.isBinderAlive }?.let { return it }
-        return resolveBinder()?.also { cached = it }
+        return resolveBinder()?.also { cached = it }.also(::traceBinder)
+    }
+
+    /** Trace: the daemon went away, came up, or both (it restarted between two lookups). */
+    private fun traceBinder(binder: IBinder?) {
+        val was = tracedBinder
+        if (binder === was) return
+        tracedBinder = binder
+        if (was != null) Trace.event(TraceArea.APP, "helper-lost")
+        if (binder != null) Trace.event(TraceArea.APP, "helper-connected", "via" to lastSource)
     }
 
     /**

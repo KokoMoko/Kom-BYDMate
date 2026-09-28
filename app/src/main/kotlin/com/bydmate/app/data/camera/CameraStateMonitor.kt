@@ -2,8 +2,12 @@ package com.bydmate.app.data.camera
 
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
 import android.util.Log
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -57,6 +62,13 @@ class CameraStateMonitor @Inject constructor(
     @Volatile private var lastForegroundPkg: String? = null
     @Volatile private var lastEventTs: Long = 0L
 
+    // "package/class" -> whether it names an activity of that package. The same few windows
+    // repeat all drive long, and the lookup is a PackageManager call on the a11y thread.
+    private val activityClasses = ConcurrentHashMap<String, Boolean>()
+    // Last ignored "package/class", so a popup firing on every gesture leaves one line per run.
+    // a11y thread only.
+    private var lastIgnoredHint: String? = null
+
     fun start() {
         if (job?.isActive == true) return
         lastForegroundPkg = null
@@ -92,13 +104,42 @@ class CameraStateMonitor @Inject constructor(
      * Window-state hint from our accessibility service: the app that just took the screen, seen
      * the moment it happens instead of on the next poll. The poll stays the fallback (the service
      * can be off) and still wins whenever it brings a newer event.
+     *
+     * The event fires for any window of a package, not only an activity: an overlay, a dialog or a
+     * popup (field log 28.09: the camera app's parking radar overlay read as the camera and hid
+     * the widget). Only a [className] naming an activity of the package counts as a screen change.
      */
-    fun onForegroundHint(packageName: String) {
+    fun onForegroundHint(packageName: String, className: String?) {
         if (packageName == context.packageName || packageName in HINT_IGNORED_PACKAGES) return
         if (packageName.contains(INPUT_METHOD_MARKER)) return
+        if (!isActivity(packageName, className)) {
+            Trace.event(TraceArea.SCREEN, "hint-ignored", "pkg" to packageName, "class" to className)
+            val key = "$packageName/$className"
+            if (key != lastIgnoredHint) {
+                Log.i(TAG, "foreground hint ignored: $packageName class=$className (not an activity)")
+            }
+            lastIgnoredHint = key
+            return
+        }
         if (!acceptForeground(packageName, System.currentTimeMillis())) return
+        // Before publish(): the widget reads it as the cause of the hide or show that follows.
+        lastForegroundTraceId = Trace.event(TraceArea.SCREEN, "foreground", "pkg" to packageName,
+            "class" to className, "src" to "a11y")
         publish()
-        Log.i(TAG, "foreground hint: $packageName (a11y)")
+        lastIgnoredHint = null
+        Log.i(TAG, "foreground hint: $packageName class=$className (a11y)")
+    }
+
+    private fun isActivity(packageName: String, className: String?): Boolean {
+        if (className.isNullOrBlank()) return false
+        return activityClasses.getOrPut("$packageName/$className") {
+            try {
+                context.packageManager.getActivityInfo(ComponentName(packageName, className), 0)
+                true
+            } catch (_: PackageManager.NameNotFoundException) {
+                false
+            }
+        }
     }
 
     /**
@@ -128,6 +169,7 @@ class CameraStateMonitor @Inject constructor(
             val latest = latestResumed(usm, beginTs, now + 1)
             if (latest != null && acceptForeground(latest.first, latest.second)) {
                 Log.i(TAG, "foreground: ${latest.first} (poll)")
+                lastForegroundTraceId = Trace.event(TraceArea.SCREEN, "foreground", "pkg" to latest.first, "src" to "poll")
             }
             // No new events => keep prior foreground (camera still on, etc.).
             // Forward through start() ensures the very first call has lastEventTs=0,
@@ -142,6 +184,11 @@ class CameraStateMonitor @Inject constructor(
 
     companion object {
         private const val TAG = "CameraMonitor"
+
+        /** Trace event of the last accepted foreground change: the cause of a widget hide or
+         *  show that follows from it. Process-wide like the monitor itself. */
+        @Volatile var lastForegroundTraceId = 0L
+            private set
         private const val CAMERA_PACKAGE = "com.byd.avc"
 
         // A window-state event fires for the status bar shade and for the keyboard too; taking

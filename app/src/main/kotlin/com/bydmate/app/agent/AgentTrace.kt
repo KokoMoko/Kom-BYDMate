@@ -1,5 +1,8 @@
 package com.bydmate.app.agent
 
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
+
 /**
  * Renders one agent turn into log lines: a round of the model, every tool call, and the
  * turn's verdict. Kept out of [AgentOrchestrator] so the loop itself stays readable — the
@@ -8,12 +11,33 @@ package com.bydmate.app.agent
  * Timings are taken from the same clock the orchestrator uses, so a test clock produces
  * deterministic lines.
  */
-internal class AgentTrace(private val clock: () -> Long, private val sink: (String) -> Unit) {
+internal class AgentTrace(
+    private val clock: () -> Long,
+    private val knownTools: Set<String>,
+    private val sink: (String) -> Unit,
+) {
 
     private var roundStart = 0L
     private var firstDeltaAt = 0L
     /** Stop reason of the last model round, so the turn line can name it too. */
     private var lastFinish: String? = null
+    // Trace events of the turn and of the tool call in flight (0 between calls).
+    private var askEvent = 0L
+    private var toolEvent = 0L
+
+    /** The turn starts; [cause] is the event it answers (the driver's phrase), null for a turn
+     *  started by an automation. */
+    fun started(cause: Long?, detached: Boolean) {
+        askEvent = Trace.event(TraceArea.AGENT, "ask-start", "detached" to detached.takeIf { it }, by = cause)
+    }
+
+    /** A tool call starts; returns its trace event, the cause of the server calls it makes.
+     *  [call.name] comes from the model unchecked, so a name it invented must not reach the
+     *  trace as-is: only a name from [knownTools] (the schemas offered this turn) is recorded. */
+    fun toolStarted(call: AgentToolCall): Long {
+        toolEvent = Trace.event(TraceArea.AGENT, "tool-start", "name" to traceName(call), by = askEvent)
+        return toolEvent
+    }
 
     /** New model round: resets the round clock and the time-to-first-token mark. */
     fun roundStarted() {
@@ -48,20 +72,34 @@ internal class AgentTrace(private val clock: () -> Long, private val sink: (Stri
 
     /** One line per tool call: name, arguments and verdict, so a "said done, did nothing"
      *  report can be read straight out of the user's log. where_am_i's result carries settlement
-     *  names and distances close to the car, so only its length is traced, e.g.
-     *  "<123 chars, redacted>" - every other tool keeps its full result. */
+     *  names and distances close to the car, find_chargers' the stations around it with their
+     *  addresses, so only their length is traced, e.g. "<123 chars, redacted>" - unless it is an
+     *  error: those are fixed texts with no place in them. Every other tool keeps its full result. */
     fun tool(call: AgentToolCall, verdict: String, tookMs: Long, result: String) {
-        val shownResult = if (call.name == "where_am_i") "<${result.length} chars, redacted>" else clip(result)
+        val redacted = call.name in PLACE_RESULT_TOOLS && verdict != "error"
+        val shownResult = if (redacted) "<${result.length} chars, redacted>" else clip(result)
         sink("tool ${call.name} args=${clip(call.arguments)} -> $verdict ${tookMs}ms result=$shownResult")
+        Trace.event(TraceArea.AGENT, "tool", "name" to traceName(call), "verdict" to verdict, "ms" to tookMs,
+            "code" to if (verdict == "error") AgentToolErrorCode.of(result) else null,
+            by = toolEvent.takeIf { it > 0 } ?: askEvent)
+        toolEvent = 0L
     }
 
     fun turn(totalMs: Long, rounds: Int, outcome: String) {
         sink("turn done total=${totalMs}ms rounds=$rounds finish=${lastFinish ?: "-"} outcome=$outcome")
+        Trace.event(TraceArea.AGENT, "ask-end", "outcome" to outcome.substringBefore(':'), "rounds" to rounds,
+            "finish" to lastFinish, "ms" to totalMs, by = askEvent)
     }
+
+    /** [call.name] if it is one of the tools offered this turn, else the literal "unknown". */
+    private fun traceName(call: AgentToolCall): String = call.name.takeIf { it in knownTools } ?: "unknown"
 
     companion object {
         /** Trace lines quote model/tool payloads, which can be arbitrarily long. */
         const val TRACE_CHARS = 200
+
+        /** Tools whose result places the car: traced as a length only. */
+        private val PLACE_RESULT_TOOLS = setOf("where_am_i", "find_chargers")
 
         /** Single-line, length-capped rendering of a payload for a trace/journal line. */
         fun clip(text: String?, max: Int = TRACE_CHARS): String {

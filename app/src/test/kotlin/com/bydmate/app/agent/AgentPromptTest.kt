@@ -19,6 +19,13 @@ class AgentPromptTest {
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("seat_heat_driver_3"))
     }
 
+    // #254: a Song Plus log showed the model picking seat level 3 for "включи подогрев водителя";
+    // that car only takes levels 1-2, so a level-less request must default to 1 like the offline voice.
+    @Test fun prompt_defaults_unnamed_seat_level_to_one() {
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("без названного уровня"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("ставь 1 уровень"))
+    }
+
     @Test fun prompt_explains_exact_time_trigger() {
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("time_range"))
     }
@@ -87,5 +94,14 @@ class AgentPromptTest {
     @Test fun prompt_mentions_driver_memory_tools() {
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("remember_fact"))
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("forget_fact"))
+    }
+
+    // Live charger status: the model must not claim a free connector the source does not know,
+    // must say "по прямой" and must route to the pick by its coordinates.
+    @Test fun prompt_explains_charger_answers() {
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("find_chargers"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("status_known=false"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("\"по прямой\""))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("navigate_to с её lat и lon"))
     }
 }

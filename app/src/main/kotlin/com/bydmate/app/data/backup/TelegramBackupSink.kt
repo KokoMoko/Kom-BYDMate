@@ -16,6 +16,7 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -77,6 +78,8 @@ class TelegramBackupSink internal constructor(
         private const val HTTP_CONFLICT = 409
         /** `["message"]`, pre-encoded: other update kinds only crowd the page. */
         private const val ALLOWED_UPDATES = "%5B%22message%22%5D"
+        /** `link_preview_options` for a message whose links get no preview card. */
+        const val NO_LINK_PREVIEW = """{"is_disabled":true}"""
         private val ZIP_MEDIA = "application/zip".toMediaType()
     }
 
@@ -111,14 +114,35 @@ class TelegramBackupSink internal constructor(
                 ?.let { TelegramChat(it.getLong("id"), chatName(it)) }
         }
 
-    /** [parseMode] "HTML" makes Telegram render the markup in [text]; null sends it as plain text. */
-    suspend fun sendMessage(token: String, chatId: Long, text: String, parseMode: String? = null): Result<Unit> {
+    /**
+     * [parseMode] "HTML" makes Telegram render the markup in [text]; null sends it as plain text.
+     * [linkPreview] false keeps Telegram from adding a card for the first link (Bot API 7.0+).
+     */
+    suspend fun sendMessage(
+        token: String,
+        chatId: Long,
+        text: String,
+        parseMode: String? = null,
+        linkPreview: Boolean = true,
+    ): Result<Unit> {
         val body = FormBody.Builder()
             .add("chat_id", chatId.toString())
             .add("text", text)
             .apply { if (parseMode != null) add("parse_mode", parseMode) }
+            .apply { if (!linkPreview) add("link_preview_options", NO_LINK_PREVIEW) }
             .build()
         return call(token, "sendMessage", body) { }
+    }
+
+    /** A native location pin, silent (`disable_notification`): it follows a message already announced. */
+    suspend fun sendLocation(token: String, chatId: Long, latitude: Double, longitude: Double): Result<Unit> {
+        val body = FormBody.Builder()
+            .add("chat_id", chatId.toString())
+            .add("latitude", String.format(Locale.US, "%.6f", latitude))
+            .add("longitude", String.format(Locale.US, "%.6f", longitude))
+            .add("disable_notification", "true")
+            .build()
+        return call(token, "sendLocation", body) { }
     }
 
     suspend fun sendDocument(token: String, chatId: Long, file: File, caption: String): Result<Unit> {
