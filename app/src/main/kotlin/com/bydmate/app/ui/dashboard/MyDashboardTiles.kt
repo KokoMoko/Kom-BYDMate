@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -112,12 +113,23 @@ private fun AppTile(tile: Tile, active: Boolean, visibleOnScreen: Boolean, modif
     val context = LocalContext.current
     val rootView = LocalView.current
     var rect by remember { mutableStateOf<android.graphics.Rect?>(null) }
-    val stillVisible by rememberUpdatedState(visibleOnScreen)
     val pm = context.packageManager
     val label = remember(tile.pkg) {
         runCatching { pm.getApplicationLabel(pm.getApplicationInfo(tile.pkg, 0)).toString() }.getOrDefault(tile.pkg)
     }
     val icon = remember(tile.pkg) { runCatching { pm.getApplicationIcon(tile.pkg) }.getOrNull() }
+
+    // Առաջին պլանի հավելվածը (UsageStats + accessibility)․ եթե Kom-ը կամ սալիկի հավելվածը չէ
+    // (օր․ 360° տեսախցիկ, զանգ, ուրիշ հավելված), «լողացող» պատուհանը չպետք է մնա նրանց վրա
+    val monitor = remember {
+        dagger.hilt.android.EntryPointAccessors.fromApplication(
+            context.applicationContext, com.bydmate.app.cluster.ClusterEntryPoint::class.java,
+        ).cameraStateMonitor()
+    }
+    val fg by monitor.foregroundPackage.collectAsState()
+    val cameraOn by monitor.active.collectAsState()
+    val othersOnTop = cameraOn || (fg != null && fg != context.packageName && fg != tile.pkg)
+    val activeNow = active && !othersOnTop
 
     TileCard(
         modifier
@@ -131,7 +143,7 @@ private fun AppTile(tile: Tile, active: Boolean, visibleOnScreen: Boolean, modif
                 )
             }
             .clickable(enabled = tile.pkg.isNotEmpty()) {
-                rect?.let { AppTileController.show(context, tile.pkg, it) }
+                rect?.let { AppTileController.setDesired(context, tile.pkg, it) }
             }
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -145,22 +157,21 @@ private fun AppTile(tile: Tile, active: Boolean, visibleOnScreen: Boolean, modif
     }
 
     val r = rect
-    LaunchedEffect(active, r, tile.pkg) {
-        if (tile.pkg.isEmpty()) return@LaunchedEffect
-        // Փոքր դադար՝ կարճ փոփոխությունները (էջի swipe, չափի փոփոխություն) պատուհանը չթրթռացնեն
-        delay(400)
-        if (active && r != null && r.width() > 0 && r.height() > 0) {
-            AppTileController.show(context, tile.pkg, r)
-        } else if (!active && AppTileController.isShown(tile.pkg)) {
-            AppTileController.hide(context, tile.pkg, bringUsToFront = stillVisible)
+    LaunchedEffect(activeNow, r, tile.pkg) {
+        android.util.Log.i("KomAppTile", "tile ${tile.pkg} active=$active activeNow=$activeNow fg=$fg camera=$cameraOn rect=$r")
+        // Ուրիշ հավելված/տեսախցիկ/էջի փոփոխություն՝ անմիջապես թաքցնել, ցույց տալ՝ փոքր դադարից հետո
+        // (էջի swipe, չափի փոփոխություն), որ պատուհանը չթրթռա
+        if (activeNow && r != null && r.width() > 0 && r.height() > 0) {
+            delay(400)
+            AppTileController.setDesired(context, tile.pkg, r)
+        } else {
+            val byLauncher = fg?.contains("launcher") == true
+            AppTileController.setDesired(context, tile.pkg, null, komOnScreen = visibleOnScreen && !othersOnTop,
+                covered = othersOnTop && !byLauncher)
         }
     }
     DisposableEffect(tile.pkg) {
-        onDispose {
-            if (tile.pkg.isNotEmpty() && AppTileController.isShown(tile.pkg)) {
-                AppTileController.hide(context, tile.pkg, bringUsToFront = stillVisible)
-            }
-        }
+        onDispose { AppTileController.setDesired(context, tile.pkg, null) }
     }
 }
 

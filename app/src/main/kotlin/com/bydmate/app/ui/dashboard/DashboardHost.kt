@@ -17,13 +17,15 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 /**
- * Kom-BYDMate: Главная-ի էջերը՝ 0 = «My Dashboard» (լռելյայն), 1 = «Cluster», 2 = Classic։
+ * Kom-BYDMate: Главная-ի էջերը՝ 0 = «Cluster» (լռելյայն), 1 = Classic։
+ * «My Dashboard»-ը (խմբագրվող ցանց + Application սալիկ) հեռացված է․ «լողացող» պատուհանը այս
+ * firmware-ում բախվում էր BYDMate-ի split-ի հետ (1/3 Music + 2/3 Navigator)։
  * Փոխվում է swipe-ով կամ «● ○ ○» կետերով․ խմբագրման ժամանակ swipe-ը անջատված է։
  */
 @Composable
 fun DashboardHost(onOpenTechPanel: () -> Unit, onOpenSettings: () -> Unit) {
     var editing by remember { mutableStateOf(false) }
-    val pager = rememberPagerState(initialPage = 0) { 3 }
+    val pager = rememberPagerState(initialPage = 0) { 2 }
     val scope = rememberCoroutineScope()
 
     // Split-ում (Panel)՝ միայն My Dashboard-ը, առանց swipe-ի և կետերի
@@ -33,19 +35,13 @@ fun DashboardHost(onOpenTechPanel: () -> Unit, onOpenSettings: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         HorizontalPager(state = pager, userScrollEnabled = !editing && !inSplit, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
-                0 -> MyDashboardScreen(
-                    editing = editing,
-                    onEditingChange = { editing = it },
-                    // «Application» սալիկի պատուհանը՝ միայն երբ My Dashboard-ը հանգիստ վիճակում է
-                    pageVisible = pager.currentPage == 0 && !pager.isScrollInProgress,
-                )
-                1 -> ClusterScreen()
+                0 -> ClusterScreen()
                 else -> DashboardScreen(onOpenTechPanel = onOpenTechPanel, onOpenSettings = onOpenSettings)
             }
         }
         // Վերևի կենտրոնում (վերնագիրը «Welcome <անուն>» կարող է երկար լինել)
         if (!inSplit) DashboardPageDots(
-            count = 3,
+            count = 2,
             current = pager.currentPage,
             onSelect = { i -> if (!editing) scope.launch { pager.animateScrollToPage(i) } },
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 11.dp),

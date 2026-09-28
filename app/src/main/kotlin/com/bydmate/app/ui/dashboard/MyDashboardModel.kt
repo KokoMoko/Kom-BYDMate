@@ -46,17 +46,29 @@ object MyDashboardStore {
      * Լռելյայն դասավորություն․ վերևում SOC | պաշար | ջերմաստիճան | Phone, ներքևում Music | եղանակ։
      * Widget սալիկները օգտագործում են Classic Главная-ի արդեն կարգավորված սլոտները։
      */
+    const val NAVI_PKG = "ru.yandex.yandexnavi"
+    private const val LAYOUT_VERSION = 2
+
+    /**
+     * Լռելյայն դասավորություն․ ձախում (4 սյուն) պաշար | ջերմաստիճան, Phone, Music widget-ները,
+     * աջում (8 սյուն, ամբողջ բարձրությամբ) Yandex Navigator-ը՝ ֆիքսված սալիկ։
+     */
     fun defaultFull(): List<Tile> = listOf(
-        Tile("soc", TileType.SOC, 0, 0, 2, 2),
-        Tile("range", TileType.RANGE, 2, 0, 3, 2),
-        Tile("temps", TileType.TEMPS, 5, 0, 2, 2),
-        Tile("phone", TileType.WIDGET, 7, 0, 5, 2, slot = DashboardWidgets.SLOT_PHONE),
-        Tile("music", TileType.WIDGET, 0, 2, 6, 6, slot = DashboardWidgets.SLOT_LEFT),
-        Tile("weather", TileType.WIDGET, 6, 2, 6, 6, slot = DashboardWidgets.SLOT_RIGHT),
+        Tile("range", TileType.RANGE, 0, 0, 2, 2),
+        Tile("temps", TileType.TEMPS, 2, 0, 2, 2),
+        Tile("phone", TileType.WIDGET, 0, 2, 4, 2, slot = DashboardWidgets.SLOT_PHONE),
+        Tile("music", TileType.WIDGET, 0, 4, 4, 4, slot = DashboardWidgets.SLOT_LEFT),
+        Tile("navi", TileType.APP, 4, 0, 8, 8, pkg = NAVI_PKG),
     )
 
     fun load(ctx: Context, layout: String = LAYOUT_FULL): List<Tile> {
         val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // Տարբերակ 2՝ նոր լռելյայն (widget-ներ ձախում + ֆիքսված Yandex Navigator աջում)
+        if (p.getInt("${layout}_ver", 1) < LAYOUT_VERSION) {
+            val d = defaultFull()
+            save(ctx, d, layout)
+            return d
+        }
         val raw = p.getString(layout, null) ?: return defaultFull()
         // Քանի տողով է պահվել (մինչև 12×8՝ 6)․ տարբերվելու դեպքում y/h-ը փոխարկում ենք համամասնորեն
         val savedRows = p.getInt("${layout}_rows", 6)
@@ -95,6 +107,7 @@ object MyDashboardStore {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(layout, arr.toString())
             .putInt("${layout}_rows", ROWS)
+            .putInt("${layout}_ver", LAYOUT_VERSION)
             .apply()
     }
 

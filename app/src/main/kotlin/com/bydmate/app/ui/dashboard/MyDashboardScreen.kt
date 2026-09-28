@@ -161,7 +161,8 @@ fun MyDashboardScreen(
                         tile = t,
                         cellW = cellW,
                         cellH = cellH,
-                        editing = editing,
+                        // Navigator-ի սալիկը ֆիքսված է՝ խմբագրելիս չի տեղաշարժվում/ջնջվում
+                        editing = editing && orig.type != TileType.APP,
                         onChange = { changed ->
                             if (MyDashboardStore.isValid(tiles, changed)) update(tiles.map { if (it.id == changed.id) changed else it })
                         },
@@ -182,7 +183,7 @@ fun MyDashboardScreen(
             title = { Text(stringResource(R.string.kom_mydash_add_title), color = TextPrimary) },
             text = {
                 Column {
-                    TileType.values().forEach { type ->
+                    TileType.values().filter { it != TileType.APP }.forEach { type ->
                         Text(
                             stringResource(type.labelRes), color = TextPrimary, fontSize = 17.sp,
                             modifier = Modifier.fillMaxWidth().clickable {

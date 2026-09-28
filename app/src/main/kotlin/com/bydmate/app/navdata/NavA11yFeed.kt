@@ -50,8 +50,11 @@ object NavA11yFeed {
     @Volatile private var lastDumpedGaode = NO_MANEUVER
     @Volatile internal var lastDumpMs = 0L
 
+    /** Kom-BYDMate: Navigator-ը կարդում ենք միշտ (արագության սահմանափակման համար), ոչ միայն HUD-ի ժամանակ։ */
+    @Volatile var komAlwaysOn: Boolean = true
+
     fun onEvent(service: SteeringWheelKeyService, event: AccessibilityEvent?) {
-        if (!enabled) return
+        if (!enabled && !komAlwaysOn) return
         val nowMs = System.currentTimeMillis()
         if (!shouldProcess(event?.packageName?.toString(), event?.eventType ?: 0, nowMs, lastProcessMs)) return
         lastProcessMs = nowMs
@@ -84,6 +87,8 @@ object NavA11yFeed {
             Log.i(TAG, "Navigator window reachable again")
         }
         try {
+            // Kom-BYDMate: սահմանափակումը՝ նաև առանց երթուղու
+            runCatching { KomNavLimit.scan(root) }
             when (val result = NavA11yExtractor.read(root)) {
                 is NavA11yExtractor.ReadResult.Guidance -> {
                     NavGuidanceHub.update(result.data, NavGuidanceHub.Source.A11Y, nowMs)
@@ -109,6 +114,9 @@ object NavA11yFeed {
     private fun readViaEventSource(event: AccessibilityEvent?, nowMs: Long): Boolean {
         val root = climbToWindowRoot(runCatching { event?.source }.getOrNull()) ?: return false
         try {
+            // Kom-BYDMate: սահմանափակումը՝ նաև երբ Navigator-ը վարորդի էկրանին է (պատուհանը
+            // հասանելի է միայն իրադարձության աղբյուրից) և առանց երթուղու
+            if (root.packageName?.toString() in NavPackages.GUIDANCE_SOURCES) runCatching { KomNavLimit.scan(root) }
             // read() re-checks the package: the climb can land in a host window that merely
             // embeds the Navigator, and a foreign root reads as NotNavigator.
             val result = NavA11yExtractor.read(root)

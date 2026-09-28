@@ -282,6 +282,7 @@ private fun ClusterTop(state: DashboardUiState, modifier: Modifier) {
             Spacer(Modifier.height(6.dp))
             RoadScene(speedKmh = speed, braking = decelBraking || (rawSpeed > 2f && rawPower < -5f && !state.isCharging) ||
                 (rawSpeed < 0.5f && state.gear != null && state.gear != 1),
+                headlights = state.headlightsOn,
                 modifier = Modifier.fillMaxWidth().weight(1f))
         }
         Box(Modifier.weight(0.3f).fillMaxHeight()) {
@@ -477,11 +478,12 @@ private fun DrawScope.drawDial(value: Float, min: Float, max: Float, step: Float
  * ժամանակ անիմացիա չկա (և frame-եր չենք ծախսում)։ Արգելակելիս/կանգնած՝ կարմիր լույսերը վառ են։
  */
 @Composable
-private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier) {
+private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier, headlights: Boolean = false) {
     // Իսկական Sealion 06-ը (DiLink-ի 3D մոդելի screenshot-ից) և արգելակման լույսերի շերտը
     val carImg = ImageBitmap.imageResource(R.drawable.kom_car_rear)
     val brakeImg = ImageBitmap.imageResource(R.drawable.kom_car_brake)
     val brakeAlpha by animateFloatAsState(if (braking) 1f else 0f, tween(250), label = "brake")
+    val headAlpha by animateFloatAsState(if (headlights) 1f else 0f, tween(500), label = "headlights")
     var offset by remember { mutableFloatStateOf(0f) }
     val speedNow by rememberUpdatedState(speedKmh)
     LaunchedEffect(Unit) {
@@ -523,6 +525,22 @@ private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier) {
         // Մեքենան՝ ճանապարհի ներքևի մասում, կենտրոնում
         val cw = hw * 0.62f
         val ch = cw * carImg.height / carImg.width
+        // Լուսարձակներ՝ մեքենայից առաջ ճանապարհին ընկնող լույսի շող (ինչպես վարորդի վահանակում)
+        if (headAlpha > 0.01f) {
+            val carTop = by - ch * 0.55f
+            val reach = (by - hy) * 0.62f
+            val beam = Path().apply {
+                moveTo(cx - cw * 0.42f, carTop)
+                lineTo(cx - cw * 0.20f, carTop - reach)
+                lineTo(cx + cw * 0.20f, carTop - reach)
+                lineTo(cx + cw * 0.42f, carTop)
+                close()
+            }
+            drawPath(beam, Brush.verticalGradient(
+                listOf(Color(0x00FFF4D6), Color(0x55FFF4D6), Color(0xAAFFF8E6)),
+                startY = carTop - reach, endY = carTop,
+            ), alpha = headAlpha)
+        }
         val dst = androidx.compose.ui.unit.IntOffset((cx - cw / 2).toInt(), (by - ch).toInt())
         val dstSize = androidx.compose.ui.unit.IntSize(cw.toInt(), ch.toInt())
         drawOval(Color.Black.copy(alpha = 0.45f), Offset(cx - cw * 0.52f, by - ch * 0.07f), Size(cw * 1.04f, ch * 0.12f))

@@ -49,6 +49,7 @@ data class DashboardUiState(
     val speed: Int? = null,
     val powerKw: Double? = null,  // Kom-BYDMate Cluster՝ ակնթարթային հզորություն (− = ռեկուպերացիա/լիցք)
     val gear: Int? = null,        // 1=P, 2=R, 3=N, 4=D
+    val headlightsOn: Boolean = false,  // Kom Cluster՝ մոտակա/հեռավոր լույսեր
     val period: DashboardPeriod = DashboardPeriod.TODAY,  // Kom-BYDMate: «այսօրվա կմ»-ի համար (ժամանակահատվածի կոճակները հեռացված են)
     val totalKm: Double = 0.0,
     val totalKwh: Double = 0.0,
@@ -232,6 +233,8 @@ class DashboardViewModel @Inject constructor(
                         speed = data?.speed ?: current.speed,
                         powerKw = data?.power ?: current.powerKw,
                         gear = data?.gear ?: current.gear,
+                        headlightsOn = if (data?.lightLow != null || data?.lightHigh != null)
+                            data.lightLow == 1 || data.lightHigh == 1 else current.headlightsOn,
                         odometer = data?.mileage ?: current.odometer,
                         isServiceRunning = running,
                         avgBatTemp = data?.avgBatTemp ?: current.avgBatTemp,

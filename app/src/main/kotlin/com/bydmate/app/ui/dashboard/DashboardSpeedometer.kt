@@ -415,6 +415,7 @@ object NavLimitHolder {
             return NavLimit(car, fresh = true, fromCar = true)
         }
         val live = runCatching { NavGuidanceHub.snapshot(nowMs).speedLimit }.getOrDefault(0)
+            .takeIf { it > 0 } ?: com.bydmate.app.navdata.KomNavLimit.fresh(nowMs = nowMs)
         if (live > 0) {
             last = live
             lastMs = nowMs
