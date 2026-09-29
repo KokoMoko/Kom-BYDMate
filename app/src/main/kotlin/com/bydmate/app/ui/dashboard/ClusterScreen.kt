@@ -433,6 +433,10 @@ private fun BatteryBar(soc: Int, charging: Boolean, range: String) {
             clipRect(right = size.width * f) {
                 drawRoundRect(socColor(f * 100f), cornerRadius = r, alpha = pulse)
             }
+            // Նուրբ ուրվագիծ՝ որ երևա, թե որքան է պակասել 100%-ից
+            val sw = 1.5.dp.toPx()
+            drawRoundRect(Color(0xFF5C7699).copy(alpha = 0.7f), topLeft = Offset(sw / 2, sw / 2),
+                size = Size(size.width - sw, size.height - sw), cornerRadius = r, style = Stroke(sw))
         }
         Text(
             "$soc% $range", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold,
