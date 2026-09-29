@@ -83,6 +83,8 @@ STRINGS = {
         "Во время зарядки навигатор на экран водителя не выводится — там экран зарядки",
         "Navigation on the driver display is unavailable while charging",
     ),
+    "kom_tsr_log_start": ("▶ Запись TSR (сигналы камеры) в поездке", "▶ Record TSR (camera signs) during the drive"),
+    "kom_tsr_log_stop": ("■ Остановить запись TSR", "■ Stop TSR recording"),
     "kom_can_icon_test": ("Тест значков CAN (HUD / экран водителя)", "CAN icon test (HUD / driver display)"),
     "kom_settings_plate": ("Номер автомобиля", "License plate"),
     "kom_settings_plate_hint": (

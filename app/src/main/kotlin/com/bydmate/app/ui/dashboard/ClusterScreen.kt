@@ -12,6 +12,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -178,7 +179,10 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
             onDismissRequest = { showSettings = false },
             title = { Text(stringResource(R.string.kom_cluster_settings), color = TextPrimary) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(
+                    Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     Text(stringResource(R.string.kom_cluster_top_height, topPct), color = TextPrimary, fontSize = 16.sp)
                     Slider(
                         value = topPct.toFloat(),
@@ -199,6 +203,25 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                         "Navigator: $navDbg\nOSM:${com.bydmate.app.navdata.KomOsmSpeedLimit.fresh().takeIf { it > 0 } ?: "—"}",
                         color = TextMuted, fontSize = 12.sp,
                     )
+                    // Yandex Music → վարորդի վահանակ (ախտորոշում և անվան կոդավորման փոխարկիչ)
+                    val musicSt by com.bydmate.app.hud.KomCanMusic.status.collectAsStateWithLifecycle()
+                    var musicEnc by remember { mutableIntStateOf(com.bydmate.app.hud.KomCanMusic.encoding) }
+                    TextButton(onClick = {
+                        musicEnc = 1 - musicEnc
+                        com.bydmate.app.hud.KomCanMusic.encoding = musicEnc
+                    }) { Text("Music name encoding: " + if (musicEnc == 0) "UTF-16LE" else "UTF-8") }
+                    musicSt?.let { Text(it, color = TextMuted, fontSize = 12.sp) }
+                    // TSR գրանցիչ՝ ուղևորության ընթացքում ADAS/Instrument fid-երի փոփոխությունները
+                    val tsrLog by com.bydmate.app.hud.KomTsrLogger.status.collectAsStateWithLifecycle()
+                    TextButton(onClick = { com.bydmate.app.hud.KomTsrLogger.toggle(context) }) {
+                        Text(
+                            stringResource(
+                                if (com.bydmate.app.hud.KomTsrLogger.running) R.string.kom_tsr_log_stop
+                                else R.string.kom_tsr_log_start
+                            )
+                        )
+                    }
+                    tsrLog?.let { Text(it, color = TextMuted, fontSize = 12.sp) }
                     // Ախտորոշում՝ մեքենայի տեսախցիկի նշանների ազդանշանները (TSR)
                     val tsrStatus by CarSignReader.status.collectAsStateWithLifecycle()
                     val tsrRaw by CarSignReader.raw.collectAsStateWithLifecycle()

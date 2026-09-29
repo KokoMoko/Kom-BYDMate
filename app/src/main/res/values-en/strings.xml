@@ -2022,4 +2022,7 @@
     <!-- Kom-BYDMate -->
     <string name="kom_settings_plate">License plate</string>
     <string name="kom_settings_plate_hint">Shown on the car on the Cluster page, e.g. 09 YY 979. Empty — a blank plate.</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_tsr_log_start">▶ Record TSR (camera signs) during the drive</string>
+    <string name="kom_tsr_log_stop">■ Stop TSR recording</string>
 </resources>

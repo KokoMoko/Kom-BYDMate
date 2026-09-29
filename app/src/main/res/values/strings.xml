@@ -2189,4 +2189,7 @@
     <!-- Kom-BYDMate -->
     <string name="kom_settings_plate">Номер автомобиля</string>
     <string name="kom_settings_plate_hint">Показывается на машине на странице Cluster, например 09 YY 979. Пусто — номер без текста.</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_tsr_log_start">▶ Запись TSR (сигналы камеры) в поездке</string>
+    <string name="kom_tsr_log_stop">■ Остановить запись TSR</string>
 </resources>
