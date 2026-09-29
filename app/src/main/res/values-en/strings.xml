@@ -2019,4 +2019,7 @@
     <string name="kom_cluster_charging_blocked">Navigation on the driver display is unavailable while charging</string>
     <!-- Kom-BYDMate -->
     <string name="kom_can_icon_test">CAN icon test (HUD / driver display)</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_settings_plate">License plate</string>
+    <string name="kom_settings_plate_hint">Shown on the car on the Cluster page, e.g. 09 YY 979. Empty — a blank plate.</string>
 </resources>

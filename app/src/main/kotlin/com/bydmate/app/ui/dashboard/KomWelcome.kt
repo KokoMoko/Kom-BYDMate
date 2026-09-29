@@ -54,6 +54,10 @@ object KomPrefs {
     }
 
     // Մեքենան միացնելիս՝ split Navigator-ով և Yandex Music-ի միացում (տես KomAutostart)
+    /** Մեքենայի համարանիշը Cluster-ի մեքենայի պատկերի համար (լռելյայն՝ դատարկ)։ */
+    fun plate(ctx: Context): String = prefs(ctx).getString("license_plate", "") ?: ""
+    fun setPlate(ctx: Context, v: String) { prefs(ctx).edit().putString("license_plate", v.take(12)).commit() }
+
     fun autostartNavi(ctx: Context) = prefs(ctx).getBoolean("autostart_navi", true)
     fun setAutostartNavi(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_navi", v).apply()
     fun autostartMusicPlay(ctx: Context) = prefs(ctx).getBoolean("autostart_music_play", true)
@@ -149,6 +153,34 @@ fun KomAutostartBlock() {
             }
             Text(stringResource(R.string.kom_autostart_hint), color = TextMuted, fontSize = 13.sp,
                 modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+/** Settings → Application՝ «License plate» դաշտը (Cluster-ի մեքենայի համարանիշը)։ */
+@Composable
+fun KomPlateBlock() {
+    val context = LocalContext.current
+    var value by remember { mutableStateOf(KomPrefs.plate(context)) }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = { v ->
+                    value = v.uppercase().take(12)
+                    KomPrefs.setPlate(context, value)
+                },
+                label = { Text(stringResource(R.string.kom_settings_plate)) },
+                placeholder = { Text("09 YY 979") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(stringResource(R.string.kom_settings_plate_hint), color = TextMuted, fontSize = 13.sp,
+                modifier = Modifier.padding(top = 6.dp))
         }
     }
 }

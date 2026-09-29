@@ -2186,4 +2186,7 @@
     <string name="kom_cluster_charging_blocked">Во время зарядки навигатор на экран водителя не выводится — там экран зарядки</string>
     <!-- Kom-BYDMate -->
     <string name="kom_can_icon_test">Тест значков CAN (HUD / экран водителя)</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_settings_plate">Номер автомобиля</string>
+    <string name="kom_settings_plate_hint">Показывается на машине на странице Cluster, например 09 YY 979. Пусто — номер без текста.</string>
 </resources>

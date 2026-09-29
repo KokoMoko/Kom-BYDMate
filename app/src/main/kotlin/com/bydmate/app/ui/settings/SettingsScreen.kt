@@ -2966,6 +2966,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
     FontScaleBlock(current = fontScale, onChange = viewModel::setFontScale)
     // Kom-BYDMate: անունը Главная-ի վերնագրի համար («Welcome Kom»)
     com.bydmate.app.ui.dashboard.KomWelcomeNameBlock()
+    com.bydmate.app.ui.dashboard.KomPlateBlock()
     com.bydmate.app.ui.dashboard.KomAutostartBlock()
 
     var showDonate by remember { mutableStateOf(false) }

@@ -84,6 +84,11 @@ STRINGS = {
         "Navigation on the driver display is unavailable while charging",
     ),
     "kom_can_icon_test": ("Тест значков CAN (HUD / экран водителя)", "CAN icon test (HUD / driver display)"),
+    "kom_settings_plate": ("Номер автомобиля", "License plate"),
+    "kom_settings_plate_hint": (
+        "Показывается на машине на странице Cluster, например 09 YY 979. Пусто — номер без текста.",
+        "Shown on the car on the Cluster page, e.g. 09 YY 979. Empty — a blank plate.",
+    ),
     "kom_cluster_settings": ("Кластер", "Cluster"),
     "kom_cluster_top_height": ("Высота верхней части: %1$d%%", "Top area height: %1$d%%"),
     "kom_cluster_style_hint": (

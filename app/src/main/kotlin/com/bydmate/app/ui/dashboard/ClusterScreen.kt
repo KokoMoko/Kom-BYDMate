@@ -291,8 +291,11 @@ private fun ClusterTop(state: DashboardUiState, modifier: Modifier) {
         Column(Modifier.weight(0.4f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
             ClusterHeader(state)
             Spacer(Modifier.height(6.dp))
-            RoadScene(speedKmh = speed, braking = decelBraking || (rawSpeed > 2f && rawPower < -5f && !state.isCharging) ||
-                (rawSpeed < 0.5f && state.gear != null && state.gear != 1),
+            // Արգելակման լույսեր՝ իրական ոտնակից (ակնթարթային)․ եթե ազդանշան չկա՝ արագության նվազումից
+            val stoppedInGear = rawSpeed < 0.5f && state.gear != null && state.gear != 1
+            val pedal = state.brakePedal
+            RoadScene(speedKmh = speed, braking = if (pedal != null) pedal > 0 || stoppedInGear
+                else decelBraking || (rawSpeed > 2f && rawPower < -5f && !state.isCharging) || stoppedInGear,
                 headlights = state.headlightsOn,
                 modifier = Modifier.fillMaxWidth().weight(1f))
         }
@@ -512,6 +515,11 @@ private fun DrawScope.drawDial(
  */
 @Composable
 private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier, headlights: Boolean = false) {
+    // Համարանիշը՝ Settings → Application → «License plate» (թարմացվում է 2 վրկ-ը մեկ)
+    val ctx = LocalContext.current
+    val plate by produceState(initialValue = KomPrefs.plate(ctx)) {
+        while (true) { value = KomPrefs.plate(ctx); delay(2_000L) }
+    }
     // Իսկական Sealion 06-ը (DiLink-ի 3D մոդելի screenshot-ից) և արգելակման լույսերի շերտը
     val carImg = ImageBitmap.imageResource(R.drawable.kom_car_rear)
     val brakeImg = ImageBitmap.imageResource(R.drawable.kom_car_brake)
@@ -578,6 +586,7 @@ private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier, hea
         val dstSize = androidx.compose.ui.unit.IntSize(cw.toInt(), ch.toInt())
         drawOval(Color.Black.copy(alpha = 0.45f), Offset(cx - cw * 0.52f, by - ch * 0.07f), Size(cw * 1.04f, ch * 0.12f))
         drawImage(carImg, dstOffset = dst, dstSize = dstSize, filterQuality = androidx.compose.ui.graphics.FilterQuality.High)
+        drawPlate(plate, dst.x.toFloat(), dst.y.toFloat(), cw / carImg.width)
         if (brakeAlpha > 0.01f) {
             drawImage(brakeImg, dstOffset = dst, dstSize = dstSize, alpha = brakeAlpha,
                 filterQuality = androidx.compose.ui.graphics.FilterQuality.High)
@@ -670,4 +679,46 @@ private fun DrawScope.drawCar(cx: Float, bottom: Float, cw: Float, braking: Bool
     drawRoundRect(Color(0xFFCBD3DF), Offset(cx - cw * 0.13f, y(0.64f)), Size(cw * 0.26f, ch * 0.08f), CornerRadius(ch * 0.015f))
     drawRoundRect(lamp.copy(alpha = 0.8f), Offset(x(0.09f), y(0.77f)), Size(cw * 0.08f, ch * 0.025f), CornerRadius(ch * 0.01f))
     drawRoundRect(lamp.copy(alpha = 0.8f), Offset(x(0.83f), y(0.77f)), Size(cw * 0.08f, ch * 0.025f), CornerRadius(ch * 0.01f))
+}
+
+/**
+ * Հայկական համարանիշ մեքենայի պատկերի վրա (պատկերի px-երում՝ 185,378 – 331,418)․ սպիտակ ֆոն,
+ * սև եզր, ձախում դրոշ և «AM», մեջտեղում՝ տեքստը։ [text]-ը դատարկ է՝ մաքուր սպիտակ համարանիշ։
+ */
+private fun DrawScope.drawPlate(text: String, ox: Float, oy: Float, s: Float) {
+    val l = ox + 185f * s
+    val t = oy + 378f * s
+    val w = 146f * s
+    val h = 40f * s
+    val r = CornerRadius(h * 0.14f)
+    drawRoundRect(Color(0xFFF4F4F4), Offset(l, t), Size(w, h), r)
+    drawRoundRect(Color(0xFF151515), Offset(l, t), Size(w, h), r, style = Stroke(h * 0.05f))
+    // Դրոշ և «AM»
+    val fx = l + w * 0.03f
+    val fy = t + h * 0.15f
+    val fw = w * 0.12f
+    val fh = h * 0.3f
+    listOf(Color(0xFFD90012), Color(0xFF0033A0), Color(0xFFF2A800)).forEachIndexed { i, c ->
+        drawRect(c, Offset(fx, fy + fh * i / 3f), Size(fw, fh / 3f))
+    }
+    val am = android.graphics.Paint().apply {
+        color = android.graphics.Color.rgb(20, 20, 20); textSize = h * 0.26f; isFakeBoldText = true
+        textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true
+    }
+    drawContext.canvas.nativeCanvas.drawText("AM", fx + fw / 2f, t + h * 0.84f, am)
+    drawLine(Color(0xFF9AA3AF), Offset(fx + fw + w * 0.025f, t + h * 0.14f), Offset(fx + fw + w * 0.025f, t + h * 0.86f), strokeWidth = w * 0.012f)
+    if (text.isBlank()) return
+    // Տեքստը՝ նեղ, թավ տառատեսակով, որ տեղավորվի մնացած լայնքում
+    val x0 = fx + fw + w * 0.05f
+    val x1 = l + w * 0.97f
+    val p = android.graphics.Paint().apply {
+        color = android.graphics.Color.rgb(15, 15, 15)
+        typeface = android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.BOLD)
+        textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true
+        textSize = h * 0.72f
+    }
+    val tw = p.measureText(text)
+    if (tw > x1 - x0) p.textSize *= (x1 - x0) / tw
+    val fm = p.fontMetrics
+    drawContext.canvas.nativeCanvas.drawText(text, (x0 + x1) / 2f, t + h / 2f - (fm.ascent + fm.descent) / 2f, p)
 }
