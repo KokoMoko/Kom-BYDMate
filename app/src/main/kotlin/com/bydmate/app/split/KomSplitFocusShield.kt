@@ -49,6 +49,9 @@ object KomSplitFocusShield {
                 delay(TICK_MS)
                 val st = runCatching { kom.splitSessionManager().state.value }.getOrNull()
                 val active = st as? SplitSessionState.Active
+                // «✕»՝ split-ը փակելու կոճակ, միշտ տեսանելի, քանի դեռ split-ը բաց է (BYDMate-ի pill-ը
+                // native ռեժիմում չկա և երբեմն թաքնված է մնում)
+                exitButton(app, kom, if (active != null) junctionX(active) else null)
                 if (active == null || active.nativePanes) { hide(); continue }
                 val (wide, narrow) = boundsFor(active.pair.narrowSide)
                 val top = runCatching { cluster.helperClient().getTopTask()?.pkg }.getOrNull()
@@ -61,6 +64,57 @@ object KomSplitFocusShield {
                 val right = if (b.right < 1920) b.right - DIVIDER_GAP else b.right
                 show(app, cluster, inactivePkg, intArrayOf(left, b.top, right, b.bottom))
             }
+        }
+    }
+
+    private var exitView: View? = null
+    @Volatile private var exitX: Int? = null
+
+    /** Բաժանման գծի X-ը՝ BYDMate-ի պատուհանների (640/1280) կամ native 3:7 (576) դեպքում։ */
+    private fun junctionX(a: SplitSessionState.Active): Int {
+        val (wide, narrow) = boundsFor(a.pair.narrowSide)
+        return if (a.nativePanes) {
+            if (a.pair.narrowSide == SplitSide.LEFT) 576 else 1344
+        } else if (narrow.left == 0) narrow.right else wide.right
+    }
+
+    private fun exitButton(ctx: Context, kom: com.bydmate.app.ui.dashboard.KomEntryPoint, x: Int?) {
+        if (x == exitX && (x == null) == (exitView == null)) return
+        exitX = x
+        main.post {
+            val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            if (x == null) {
+                exitView?.let { runCatching { wm.removeView(it) } }
+                exitView = null
+                return@post
+            }
+            val size = 64
+            val lp = WindowManager.LayoutParams(
+                size, size, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT,
+            ).apply { gravity = Gravity.TOP or Gravity.START; this.x = x - size / 2; y = 96 }
+            val v = exitView ?: android.widget.TextView(ctx).also { tv ->
+                tv.text = "✕"
+                tv.textSize = 20f
+                tv.gravity = Gravity.CENTER
+                tv.setTextColor(android.graphics.Color.WHITE)
+                tv.background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(0xCC1B2B45.toInt())
+                    setStroke(3, 0xFF4AA3FF.toInt())
+                }
+                tv.setOnClickListener {
+                    Log.i(TAG, "exit button tapped")
+                    CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                        runCatching { kom.splitSessionManager().exit() }
+                    }
+                }
+            }
+            runCatching {
+                if (exitView == null) wm.addView(v, lp) else wm.updateViewLayout(v, lp)
+                exitView = v
+            }.onFailure { Log.w(TAG, "exit button failed: ${it.message}") }
         }
     }
 
