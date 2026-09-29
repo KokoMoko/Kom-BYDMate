@@ -2196,4 +2196,8 @@
     <string name="kom_cluster_return_title">Вернуть навигатор на экран водителя</string>
     <string name="kom_cluster_return_hint">Если прокрутить правую карточку (напр. Музыка), навигатор вернётся через выбранное время.</string>
     <string name="kom_off">Выкл</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_swap">Поменять местами спидометр и мощность</string>
+    <string name="kom_speed_alert_title">Звук при превышении скорости</string>
+    <string name="kom_speed_alert_hint">Сигнал, когда скорость выше ограничения + допуск (как тёмно-красное кольцо). Повтор каждые 10 с.</string>
 </resources>

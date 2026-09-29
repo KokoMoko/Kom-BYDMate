@@ -2969,6 +2969,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
     com.bydmate.app.ui.dashboard.KomPlateBlock()
     com.bydmate.app.ui.dashboard.KomAutostartBlock()
     com.bydmate.app.ui.dashboard.KomClusterReturnBlock()
+    com.bydmate.app.ui.dashboard.KomSpeedAlertBlock()
 
     var showDonate by remember { mutableStateOf(false) }
     if (showDonate) {

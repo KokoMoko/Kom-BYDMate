@@ -2029,4 +2029,8 @@
     <string name="kom_cluster_return_title">Return navigation to the driver display</string>
     <string name="kom_cluster_return_hint">If you scroll the right card (e.g. Music), the navigator comes back after the chosen time.</string>
     <string name="kom_off">Off</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_swap">Swap speedometer and power</string>
+    <string name="kom_speed_alert_title">Overspeed alert sound</string>
+    <string name="kom_speed_alert_hint">Beeps when speed is above the limit + tolerance (the dark red ring). Repeats every 10 s.</string>
 </resources>

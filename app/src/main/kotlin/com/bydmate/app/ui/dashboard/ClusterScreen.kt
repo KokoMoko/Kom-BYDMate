@@ -115,6 +115,9 @@ object ClusterPrefs {
     fun setSpeedStyle(ctx: Context, s: GaugeStyle) = p(ctx).edit().putString(KEY_SPEED_STYLE, s.name).apply()
     fun topPct(ctx: Context) = p(ctx).getInt(KEY_TOP, DEFAULT_TOP)
     fun setTopPct(ctx: Context, v: Int) = p(ctx).edit().putInt(KEY_TOP, v).apply()
+    /** true՝ հզորությունը ձախից, արագաչափը՝ աջից։ */
+    fun swapGauges(ctx: Context) = p(ctx).getBoolean("swap_gauges", false)
+    fun setSwapGauges(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("swap_gauges", v).apply()
 }
 
 private val Track = Color(0xFF1B2B45)
@@ -142,6 +145,7 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
     val requestGrant: ((Boolean) -> Unit) -> Unit = { cb -> viewModel.grantWidgetBind(cb) }
     var topPct by remember { mutableIntStateOf(ClusterPrefs.topPct(context)) }
     var showSettings by remember { mutableStateOf(false) }
+    var swapGauges by remember { mutableStateOf(ClusterPrefs.swapGauges(context)) }
 
     Column(
         modifier = Modifier
@@ -160,7 +164,7 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
             val topH = maxHeight * (topPct / 100f)
             Column(Modifier.fillMaxSize()) {
-                ClusterTop(state, Modifier.fillMaxWidth().height(topH))
+                ClusterTop(state, swapGauges, Modifier.fillMaxWidth().height(topH))
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     DashboardWidgetSlot(DashboardWidgets.scoped("cluster", DashboardWidgets.SLOT_PHONE), stringResource(R.string.kom_widget_hint_phone),
@@ -191,6 +195,15 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                         valueRange = 50f..75f,
                     )
                     Text(stringResource(R.string.kom_cluster_style_hint), color = TextMuted, fontSize = 13.sp)
+                    // Արագաչափը և հզորությունը՝ տեղերով փոխել
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.kom_cluster_swap), color = TextPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        androidx.compose.material3.Switch(checked = swapGauges, onCheckedChange = {
+                            swapGauges = it; ClusterPrefs.setSwapGauges(context, it)
+                        })
+                    }
+                    val exDbg by KomClusterExtras.debug.collectAsStateWithLifecycle()
+                    Text(exDbg, color = TextMuted, fontSize = 12.sp)
                     // CAN պատկերակների թեստ (HUD / վարորդի էկրան)՝ կոդերի աղյուսակի համար
                     val canTest by com.bydmate.app.hud.KomCanGuidance.testStatus.collectAsStateWithLifecycle()
                     TextButton(onClick = { com.bydmate.app.hud.KomCanGuidance.runIconTest(context) }) {
@@ -244,7 +257,7 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun ClusterTop(state: DashboardUiState, modifier: Modifier) {
+private fun ClusterTop(state: DashboardUiState, swap: Boolean, modifier: Modifier) {
     val context = LocalContext.current
     var powerStyle by remember { mutableStateOf(ClusterPrefs.powerStyle(context)) }
     var speedStyle by remember { mutableStateOf(ClusterPrefs.speedStyle(context)) }
@@ -308,17 +321,34 @@ private fun ClusterTop(state: DashboardUiState, modifier: Modifier) {
         modifier = modifier.clip(shape).border(1.dp, CardBorder, shape).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Արագաչափը՝ ձախում․ թույլատրելի արագությունը՝ սանդղակի վրա կարմիր շրջանակով
-        Gauge(
-            value = speed, min = 0f, max = S_MAX, step = 20f, unit = "km/h", label = stringResource(R.string.kom_speedo_speed_label),
-            color = speedColor, style = speedStyle,
-            onTap = { speedStyle = next(speedStyle); ClusterPrefs.setSpeedStyle(context, speedStyle) },
-            modifier = Modifier.weight(0.3f).fillMaxHeight(),
-            limit = if (navLimit > 0) navLimit.toFloat() else 0f,
-            overLimit = navLimit > 0 && speed > upper,
-        )
+        val extras by KomClusterExtras.extras.collectAsStateWithLifecycle()
+        // Արագաչափը՝ թույլատրելի արագությունը սանդղակի վրա կարմիր շրջանակով, տակը՝ միջին արագությունը
+        val speedGauge: @Composable (Modifier) -> Unit = { m ->
+            GaugeWithCaption(extras.avgSpeedKmh?.let { "Avg: $it km/h" } ?: "Avg: — km/h", m) {
+                Gauge(
+                    value = speed, min = 0f, max = S_MAX, step = 20f, unit = "km/h", label = stringResource(R.string.kom_speedo_speed_label),
+                    color = speedColor, style = speedStyle,
+                    onTap = { speedStyle = next(speedStyle); ClusterPrefs.setSpeedStyle(context, speedStyle) },
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    limit = if (navLimit > 0) navLimit.toFloat() else 0f,
+                    overLimit = navLimit > 0 && speed > upper,
+                )
+            }
+        }
+        // Հզորությունը, տակը՝ միջին ծախսը
+        val powerGauge: @Composable (Modifier) -> Unit = { m ->
+            GaugeWithCaption(state.consumption?.let { "Avg: %.1f kWh/100".format(it) } ?: "Avg: — kWh/100", m) {
+                Gauge(
+                    value = power, min = if (charging) 0f else P_MIN, max = P_MAX, step = 25f, unit = "kW", label = powerLabel,
+                    color = powerColor, style = powerStyle,
+                    onTap = { powerStyle = next(powerStyle); ClusterPrefs.setPowerStyle(context, powerStyle) },
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
+            }
+        }
+        if (swap) powerGauge(Modifier.weight(0.3f).fillMaxHeight()) else speedGauge(Modifier.weight(0.3f).fillMaxHeight())
         Column(Modifier.weight(0.4f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
-            ClusterHeader(state)
+            ClusterHeader(state, extras)
             Spacer(Modifier.height(6.dp))
             // Արգելակման լույսեր՝ իրական ոտնակից (ակնթարթային)․ եթե ազդանշան չկա՝ արագության նվազումից
             val stoppedInGear = rawSpeed < 0.5f && state.gear != null && state.gear != 1
@@ -328,12 +358,7 @@ private fun ClusterTop(state: DashboardUiState, modifier: Modifier) {
                 headlights = state.headlightsOn,
                 modifier = Modifier.fillMaxWidth().weight(1f))
         }
-        Gauge(
-            value = power, min = if (charging) 0f else P_MIN, max = P_MAX, step = 25f, unit = "kW", label = powerLabel,
-            color = powerColor, style = powerStyle,
-            onTap = { powerStyle = next(powerStyle); ClusterPrefs.setPowerStyle(context, powerStyle) },
-            modifier = Modifier.weight(0.3f).fillMaxHeight(),
-        )
+        if (swap) speedGauge(Modifier.weight(0.3f).fillMaxHeight()) else powerGauge(Modifier.weight(0.3f).fillMaxHeight())
     }
 }
 
@@ -341,7 +366,16 @@ private fun next(s: GaugeStyle) = GaugeStyle.values()[(s.ordinal + 1) % GaugeSty
 
 /** Վերևի տողը՝ D | մարտկոց, պաշար / ծախս | ջերմաստիճաններ (բաժանարար գծերով)։ */
 @Composable
-private fun ClusterHeader(state: DashboardUiState) {
+private fun GaugeWithCaption(caption: String, modifier: Modifier, gauge: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        gauge()
+        Text(caption, color = TextSecondary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(bottom = 2.dp))
+    }
+}
+
+@Composable
+private fun ClusterHeader(state: DashboardUiState, extras: KomClusterExtras.Extras) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
         val (g, gc) = when (state.gear) {
             1 -> "P" to TextSecondary
@@ -353,18 +387,16 @@ private fun ClusterHeader(state: DashboardUiState) {
         Text(g, color = gc, fontSize = 40.sp, fontWeight = FontWeight.Bold)
         HeaderDivider()
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BatteryBar(state.soc ?: 0, state.isCharging)
-                Spacer(Modifier.width(12.dp))
-                Text(state.estimatedRangeKm?.let { "~${"%.0f".format(it)} km" } ?: "— km", color = TextPrimary, fontSize = 18.sp)
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(state.consumption?.let { "%.1f kWh/100".format(it) } ?: "— kWh/100", color = TextSecondary, fontSize = 15.sp)
+            // Լիցքը և պաշարը՝ մարտկոցի ներսում («49% ~ 244 km»), ծախսը՝ հզորության սարքի տակ
+            BatteryBar(state.soc ?: 0, state.isCharging,
+                state.estimatedRangeKm?.let { "~${"%.0f".format(it)} km" } ?: "~— km")
         }
         HeaderDivider()
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             TempRow(state.insideTemp, Icons.Outlined.DirectionsCar)
             TempRow(state.exteriorTemp, Icons.Outlined.WbSunny)
+            // Բարձրությունը ծովի մակարդակից (մեքենայից կամ GPS-ից)
+            Text(extras.altitudeM?.let { "▲ $it m" } ?: "▲ — m", color = TextSecondary, fontSize = 15.sp)
         }
     }
 }
@@ -387,13 +419,13 @@ private fun TempRow(temp: Int?, icon: ImageVector) {
 
 /** Մարտկոցի պատկեր՝ լցված մասը SOC-ն է, գույնը կարմիր → դեղին → կանաչ, լիցքավորվելիս՝ «շնչում» է։ */
 @Composable
-private fun BatteryBar(soc: Int, charging: Boolean) {
+private fun BatteryBar(soc: Int, charging: Boolean, range: String) {
     val f by animateFloatAsState((soc / 100f).coerceIn(0f, 1f), tween(800), label = "soc")
     val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
         initialValue = 1f, targetValue = if (charging) 0.55f else 1f,
         animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "pulse",
     )
-    Box(Modifier.width(132.dp).height(34.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.width(220.dp).height(38.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val tip = 6.dp.toPx()
             val w = size.width - tip
@@ -414,7 +446,7 @@ private fun BatteryBar(soc: Int, charging: Boolean) {
             }
         }
         Text(
-            "$soc%", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold,
+            "$soc% $range", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
             style = TextStyle(shadow = Shadow(Color(0xCC0B1422), Offset(0f, 1f), 4f)),
             modifier = Modifier.padding(end = 6.dp),
         )

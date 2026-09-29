@@ -91,6 +91,12 @@ STRINGS = {
         "If you scroll the right card (e.g. Music), the navigator comes back after the chosen time.",
     ),
     "kom_off": ("Выкл", "Off"),
+    "kom_cluster_swap": ("Поменять местами спидометр и мощность", "Swap speedometer and power"),
+    "kom_speed_alert_title": ("Звук при превышении скорости", "Overspeed alert sound"),
+    "kom_speed_alert_hint": (
+        "Сигнал, когда скорость выше ограничения + допуск (как тёмно-красное кольцо). Повтор каждые 10 с.",
+        "Beeps when speed is above the limit + tolerance (the dark red ring). Repeats every 10 s.",
+    ),
     "kom_can_icon_test": ("Тест значков CAN (HUD / экран водителя)", "CAN icon test (HUD / driver display)"),
     "kom_settings_plate": ("Номер автомобиля", "License plate"),
     "kom_settings_plate_hint": (

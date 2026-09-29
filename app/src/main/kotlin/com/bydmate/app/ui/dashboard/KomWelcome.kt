@@ -67,6 +67,9 @@ object KomPrefs {
     /** Վարորդի էկրանին Navigator-ի ինքնաբերական վերադարձը՝ վայրկյաններ (0՝ անջատված)։ */
     fun clusterReturnSec(ctx: Context) = prefs(ctx).getInt("cluster_return_sec", 5)
     fun setClusterReturnSec(ctx: Context, v: Int) = prefs(ctx).edit().putInt("cluster_return_sec", v).apply()
+    /** Ձայնային ազդանշան՝ սահմանափակումը + շեղումը գերազանցելիս։ */
+    fun speedAlert(ctx: Context) = prefs(ctx).getBoolean("speed_alert", true)
+    fun setSpeedAlert(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("speed_alert", v).apply()
 
     /** Վերնագիրը՝ ըստ պահված անվան (օգտագործվում է և՛ Dashboard-ում, և՛ Settings-ի նախադիտման մեջ)։ */
     fun titleFor(name: String): String? =
@@ -186,6 +189,28 @@ fun KomClusterReturnBlock() {
                 }
             }
             Text(stringResource(R.string.kom_cluster_return_hint), color = TextMuted, fontSize = 13.sp,
+                modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+/** Settings → Application՝ արագությունը գերազանցելիս ձայնային ազդանշան։ */
+@Composable
+fun KomSpeedAlertBlock() {
+    val context = LocalContext.current
+    var on by remember { mutableStateOf(KomPrefs.speedAlert(context)) }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(stringResource(R.string.kom_speed_alert_title), color = TextPrimary, fontSize = 16.sp,
+                    modifier = Modifier.weight(1f))
+                androidx.compose.material3.Switch(checked = on, onCheckedChange = { on = it; KomPrefs.setSpeedAlert(context, it) })
+            }
+            Text(stringResource(R.string.kom_speed_alert_hint), color = TextMuted, fontSize = 13.sp,
                 modifier = Modifier.padding(top = 4.dp))
         }
     }
