@@ -2025,4 +2025,8 @@
     <!-- Kom-BYDMate -->
     <string name="kom_tsr_log_start">▶ Record TSR (camera signs) during the drive</string>
     <string name="kom_tsr_log_stop">■ Stop TSR recording</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_return_title">Return navigation to the driver display</string>
+    <string name="kom_cluster_return_hint">If you scroll the right card (e.g. Music), the navigator comes back after the chosen time.</string>
+    <string name="kom_off">Off</string>
 </resources>

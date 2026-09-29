@@ -141,6 +141,8 @@ class BYDMateApp : Application(), Configuration.Provider {
         com.bydmate.app.hud.KomCanGuidance.start(this, appScope)
         // Kom-BYDMate: Yandex Music-ի երգը վարորդի վահանակի Music քարտում
         com.bydmate.app.hud.KomCanMusic.start(this, appScope)
+        // Kom-BYDMate: քարտը թերթելուց հետո Navigator-ը վերադառնում է վարորդի էկրան
+        com.bydmate.app.cluster.KomClusterReturn.start(this, appScope)
     }
 
     /**

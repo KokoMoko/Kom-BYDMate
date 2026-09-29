@@ -2192,4 +2192,8 @@
     <!-- Kom-BYDMate -->
     <string name="kom_tsr_log_start">▶ Запись TSR (сигналы камеры) в поездке</string>
     <string name="kom_tsr_log_stop">■ Остановить запись TSR</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_return_title">Вернуть навигатор на экран водителя</string>
+    <string name="kom_cluster_return_hint">Если прокрутить правую карточку (напр. Музыка), навигатор вернётся через выбранное время.</string>
+    <string name="kom_off">Выкл</string>
 </resources>

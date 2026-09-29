@@ -64,6 +64,9 @@ object KomPrefs {
     fun setAutostartMusicPlay(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_music_play", v).apply()
     fun autostartMusic(ctx: Context) = prefs(ctx).getBoolean("autostart_music", true)
     fun setAutostartMusic(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("autostart_music", v).apply()
+    /** Վարորդի էկրանին Navigator-ի ինքնաբերական վերադարձը՝ վայրկյաններ (0՝ անջատված)։ */
+    fun clusterReturnSec(ctx: Context) = prefs(ctx).getInt("cluster_return_sec", 5)
+    fun setClusterReturnSec(ctx: Context, v: Int) = prefs(ctx).edit().putInt("cluster_return_sec", v).apply()
 
     /** Վերնագիրը՝ ըստ պահված անվան (օգտագործվում է և՛ Dashboard-ում, և՛ Settings-ի նախադիտման մեջ)։ */
     fun titleFor(name: String): String? =
@@ -152,6 +155,37 @@ fun KomAutostartBlock() {
                     onCheckedChange = { play = it; KomPrefs.setAutostartMusicPlay(context, it) })
             }
             Text(stringResource(R.string.kom_autostart_hint), color = TextMuted, fontSize = 13.sp,
+                modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+/** Settings → Application՝ վարորդի էկրանին Navigator-ի վերադարձը քարտը թերթելուց հետո։ */
+@Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+fun KomClusterReturnBlock() {
+    val context = LocalContext.current
+    var sec by remember { mutableStateOf(KomPrefs.clusterReturnSec(context)) }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text(stringResource(R.string.kom_cluster_return_title), color = TextPrimary, fontSize = 16.sp)
+            androidx.compose.foundation.layout.Row(
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 6.dp),
+            ) {
+                listOf(0, 5, 10, 15).forEach { v ->
+                    androidx.compose.material3.FilterChip(
+                        selected = sec == v,
+                        onClick = { sec = v; KomPrefs.setClusterReturnSec(context, v) },
+                        label = { Text(if (v == 0) stringResource(R.string.kom_off) else "$v s") },
+                    )
+                }
+            }
+            Text(stringResource(R.string.kom_cluster_return_hint), color = TextMuted, fontSize = 13.sp,
                 modifier = Modifier.padding(top = 4.dp))
         }
     }
