@@ -421,6 +421,9 @@ object NavLimitHolder {
             lastMs = nowMs
             return NavLimit(live, fresh = true)
         }
+        // Navigator-ը չի երևում՝ OpenStreetMap-ը (ընթացիկ ճանապարհի maxspeed-ը GPS դիրքով)
+        val osm = com.bydmate.app.navdata.KomOsmSpeedLimit.fresh(nowMs = nowMs)
+        if (osm > 0) return NavLimit(osm, fresh = true)
         return if (last > 0 && nowMs - lastMs < HOLD_MS) NavLimit(last, fresh = false) else NavLimit(0, fresh = false)
     }
 }

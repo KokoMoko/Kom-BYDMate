@@ -133,6 +133,8 @@ class BYDMateApp : Application(), Configuration.Provider {
         com.bydmate.app.ui.dashboard.KomAutostart.start(this, appScope)
         // Kom-BYDMate: split-ում ոչ ակտիվ պատուհանն էլ է հպում ստանում (տես KomSplitFocusShield)
         com.bydmate.app.split.KomSplitFocusShield.start(this, appScope)
+        // Kom-BYDMate: արագության սահմանափակում OSM-ից՝ երբ Navigator-ը չի երևում
+        com.bydmate.app.navdata.KomOsmSpeedLimit.start(appScope)
     }
 
     /**
