@@ -271,11 +271,14 @@ private fun ClusterTop(state: DashboardUiState, modifier: Modifier) {
         modifier = modifier.clip(shape).border(1.dp, CardBorder, shape).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Արագաչափը՝ ձախում․ թույլատրելի արագությունը՝ սանդղակի վրա կարմիր շրջանակով
         Gauge(
-            value = power, min = if (charging) 0f else P_MIN, max = P_MAX, step = 25f, unit = "kW", label = powerLabel,
-            color = powerColor, style = powerStyle,
-            onTap = { powerStyle = next(powerStyle); ClusterPrefs.setPowerStyle(context, powerStyle) },
+            value = speed, min = 0f, max = S_MAX, step = 20f, unit = "km/h", label = stringResource(R.string.kom_speedo_speed_label),
+            color = speedColor, style = speedStyle,
+            onTap = { speedStyle = next(speedStyle); ClusterPrefs.setSpeedStyle(context, speedStyle) },
             modifier = Modifier.weight(0.3f).fillMaxHeight(),
+            limit = if (navLimit > 0) navLimit.toFloat() else 0f,
+            overLimit = navLimit > 0 && speed > upper,
         )
         Column(Modifier.weight(0.4f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
             ClusterHeader(state)
@@ -285,16 +288,12 @@ private fun ClusterTop(state: DashboardUiState, modifier: Modifier) {
                 headlights = state.headlightsOn,
                 modifier = Modifier.fillMaxWidth().weight(1f))
         }
-        Box(Modifier.weight(0.3f).fillMaxHeight()) {
-            Gauge(
-                value = speed, min = 0f, max = S_MAX, step = 20f, unit = "km/h", label = stringResource(R.string.kom_speedo_speed_label),
-                color = speedColor, style = speedStyle,
-                onTap = { speedStyle = next(speedStyle); ClusterPrefs.setSpeedStyle(context, speedStyle) },
-                modifier = Modifier.fillMaxSize(),
-            )
-            // Navigator-ի սահմանափակման նշանը
-            if (navLimit > 0) LimitSign(navLimit, fresh = nav.fresh, modifier = Modifier.align(Alignment.TopEnd))
-        }
+        Gauge(
+            value = power, min = if (charging) 0f else P_MIN, max = P_MAX, step = 25f, unit = "kW", label = powerLabel,
+            color = powerColor, style = powerStyle,
+            onTap = { powerStyle = next(powerStyle); ClusterPrefs.setPowerStyle(context, powerStyle) },
+            modifier = Modifier.weight(0.3f).fillMaxHeight(),
+        )
     }
 }
 
@@ -387,6 +386,7 @@ private fun BatteryBar(soc: Int, charging: Boolean) {
 private fun Gauge(
     value: Float, min: Float, max: Float, step: Float, unit: String, label: String,
     color: Color, style: GaugeStyle, onTap: () -> Unit, modifier: Modifier,
+    limit: Float = 0f, overLimit: Boolean = false,
 ) {
     BoxWithConstraints(
         modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onTap),
@@ -414,7 +414,7 @@ private fun Gauge(
                 Text("$unit · $label", color = TextSecondary, fontSize = (side.value * 0.07f).sp)
             }
             else -> Box(Modifier.size(side), contentAlignment = Alignment.Center) {
-                Canvas(Modifier.fillMaxSize()) { drawDial(value, min, max, step, color, style == GaugeStyle.NEEDLE) }
+                Canvas(Modifier.fillMaxSize()) { drawDial(value, min, max, step, color, style == GaugeStyle.NEEDLE, limit, overLimit) }
                 // Թիվը՝ ճիշտ կենտրոնում (սլաքի առանցքի շրջանում), միավորը՝ առանձին, կենտրոնից ներքև
                 val needle = style == GaugeStyle.NEEDLE
                 Text(
@@ -435,7 +435,10 @@ private fun Gauge(
 private const val START = 135f
 private const val SWEEP = 270f
 
-private fun DrawScope.drawDial(value: Float, min: Float, max: Float, step: Float, color: Color, needle: Boolean) {
+private fun DrawScope.drawDial(
+    value: Float, min: Float, max: Float, step: Float, color: Color, needle: Boolean,
+    limit: Float = 0f, overLimit: Boolean = false,
+) {
     val stroke = size.minDimension * 0.05f
     val radius = size.minDimension / 2 - stroke
     val c = center
@@ -451,7 +454,26 @@ private fun DrawScope.drawDial(value: Float, min: Float, max: Float, step: Float
     val sweep = kotlin.math.abs(a - zeroA).coerceAtLeast(0.5f)
     drawArc(color, from, sweep, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
 
-    if (!needle) return
+    // Թույլատրելի արագությունը սանդղակի վրա՝ կարմիր շրջանակով թիվ (գերազանցելիս՝ լցված մուգ կարմիր)
+    fun drawLimitMarker() {
+        if (limit <= 0f) return
+        val rad = Math.toRadians(ang(limit).toDouble())
+        val p = Offset(c.x + cos(rad).toFloat() * radius * 0.68f, c.y + sin(rad).toFloat() * radius * 0.68f)
+        val r = size.minDimension * 0.075f
+        if (overLimit) {
+            drawCircle(Color(0xFF991B1B), r, p)
+        } else {
+            drawCircle(CardSurface, r, p)
+        }
+        drawCircle(Color(0xFFE53935), r, p, style = Stroke(size.minDimension * 0.012f))
+        val tp = android.graphics.Paint().apply {
+            this.color = android.graphics.Color.WHITE; textSize = size.minDimension * 0.06f; isFakeBoldText = true
+            textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true
+        }
+        drawContext.canvas.nativeCanvas.drawText(limit.roundToInt().toString(), p.x, p.y + tp.textSize / 3, tp)
+    }
+
+    if (!needle) { drawLimitMarker(); return }
     val paint = android.graphics.Paint().apply {
         this.color = TextMuted.toArgb(); textSize = size.minDimension * 0.055f
         textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true
@@ -462,10 +484,13 @@ private fun DrawScope.drawDial(value: Float, min: Float, max: Float, step: Float
         val cs = cos(rad).toFloat(); val sn = sin(rad).toFloat()
         drawLine(TextMuted, Offset(c.x + cs * radius * 0.82f, c.y + sn * radius * 0.82f),
             Offset(c.x + cs * radius * 0.92f, c.y + sn * radius * 0.92f), strokeWidth = 3f)
-        drawContext.canvas.nativeCanvas.drawText(v.roundToInt().toString(),
-            c.x + cs * radius * 0.68f, c.y + sn * radius * 0.68f + paint.textSize / 3, paint)
+        if (limit <= 0f || kotlin.math.abs(v - limit) > 0.5f) {
+            drawContext.canvas.nativeCanvas.drawText(v.roundToInt().toString(),
+                c.x + cs * radius * 0.68f, c.y + sn * radius * 0.68f + paint.textSize / 3, paint)
+        }
         v += step
     }
+    drawLimitMarker()
     val rad = Math.toRadians(a.toDouble())
     drawLine(Needle, c, Offset(c.x + cos(rad).toFloat() * radius * 0.86f, c.y + sin(rad).toFloat() * radius * 0.86f),
         strokeWidth = size.minDimension * 0.018f, cap = StrokeCap.Round)
