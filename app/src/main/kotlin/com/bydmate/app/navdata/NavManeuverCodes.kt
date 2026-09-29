@@ -34,6 +34,7 @@ object NavManeuverCodes {
         // AutoNavi CCW_N_EXIT = 24+N (right-hand traffic); flat 24 only when the
         // exit number is missing or out of the 1..10 icon range.
         if (exitNum != null) return if (exitNum in 1..10) GAODE_ROUNDABOUT_EXIT + exitNum else GAODE_ROUNDABOUT_EXIT
+        if ("съезд" in lower) exitOrdinal(lower)?.let { n -> if (n in 1..10) return GAODE_ROUNDABOUT_EXIT + n }
 
         return when {
             "въезд на паром" in lower -> GAODE_FERRY
@@ -60,9 +61,33 @@ object NavManeuverCodes {
      *  մանևրը 0 էր, և վահանակը/HUD-ը ցույց էին տալիս թունելի պատկերակ։ */
     private val EN_EXIT_RE = Regex("""(\d+)(?:st|nd|rd|th)?\s+exit""")
 
+    private val ORDINALS = listOf(
+        listOf("first", "первый", "1st"), listOf("second", "второй", "2nd"), listOf("third", "третий", "3rd"),
+        listOf("fourth", "четвёртый", "четвертый", "4th"), listOf("fifth", "пятый", "5th"),
+        listOf("sixth", "шестой", "6th"), listOf("seventh", "седьмой", "7th"), listOf("eighth", "восьмой", "8th"),
+        listOf("ninth", "девятый", "9th"), listOf("tenth", "десятый", "10th"),
+    )
+
+    /**
+     * Kom-BYDMate: շրջանաձևի ելքի համարը՝ թվով («2», «2nd», «2-й») կամ բառով («Second exit»,
+     * «Второй съезд»)։ Անգլերեն Navigator-ը գրում է բառով, և մինչ այս HUD-ը ստանում էր ընդհանուր
+     * «ելք» նշանը (24)՝ «2-րդ ելք»-ի (26) փոխարեն։ Null՝ եթե համար չկա։
+     */
+    fun exitOrdinal(text: String?): Int? {
+        val lower = text?.lowercase()?.replace(' ', ' ') ?: return null
+        Regex("""\d+""").find(lower)?.value?.toIntOrNull()?.let { return it }
+        ORDINALS.forEachIndexed { i, words ->
+            if (words.any { Regex("""(^|[^\p{L}])""" + it + """($|[^\p{L}])""").containsMatchIn(lower) }) return i + 1
+        }
+        return null
+    }
+
     internal fun fromEnglish(lower: String): Int {
         EN_EXIT_RE.find(lower)?.groupValues?.get(1)?.toIntOrNull()?.let { n ->
             return if (n in 1..10) GAODE_ROUNDABOUT_EXIT + n else GAODE_ROUNDABOUT_EXIT
+        }
+        if ("exit" in lower || "roundabout" in lower) exitOrdinal(lower)?.let { n ->
+            if (n in 1..10) return GAODE_ROUNDABOUT_EXIT + n
         }
         return when {
             "ferry" in lower -> GAODE_FERRY
