@@ -53,7 +53,7 @@ object KomCanGuidance {
                 val s = NavGuidanceHub.snapshot()
                 val guiding = s.active && (s.maneuverGaode > 0 || s.distanceMeters > 0)
                 if (guiding) {
-                    val kind = s.maneuverGaode
+                    val kind = toInstrumentKind(s.maneuverGaode)
                     val dist = s.distanceMeters
                     val road = s.road.take(32)
                     // Հեռավորությունը՝ 10 մ ճշտությամբ, որ ամեն մետրի համար չգրենք
@@ -79,6 +79,17 @@ object KomCanGuidance {
      * Պատկերակների թեստ․ բարձրացնում է նավիգացիայի կարգավիճակը և 3 վրկ-ը մեկ ցույց տալիս կոդերը
      * (հեռավորությունը = կոդը, փողոցը = «KOM <կոդ>»), որ HUD-ի/վահանակի նկարներից կազմենք աղյուսակը։
      */
+    /**
+     * AutoNavi (gaode) մանևր → վահանակի TURN_KIND։ CAN icon test-ով (2026-09-29, Sealion 06) ստուգված՝
+     * գրեթե բոլորը նույնն են (1 ձախ, 2 աջ, 3 թեթև ձախ, 7/8 կտրուկ, 9/10 հետադարձ, 11 ուղիղ,
+     * 13 շրջանաձև, 25–30 = շրջանաձևի 1–6 ելք (24+N), 45 կետ, 47 վճարովի, 48 վերջնակետ, 49 թունել)։
+     * Տարբերություն․ gaode 4 = թեթև աջ, իսկ վահանակում 4-ը ձախ է, թեթև աջը՝ 5։
+     */
+    internal fun toInstrumentKind(gaode: Int): Int = when (gaode) {
+        4 -> 5
+        else -> gaode
+    }
+
     private val ownScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
 
     fun runIconTest(ctx: Context, scope: CoroutineScope = ownScope) {
