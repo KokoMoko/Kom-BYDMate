@@ -135,6 +135,8 @@ class BYDMateApp : Application(), Configuration.Provider {
         com.bydmate.app.split.KomSplitFocusShield.start(this, appScope)
         // Kom-BYDMate: արագության սահմանափակում OSM-ից՝ երբ Navigator-ը չի երևում
         com.bydmate.app.navdata.KomOsmSpeedLimit.start(appScope)
+        // Kom-BYDMate: Navigator-ի մանևրները HUD-ում և վարորդի էկրանին՝ CAN դաշտերով
+        com.bydmate.app.hud.KomCanGuidance.start(this, appScope)
     }
 
     /**

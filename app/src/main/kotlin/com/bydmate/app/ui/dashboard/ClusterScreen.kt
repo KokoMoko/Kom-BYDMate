@@ -185,6 +185,12 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                         valueRange = 50f..75f,
                     )
                     Text(stringResource(R.string.kom_cluster_style_hint), color = TextMuted, fontSize = 13.sp)
+                    // CAN պատկերակների թեստ (HUD / վարորդի էկրան)՝ կոդերի աղյուսակի համար
+                    val canTest by com.bydmate.app.hud.KomCanGuidance.testStatus.collectAsStateWithLifecycle()
+                    TextButton(onClick = { com.bydmate.app.hud.KomCanGuidance.runIconTest(context) }) {
+                        Text(stringResource(R.string.kom_can_icon_test))
+                    }
+                    canTest?.let { Text(it, color = TextMuted, fontSize = 12.sp) }
                     // Ախտորոշում՝ մեքենայի տեսախցիկի նշանների ազդանշանները (TSR)
                     val tsrStatus by CarSignReader.status.collectAsStateWithLifecycle()
                     val tsrRaw by CarSignReader.raw.collectAsStateWithLifecycle()

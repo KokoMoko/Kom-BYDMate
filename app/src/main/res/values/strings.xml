@@ -2184,4 +2184,6 @@
     <string name="kom_panel_exit">Весь экран</string>
     <!-- Kom-BYDMate -->
     <string name="kom_cluster_charging_blocked">Во время зарядки навигатор на экран водителя не выводится — там экран зарядки</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_can_icon_test">Тест значков CAN (HUD / экран водителя)</string>
 </resources>

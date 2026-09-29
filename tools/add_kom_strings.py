@@ -83,6 +83,7 @@ STRINGS = {
         "Во время зарядки навигатор на экран водителя не выводится — там экран зарядки",
         "Navigation on the driver display is unavailable while charging",
     ),
+    "kom_can_icon_test": ("Тест значков CAN (HUD / экран водителя)", "CAN icon test (HUD / driver display)"),
     "kom_cluster_settings": ("Кластер", "Cluster"),
     "kom_cluster_top_height": ("Высота верхней части: %1$d%%", "Top area height: %1$d%%"),
     "kom_cluster_style_hint": (
