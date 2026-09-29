@@ -232,6 +232,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startTrackingService() {
-        TrackingService.start(this)
+        TrackingService.start(this, com.bydmate.app.service.AutostartTrace.TRIGGER_ACTIVITY)
     }
 }
