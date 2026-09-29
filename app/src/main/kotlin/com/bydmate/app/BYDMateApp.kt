@@ -131,6 +131,8 @@ class BYDMateApp : Application(), Configuration.Provider {
         splitOverlayController.start(appScope)
         // Kom-BYDMate: մեքենան միացնելիս՝ Panel (Navigator) և Yandex Music (առանց նվագարկման)
         com.bydmate.app.ui.dashboard.KomAutostart.start(this, appScope)
+        // Kom-BYDMate: split-ում ոչ ակտիվ պատուհանն էլ է հպում ստանում (տես KomSplitFocusShield)
+        com.bydmate.app.split.KomSplitFocusShield.start(this, appScope)
     }
 
     /**
