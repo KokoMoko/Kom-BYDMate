@@ -1,4 +1,7 @@
-"""Ավելացնում է Kom-BYDMate-ի տեքստերը values (ru) և values-en strings.xml-ում (կրկնակի չի ավելացնում)։"""
+"""Ավելացնում է Kom-BYDMate-ի տեքստերը values (ru), values-en և values-hy strings.xml-ում (կրկնակի չի ավելացնում)։
+
+Արժեքը՝ (ru, en) կամ (ru, en, hy)․ hy-ի բացակայության դեպքում values-hy-ում գրվում է en-ը։
+"""
 from pathlib import Path
 
 RES = Path(__file__).resolve().parent.parent / "app/src/main/res"
@@ -97,6 +100,8 @@ STRINGS = {
         "Сигнал, когда скорость выше ограничения + допуск (как тёмно-красное кольцо). Повтор каждые 10 с.",
         "Beeps when speed is above the limit + tolerance (the dark red ring). Repeats every 10 s.",
     ),
+    "kom_cluster_avg_speed": ("Сред.: %1$s км/ч", "Avg: %1$s km/h", "Միջ.՝ %1$s կմ/ժ"),
+    "kom_cluster_avg_consumption": ("Сред.: %1$s kWh/100", "Avg: %1$s kWh/100", "Միջ.՝ %1$s kWh/100"),
     "kom_can_icon_test": ("Тест значков CAN (HUD / экран водителя)", "CAN icon test (HUD / driver display)"),
     "kom_settings_plate": ("Номер автомобиля", "License plate"),
     "kom_settings_plate_hint": (
@@ -140,10 +145,10 @@ def esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace("'", "\\'")
 
 
-for folder, idx in (("values", 0), ("values-en", 1)):
+for folder, idx in (("values", 0), ("values-en", 1), ("values-hy", 2)):
     p = RES / folder / "strings.xml"
     c = p.read_text(encoding="utf-8")
-    add = [f'    <string name="{k}">{esc(v[idx])}</string>' for k, v in STRINGS.items() if f'name="{k}"' not in c]
+    add = [f'    <string name="{k}">{esc(v[idx] if len(v) > idx else v[1])}</string>' for k, v in STRINGS.items() if f'name="{k}"' not in c]
     if add:
         block = "    <!-- Kom-BYDMate -->\n" + "\n".join(add) + "\n"
         c = c.replace("</resources>", block + "</resources>")

@@ -203,48 +203,6 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                             swapGauges = it; ClusterPrefs.setSwapGauges(context, it)
                         })
                     }
-                    val exDbg by KomClusterExtras.debug.collectAsStateWithLifecycle()
-                    Text(exDbg, color = TextMuted, fontSize = 12.sp)
-                    // CAN պատկերակների թեստ (HUD / վարորդի էկրան)՝ կոդերի աղյուսակի համար
-                    val canTest by com.bydmate.app.hud.KomCanGuidance.testStatus.collectAsStateWithLifecycle()
-                    TextButton(onClick = { com.bydmate.app.hud.KomCanGuidance.runIconTest(context) }) {
-                        Text(stringResource(R.string.kom_can_icon_test))
-                    }
-                    canTest?.let { Text(it, color = TextMuted, fontSize = 12.sp) }
-                    // Ախտորոշում՝ Navigator-ի սահմանափակման ընթերցումը և OSM-ը
-                    val navDbg by com.bydmate.app.navdata.KomNavLimit.debug.collectAsStateWithLifecycle()
-                    Text(
-                        "Navigator: $navDbg\nOSM:${com.bydmate.app.navdata.KomOsmSpeedLimit.fresh().takeIf { it > 0 } ?: "—"}",
-                        color = TextMuted, fontSize = 12.sp,
-                    )
-                    // Yandex Music → վարորդի վահանակ (ախտորոշում և անվան կոդավորման փոխարկիչ)
-                    val musicSt by com.bydmate.app.hud.KomCanMusic.status.collectAsStateWithLifecycle()
-                    var musicEnc by remember { mutableIntStateOf(com.bydmate.app.hud.KomCanMusic.encoding) }
-                    TextButton(onClick = {
-                        musicEnc = 1 - musicEnc
-                        com.bydmate.app.hud.KomCanMusic.encoding = musicEnc
-                    }) { Text("Music name encoding: " + if (musicEnc == 0) "UTF-16LE" else "UTF-8") }
-                    musicSt?.let { Text(it, color = TextMuted, fontSize = 12.sp) }
-                    // TSR գրանցիչ՝ ուղևորության ընթացքում ADAS/Instrument fid-երի փոփոխությունները
-                    val tsrLog by com.bydmate.app.hud.KomTsrLogger.status.collectAsStateWithLifecycle()
-                    TextButton(onClick = { com.bydmate.app.hud.KomTsrLogger.toggle(context) }) {
-                        Text(
-                            stringResource(
-                                if (com.bydmate.app.hud.KomTsrLogger.running) R.string.kom_tsr_log_stop
-                                else R.string.kom_tsr_log_start
-                            )
-                        )
-                    }
-                    tsrLog?.let { Text(it, color = TextMuted, fontSize = 12.sp) }
-                    // Ախտորոշում՝ մեքենայի տեսախցիկի նշանների ազդանշանները (TSR)
-                    val tsrStatus by CarSignReader.status.collectAsStateWithLifecycle()
-                    val tsrRaw by CarSignReader.raw.collectAsStateWithLifecycle()
-                    Text(
-                        "TSR: $tsrStatus\n" + tsrRaw.entries.joinToString("\n") {
-                            it.key.removePrefix("Instrument.INSTRUMENT_") + " = " + (it.value ?: "—")
-                        },
-                        color = TextMuted, fontSize = 12.sp,
-                    )
                 }
             },
             confirmButton = {
@@ -325,7 +283,7 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, modifier: Modifie
         val extras by KomClusterExtras.extras.collectAsStateWithLifecycle()
         // Արագաչափը՝ թույլատրելի արագությունը սանդղակի վրա կարմիր շրջանակով, տակը՝ միջին արագությունը
         val speedGauge: @Composable (Modifier) -> Unit = { m ->
-            GaugeWithCaption(extras.avgSpeedKmh?.let { "Avg: $it km/h" } ?: "Avg: — km/h", m) {
+            GaugeWithCaption(stringResource(R.string.kom_cluster_avg_speed, extras.avgSpeedKmh?.toString() ?: "—"), m) {
                 Gauge(
                     value = speed, min = 0f, max = S_MAX, step = 20f, unit = "km/h", label = stringResource(R.string.kom_speedo_speed_label),
                     color = speedColor, style = speedStyle,
@@ -338,7 +296,7 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, modifier: Modifie
         }
         // Հզորությունը, տակը՝ միջին ծախսը
         val powerGauge: @Composable (Modifier) -> Unit = { m ->
-            GaugeWithCaption(state.consumption?.let { "Avg: %.1f kWh/100".format(it) } ?: "Avg: — kWh/100", m) {
+            GaugeWithCaption(stringResource(R.string.kom_cluster_avg_consumption, state.consumption?.let { "%.1f".format(it) } ?: "—"), m) {
                 Gauge(
                     value = power, min = if (charging) 0f else P_MIN, max = P_MAX, step = 25f, unit = "kW", label = powerLabel,
                     color = powerColor, style = powerStyle,

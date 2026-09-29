@@ -13,7 +13,8 @@ import com.bydmate.app.ui.widget.WidgetController
 val APP_LANGUAGES: List<Pair<String, String>> = listOf(
     "ru" to "Русский",
     "en" to "English",
-    // Kom-BYDMate: միայն ռուսերեն և անգլերեն (zh/pt/pl/be թարգմանությունները հեռացված են)
+    "hy" to "Հայերեն",
+    // Kom-BYDMate: ռուսերեն, անգլերեն և հայերեն (zh/pt/pl/be թարգմանությունները հեռացված են)
 )
 
 /**

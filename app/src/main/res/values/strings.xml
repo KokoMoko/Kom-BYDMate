@@ -2200,4 +2200,7 @@
     <string name="kom_cluster_swap">Поменять местами спидометр и мощность</string>
     <string name="kom_speed_alert_title">Звук при превышении скорости</string>
     <string name="kom_speed_alert_hint">Сигнал, когда скорость выше ограничения + допуск (как тёмно-красное кольцо). Повтор каждые 10 с.</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_avg_speed">Сред.: %1$s км/ч</string>
+    <string name="kom_cluster_avg_consumption">Сред.: %1$s kWh/100</string>
 </resources>
