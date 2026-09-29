@@ -118,6 +118,8 @@ object ClusterPrefs {
 
 private val Track = Color(0xFF1B2B45)
 private val RegenBlue = Color(0xFF4AA3FF)
+/** Սովորական (նորմալ) վիճակի գույնը՝ նուրբ կապույտ․ ռեկուպերացիան՝ կանաչ (AccentGreen)։ */
+private val SoftBlue = Color(0xFF6FB6FF)
 private val Amber = Color(0xFFFFB020)
 private val Needle = Color(0xFFFF5A3C)
 private val Road = Color(0xFF0F1B2D)
@@ -254,14 +256,14 @@ private fun ClusterTop(state: DashboardUiState, modifier: Modifier) {
 
     val powerColor = when {
         charging -> AccentGreen
-        power < -0.5f -> RegenBlue
+        power < -0.5f -> AccentGreen
         power > P_MAX * 0.75f -> SocRed
         power > P_MAX * 0.45f -> Amber
-        else -> AccentGreen
+        else -> SoftBlue
     }
     val speedColor = when {
-        speed <= limit -> AccentGreen
-        speed <= upper -> lerp(AccentGreen, SocRed, ((speed - limit) / (upper - limit).coerceAtLeast(1f)).coerceIn(0f, 1f))
+        speed <= limit -> SoftBlue
+        speed <= upper -> lerp(SoftBlue, SocRed, ((speed - limit) / (upper - limit).coerceAtLeast(1f)).coerceIn(0f, 1f))
         else -> Color(0xFF991B1B)
     }
     val powerLabel = stringResource(
@@ -454,7 +456,7 @@ private fun DrawScope.drawDial(
 
     drawArc(Track, START, SWEEP, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
     val zeroA = ang(0f)
-    if (min < 0f) drawArc(RegenBlue.copy(alpha = 0.3f), START, zeroA - START, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+    if (min < 0f) drawArc(AccentGreen.copy(alpha = 0.3f), START, zeroA - START, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
     val a = ang(value)
     val from = kotlin.math.min(zeroA, a)
     val sweep = kotlin.math.abs(a - zeroA).coerceAtLeast(0.5f)
