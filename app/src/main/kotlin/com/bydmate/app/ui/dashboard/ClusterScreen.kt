@@ -193,6 +193,12 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                         Text(stringResource(R.string.kom_can_icon_test))
                     }
                     canTest?.let { Text(it, color = TextMuted, fontSize = 12.sp) }
+                    // Ախտորոշում՝ Navigator-ի սահմանափակման ընթերցումը և OSM-ը
+                    val navDbg by com.bydmate.app.navdata.KomNavLimit.debug.collectAsStateWithLifecycle()
+                    Text(
+                        "Navigator: $navDbg\nOSM:${com.bydmate.app.navdata.KomOsmSpeedLimit.fresh().takeIf { it > 0 } ?: "—"}",
+                        color = TextMuted, fontSize = 12.sp,
+                    )
                     // Ախտորոշում՝ մեքենայի տեսախցիկի նշանների ազդանշանները (TSR)
                     val tsrStatus by CarSignReader.status.collectAsStateWithLifecycle()
                     val tsrRaw by CarSignReader.raw.collectAsStateWithLifecycle()
