@@ -419,27 +419,38 @@ private fun TempRow(value: String?, icon: ImageVector) {
 /** Մարտկոցի պատկեր՝ լցված մասը SOC-ն է, գույնը կարմիր → դեղին → կանաչ, լիցքավորվելիս՝ «շնչում» է։ */
 @Composable
 private fun BatteryBar(soc: Int, charging: Boolean, range: String) {
-    // Օգտատիրոջ նմուշով՝ ամբողջ ուղղանկյունը գրադիենտ (կարմիր → դեղին → կանաչ), առանց շրջանակի և
-    // «ծայրի», ներսում՝ «49% ~ 244 km»։ Լիցքավորվելիս «շնչում» է։
+    // Չափն ու տեսքը՝ օգտատիրոջ նմուշով (առանց շրջանակի և «ծայրի»), լցված մասը՝ SOC-ի չափով, մնացածը՝ մուգ։
+    // Գույնը՝ ըստ լիցքի․ ≥ 60% ամբողջը կանաչ, 60 → 30% աստիճանաբար դեղին, 30 → 10% կարմիր
+    val f by animateFloatAsState((soc / 100f).coerceIn(0f, 1f), tween(800), label = "soc")
     val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
         initialValue = 1f, targetValue = if (charging) 0.6f else 1f,
         animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "pulse",
     )
     Box(Modifier.width(240.dp).height(56.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            drawRoundRect(
-                Brush.horizontalGradient(
-                    0f to Color(0xFFC81E1E), 0.1f to Color(0xFFFFB800), 0.45f to Color(0xFFFFB800),
-                    0.75f to Color(0xFF4CD964), 1f to Color(0xFF4CD964),
-                ),
-                cornerRadius = CornerRadius(12.dp.toPx()), alpha = pulse,
-            )
+            val r = CornerRadius(12.dp.toPx())
+            drawRoundRect(Road, cornerRadius = r)
+            clipRect(right = size.width * f) {
+                drawRoundRect(socColor(f * 100f), cornerRadius = r, alpha = pulse)
+            }
         }
         Text(
             "$soc% $range", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold,
-            style = TextStyle(shadow = Shadow(Color(0x66000000), Offset(0f, 1f), 3f)),
+            style = TextStyle(shadow = Shadow(Color(0x99000000), Offset(0f, 1f), 4f)),
         )
     }
+}
+
+private val SocGreen = Color(0xFF4CD964)
+private val SocYellow = Color(0xFFF5C518)
+private val SocLow = Color(0xFFE5322D)
+
+/** Մարտկոցի գույնը՝ ըստ լիցքի (սահուն անցումներով)։ */
+private fun socColor(soc: Float): Color = when {
+    soc >= 60f -> SocGreen
+    soc >= 30f -> lerp(SocYellow, SocGreen, (soc - 30f) / 30f)
+    soc >= 10f -> lerp(SocLow, SocYellow, (soc - 10f) / 20f)
+    else -> SocLow
 }
 
 /** Սարք՝ ընտրված ոճով։ Սեղմելիս փոխվում է հաջորդ ոճին։ */
