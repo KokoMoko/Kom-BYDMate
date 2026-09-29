@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.Terrain
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -70,7 +71,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.foundation.layout.offset
@@ -394,7 +394,7 @@ private fun ClusterHeader(state: DashboardUiState, extras: KomClusterExtras.Extr
             TempRow(state.insideTemp?.let { "$it°" }, Icons.Outlined.DirectionsCar)
             TempRow(state.exteriorTemp?.let { "$it°" }, Icons.Outlined.WbSunny)
             // Բարձրությունը ծովի մակարդակից (մեքենայից կամ GPS-ից)
-            TempRow(extras.altitudeM?.let { "$it m" }, androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.kom_ic_altitude))
+            TempRow(extras.altitudeM?.let { "$it m" }, Icons.Outlined.Terrain)
         }
     }
 }
