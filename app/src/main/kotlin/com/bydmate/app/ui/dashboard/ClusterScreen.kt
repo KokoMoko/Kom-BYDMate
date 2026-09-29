@@ -369,14 +369,16 @@ private fun next(s: GaugeStyle) = GaugeStyle.values()[(s.ordinal + 1) % GaugeSty
 private fun GaugeWithCaption(caption: String, modifier: Modifier, gauge: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         gauge()
+        // ~1 սմ վերև՝ սարքի աղեղի բացվածքի մեջ
         Text(caption, color = TextSecondary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 2.dp))
+            modifier = Modifier.offset(y = (-36).dp))
     }
 }
 
 @Composable
 private fun ClusterHeader(state: DashboardUiState, extras: KomClusterExtras.Extras) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+    // Մարտկոցը՝ ճիշտ մեջտեղում (ճանապարհի վրա), փոխանցումը՝ ձախ, ջերմաստիճանները՝ աջ
+    Box(Modifier.fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.Center) {
         val (g, gc) = when (state.gear) {
             1 -> "P" to TextSecondary
             2 -> "R" to Amber
@@ -384,19 +386,14 @@ private fun ClusterHeader(state: DashboardUiState, extras: KomClusterExtras.Extr
             4 -> "D" to AccentGreen
             else -> "–" to TextMuted
         }
-        Text(g, color = gc, fontSize = 40.sp, fontWeight = FontWeight.Bold)
-        HeaderDivider()
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // Լիցքը և պաշարը՝ մարտկոցի ներսում («49% ~ 244 km»), ծախսը՝ հզորության սարքի տակ
-            BatteryBar(state.soc ?: 0, state.isCharging,
-                state.estimatedRangeKm?.let { "~${"%.0f".format(it)} km" } ?: "~— km")
-        }
-        HeaderDivider()
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            TempRow(state.insideTemp, Icons.Outlined.DirectionsCar)
-            TempRow(state.exteriorTemp, Icons.Outlined.WbSunny)
+        Text(g, color = gc, fontSize = 40.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.CenterStart))
+        BatteryBar(state.soc ?: 0, state.isCharging,
+            state.estimatedRangeKm?.let { "~ ${"%.0f".format(it)} km" } ?: "~ — km")
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.align(Alignment.CenterEnd)) {
+            TempRow(state.insideTemp?.let { "$it°" }, Icons.Outlined.DirectionsCar)
+            TempRow(state.exteriorTemp?.let { "$it°" }, Icons.Outlined.WbSunny)
             // Բարձրությունը ծովի մակարդակից (մեքենայից կամ GPS-ից)
-            Text(extras.altitudeM?.let { "▲ $it m" } ?: "▲ — m", color = TextSecondary, fontSize = 15.sp)
+            TempRow(extras.altitudeM?.let { "$it m" }, androidx.compose.ui.graphics.vector.ImageVector.vectorResource(R.drawable.kom_ic_altitude))
         }
     }
 }
@@ -409,46 +406,37 @@ private fun HeaderDivider() {
 }
 
 @Composable
-private fun TempRow(temp: Int?, icon: ImageVector) {
+private fun TempRow(value: String?, icon: ImageVector) {
+    // Icon-ը ձախից, թիվը՝ հետո (ինչպես մեքենայի վահանակում)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(temp?.let { "$it°" } ?: "—", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.width(6.dp))
         Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(value ?: "—", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
 /** Մարտկոցի պատկեր՝ լցված մասը SOC-ն է, գույնը կարմիր → դեղին → կանաչ, լիցքավորվելիս՝ «շնչում» է։ */
 @Composable
 private fun BatteryBar(soc: Int, charging: Boolean, range: String) {
-    val f by animateFloatAsState((soc / 100f).coerceIn(0f, 1f), tween(800), label = "soc")
+    // Օգտատիրոջ նմուշով՝ ամբողջ ուղղանկյունը գրադիենտ (կարմիր → դեղին → կանաչ), առանց շրջանակի և
+    // «ծայրի», ներսում՝ «49% ~ 244 km»։ Լիցքավորվելիս «շնչում» է։
     val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
-        initialValue = 1f, targetValue = if (charging) 0.55f else 1f,
+        initialValue = 1f, targetValue = if (charging) 0.6f else 1f,
         animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "pulse",
     )
-    Box(Modifier.width(220.dp).height(38.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.width(240.dp).height(56.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            val tip = 6.dp.toPx()
-            val w = size.width - tip
-            val h = size.height
-            val r = CornerRadius(h * 0.22f)
-            drawRoundRect(Road, size = Size(w, h), cornerRadius = r)
-            drawRoundRect(Color(0xFF5C7699), size = Size(w, h), cornerRadius = r, style = Stroke(2.dp.toPx()))
-            drawRoundRect(Color(0xFF5C7699), topLeft = Offset(w + 1.dp.toPx(), h * 0.3f), size = Size(tip - 1.dp.toPx(), h * 0.4f),
-                cornerRadius = CornerRadius(2.dp.toPx()))
-            val inset = 3.dp.toPx()
-            clipRect(left = inset, top = inset, right = inset + (w - 2 * inset) * f, bottom = h - inset) {
-                drawRoundRect(
-                    Brush.horizontalGradient(listOf(Color(0xFFE5322D), Color(0xFFF5C518), AccentGreen), startX = 0f, endX = w),
-                    topLeft = Offset(inset, inset), size = Size(w - 2 * inset, h - 2 * inset),
-                    cornerRadius = CornerRadius(h * 0.16f), alpha = pulse,
-                )
-                drawRect(Color.White.copy(alpha = 0.2f), topLeft = Offset(inset, inset), size = Size(w, (h - 2 * inset) * 0.3f))
-            }
+            drawRoundRect(
+                Brush.horizontalGradient(
+                    0f to Color(0xFFC81E1E), 0.1f to Color(0xFFFFB800), 0.45f to Color(0xFFFFB800),
+                    0.75f to Color(0xFF4CD964), 1f to Color(0xFF4CD964),
+                ),
+                cornerRadius = CornerRadius(12.dp.toPx()), alpha = pulse,
+            )
         }
         Text(
-            "$soc% $range", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-            style = TextStyle(shadow = Shadow(Color(0xCC0B1422), Offset(0f, 1f), 4f)),
-            modifier = Modifier.padding(end = 6.dp),
+            "$soc% $range", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold,
+            style = TextStyle(shadow = Shadow(Color(0x66000000), Offset(0f, 1f), 3f)),
         )
     }
 }
