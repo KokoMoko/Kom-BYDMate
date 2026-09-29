@@ -52,7 +52,35 @@ object NavManeuverCodes {
             "поверните налево" in lower || "поворот налево" in lower || "налево" in lower -> GAODE_LEFT
             "поверните направо" in lower || "поворот направо" in lower || "направо" in lower -> GAODE_RIGHT
             "прямо" in lower || "продолжайте" in lower || "двигайтесь" in lower -> GAODE_STRAIGHT
-            else -> fromRussianTextFallback(lower)
+            else -> fromEnglish(lower).takeIf { it != 0 } ?: fromRussianTextFallback(lower)
+        }
+    }
+
+    /** Kom-BYDMate: Navigator-ը անգլերեն UI-ով («Turn right», «Take the 2nd exit» …)։ Առանց սրա
+     *  մանևրը 0 էր, և վահանակը/HUD-ը ցույց էին տալիս թունելի պատկերակ։ */
+    private val EN_EXIT_RE = Regex("""(\d+)(?:st|nd|rd|th)?\s+exit""")
+
+    internal fun fromEnglish(lower: String): Int {
+        EN_EXIT_RE.find(lower)?.groupValues?.get(1)?.toIntOrNull()?.let { n ->
+            return if (n in 1..10) GAODE_ROUNDABOUT_EXIT + n else GAODE_ROUNDABOUT_EXIT
+        }
+        return when {
+            "ferry" in lower -> GAODE_FERRY
+            "exit the roundabout" in lower || "leave the roundabout" in lower -> GAODE_ROUNDABOUT_EXIT
+            "roundabout" in lower || "traffic circle" in lower -> GAODE_ROUNDABOUT_ENTER
+            "waypoint" in lower || "via point" in lower -> GAODE_WAYPOINT
+            "arriv" in lower || "destination" in lower || "route ended" in lower -> GAODE_ARRIVE
+            "tunnel" in lower -> GAODE_TUNNEL
+            "u-turn" in lower || "u turn" in lower || "uturn" in lower || "turn around" in lower ->
+                if ("right" in lower) GAODE_UTURN_RIGHT else GAODE_UTURN
+            ("slight" in lower || "bear" in lower || "keep" in lower || "fork" in lower) && "left" in lower -> GAODE_SLIGHT_LEFT
+            ("slight" in lower || "bear" in lower || "keep" in lower || "fork" in lower) && "right" in lower -> GAODE_SLIGHT_RIGHT
+            "sharp" in lower && "left" in lower -> GAODE_HARD_LEFT
+            "sharp" in lower && "right" in lower -> GAODE_HARD_RIGHT
+            "left" in lower -> GAODE_LEFT
+            "right" in lower -> GAODE_RIGHT
+            "straight" in lower || "continue" in lower || "ahead" in lower -> GAODE_STRAIGHT
+            else -> 0
         }
     }
 

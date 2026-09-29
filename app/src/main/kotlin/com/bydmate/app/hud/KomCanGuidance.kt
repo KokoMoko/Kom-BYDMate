@@ -87,6 +87,7 @@ object KomCanGuidance {
      */
     internal fun toInstrumentKind(gaode: Int): Int = when (gaode) {
         4 -> 5
+        0 -> 11  // անհայտ մանևր՝ «ուղիղ» (0-ն վահանակում թունելի պատկերակ է)
         else -> gaode
     }
 
