@@ -2182,4 +2182,6 @@
     <string name="kom_tile_app_open_hint">Нажмите — открыть на весь экран</string>
     <!-- Kom-BYDMate -->
     <string name="kom_panel_exit">Весь экран</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_charging_blocked">Во время зарядки навигатор на экран водителя не выводится — там экран зарядки</string>
 </resources>

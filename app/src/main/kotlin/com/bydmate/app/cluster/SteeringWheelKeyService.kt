@@ -117,6 +117,17 @@ class SteeringWheelKeyService : AccessibilityService() {
         val trigger = prefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE)
         return when (starDecision(event.keyCode, isDown, enabled, trigger)) {
             StarDecision.CONSUME_AND_TOGGLE -> {
+                // Kom-BYDMate: լիցքավորման ժամանակ վարորդի էկրանը զբաղված է լիցքավորման էկրանով,
+                // և Navigator-ը «կիսատ» էր մնում մեծ էկրանին՝ չենք ուղարկում, միայն հաղորդագրություն
+                val d = com.bydmate.app.service.TrackingService.lastData.value
+                val charging = d != null && (d.chargeGunState == 2 || d.bmsState == 1)
+                if (charging && !ClusterProjectionManager.isProjectionActive()) {
+                    android.widget.Toast.makeText(
+                        applicationContext, getString(com.bydmate.app.R.string.kom_cluster_charging_blocked),
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                    return traced(event, "cluster_toggle_blocked_charging")
+                }
                 val ep = entryPoint()
                 ClusterProjectionManager.toggle(applicationContext, ep.helperClient(), ep.helperBootstrap())
                 traced(event, "cluster_toggle")

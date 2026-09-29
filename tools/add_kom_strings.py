@@ -79,6 +79,10 @@ STRINGS = {
     "kom_capture_failed": ("Не удалось сделать снимок (ADB)", "Screenshot failed (ADB)"),
     "kom_tile_app_open_hint": ("Нажмите — открыть на весь экран", "Tap to open full screen"),
     "kom_panel_exit": ("Весь экран", "Full screen"),
+    "kom_cluster_charging_blocked": (
+        "Во время зарядки навигатор на экран водителя не выводится — там экран зарядки",
+        "Navigation on the driver display is unavailable while charging",
+    ),
     "kom_cluster_settings": ("Кластер", "Cluster"),
     "kom_cluster_top_height": ("Высота верхней части: %1$d%%", "Top area height: %1$d%%"),
     "kom_cluster_style_hint": (
