@@ -2056,4 +2056,6 @@
     <string name="kom_cluster_info_rows">Temperature and altitude</string>
     <string name="kom_cluster_info_two">Two rows</string>
     <string name="kom_cluster_info_one">One row</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_lagoon_clear">Top transparency: %1$d%%</string>
 </resources>

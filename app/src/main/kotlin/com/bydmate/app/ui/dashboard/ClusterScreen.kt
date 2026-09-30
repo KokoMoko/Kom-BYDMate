@@ -131,6 +131,9 @@ object ClusterPrefs {
             infoRows = e("info_rows", InfoRows.TWO, InfoRows.values()),
         )
     }
+    /** «Լիճ» վահանակի վերին մասի թափանցիկությունը՝ 0…90 %։ */
+    fun lagoonClear(ctx: Context) = p(ctx).getInt("lagoon_clear", 50)
+    fun setLagoonClear(ctx: Context, v: Int) = p(ctx).edit().putInt("lagoon_clear", v).apply()
     fun setLook(ctx: Context, l: ClusterLook) = p(ctx).edit()
         .putString("theme", l.theme.name).putBoolean("gauge_3d", l.d3)
         .putString("arch_labels", l.archLabels.name).putString("info_rows", l.infoRows.name).apply()
@@ -163,6 +166,7 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
     var showSettings by remember { mutableStateOf(false) }
     var swapGauges by remember { mutableStateOf(ClusterPrefs.swapGauges(context)) }
     var look by remember { mutableStateOf(ClusterPrefs.look(context)) }
+    var lagoonClear by remember { mutableIntStateOf(ClusterPrefs.lagoonClear(context)) }
 
     Column(
         modifier = Modifier
@@ -181,7 +185,7 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
             val topH = maxHeight * (topPct / 100f)
             Column(Modifier.fillMaxSize()) {
-                ClusterTop(state, swapGauges, look, Modifier.fillMaxWidth().height(topH))
+                ClusterTop(state, swapGauges, look, lagoonClear, Modifier.fillMaxWidth().height(topH))
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     DashboardWidgetSlot(DashboardWidgets.scoped("cluster", DashboardWidgets.SLOT_PHONE), stringResource(R.string.kom_widget_hint_phone),
@@ -223,6 +227,14 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                         Text(stringResource(R.string.kom_cluster_3d), color = TextPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         androidx.compose.material3.Switch(checked = look.d3, onCheckedChange = { upd(look.copy(d3 = it)) })
                     }
+                    if (look.theme == ClusterTheme.LAGOON) {
+                        Text(stringResource(R.string.kom_cluster_lagoon_clear, lagoonClear), color = TextPrimary, fontSize = 15.sp)
+                        Slider(
+                            value = lagoonClear.toFloat(), valueRange = 0f..90f,
+                            onValueChange = { lagoonClear = (it / 5).roundToInt() * 5 },
+                            onValueChangeFinished = { ClusterPrefs.setLagoonClear(context, lagoonClear) },
+                        )
+                    }
                     if (look.theme == ClusterTheme.ARCH) {
                         Text(stringResource(R.string.kom_cluster_arch_numbers), color = TextPrimary, fontSize = 15.sp)
                         LookChips(listOf(ArchLabels.ENDS to R.string.kom_cluster_arch_ends, ArchLabels.CYCLE to R.string.kom_cluster_arch_cycle),
@@ -263,7 +275,7 @@ private fun <T> LookChips(options: List<Pair<T, Int>>, selected: T, onPick: (T) 
 }
 
 @Composable
-private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook, modifier: Modifier) {
+private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook, lagoonClear: Int, modifier: Modifier) {
     val context = LocalContext.current
     var powerStyle by remember { mutableStateOf(ClusterPrefs.powerStyle(context)) }
     var speedStyle by remember { mutableStateOf(ClusterPrefs.speedStyle(context)) }
@@ -337,7 +349,10 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
     }
     val inside = state.insideTemp?.let { "$it°" } ?: "—"
     val outside = state.exteriorTemp?.let { "$it°" } ?: "—"
-    val captionH = 22.dp
+    // 3D սլաքով սարքում «Միջ.» տեքստը շրջանակի ներսում է (տակը առանձին տող չկա)
+    val speedCaptionInside = look.d3 && speedStyle == GaugeStyle.NEEDLE
+    val powerCaptionInside = look.d3 && powerStyle == GaugeStyle.NEEDLE
+    val captionH = if (speedCaptionInside) 0.dp else 22.dp
     BoxWithConstraints(modifier.clip(shape).border(1.dp, CardBorder, shape)) {
         val innerW = maxWidth - 24.dp
         val innerH = maxHeight - 16.dp
@@ -356,8 +371,11 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
         val extras by KomClusterExtras.extras.collectAsStateWithLifecycle()
         val altText = extras.altitudeM?.let { "$it m" } ?: "— m"
         // Արագաչափը՝ թույլատրելի արագությունը սանդղակի վրա կարմիր շրջանակով, տակը՝ միջին արագությունը
+        val speedCaption = stringResource(R.string.kom_cluster_avg_speed, extras.avgSpeedKmh?.toString() ?: "—")
+        val powerCaption = stringResource(R.string.kom_cluster_avg_consumption, state.consumption?.let { "%.1f".format(it) } ?: "—")
+        val gaugeFrame = if (theme == ClusterTheme.LAGOON) Modifier.border(1.dp, Color(0x2E78BEFF), RoundedCornerShape(20.dp)) else Modifier
         val speedGauge: @Composable (Modifier) -> Unit = { m ->
-            GaugeWithCaption(stringResource(R.string.kom_cluster_avg_speed, extras.avgSpeedKmh?.toString() ?: "—"), m) {
+            GaugeWithCaption(if (speedCaptionInside) null else speedCaption, m.then(gaugeFrame)) {
                 Gauge(
                     value = speed, min = 0f, max = S_MAX, step = 20f, unit = "km/h", label = stringResource(R.string.kom_speedo_speed_label),
                     color = speedColor, style = speedStyle,
@@ -365,19 +383,19 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
                     modifier = Modifier.fillMaxWidth().weight(1f),
                     limit = if (navLimit > 0) navLimit.toFloat() else 0f,
                     overLimit = navLimit > 0 && speed > upper,
-                    d3 = look.d3, glass = theme == ClusterTheme.TIDE,
+                    d3 = look.d3, glass = theme == ClusterTheme.TIDE, caption = speedCaption,
                 )
             }
         }
         // Հզորությունը, տակը՝ միջին ծախսը
         val powerGauge: @Composable (Modifier) -> Unit = { m ->
-            GaugeWithCaption(stringResource(R.string.kom_cluster_avg_consumption, state.consumption?.let { "%.1f".format(it) } ?: "—"), m) {
+            GaugeWithCaption(if (powerCaptionInside) null else powerCaption, m.then(gaugeFrame)) {
                 Gauge(
                     value = power, min = if (charging) 0f else P_MIN, max = P_MAX, step = 25f, unit = "kW", label = powerLabel,
                     color = powerColor, style = powerStyle,
                     onTap = { powerStyle = next(powerStyle); ClusterPrefs.setPowerStyle(context, powerStyle) },
                     modifier = Modifier.fillMaxWidth().weight(1f),
-                    d3 = look.d3, glass = theme == ClusterTheme.TIDE,
+                    d3 = look.d3, glass = theme == ClusterTheme.TIDE, caption = powerCaption,
                 )
             }
         }
@@ -401,7 +419,10 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
                     if (theme == ClusterTheme.LAGOON) {
                         // Լիճ՝ կապույտ վահանակ, ալիքի մակարդակը՝ լիցքը
                         Canvas(Modifier.fillMaxSize()) {
-                            drawRect(Brush.verticalGradient(listOf(Color(0xFF0B2A5A), Color(0xFF0A3D7A), Color(0xFF06214A))))
+                            // վերին մասը՝ ըստ կարգավորման թափանցիկ, մեջտեղից ներքև՝ լրիվ
+                            val topA = 1f - lagoonClear / 100f
+                            drawRect(Brush.verticalGradient(0f to Color(0xFF0B2A5A).copy(alpha = topA), 0.5f to Color(0xFF0A3D7A),
+                                1f to Color(0xFF06214A)))
                             drawRect(Brush.radialGradient(listOf(Color(0x5978C8FF), Color.Transparent), center = Offset(size.width / 2, size.height * 0.56f), radius = size.width * 0.6f))
                             val top = 64.dp.toPx(); val bot = size.height - 30.dp.toPx()
                             val level = bot - (bot - top) * soc / 100f
@@ -413,10 +434,11 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
                     BigNumber("$soc%", Modifier.align(Alignment.CenterStart).padding(start = 12.dp))
                     BigNumber(rangeText, Modifier.align(Alignment.CenterEnd).padding(end = 12.dp))
                 }
-                ClusterTheme.ARCH -> ArchCenter(look, gaugeSide, captionH, soc, rangeText, gearText, gearColor, inside, outside, altText, road)
+                ClusterTheme.ARCH -> ArchCenter(look, gaugeSide, captionH, if (speedCaptionInside) 0.005f else 0.025f,
+                    soc, rangeText, gearText, gearColor, inside, outside, altText, road)
             }
             if (theme == ClusterTheme.LAGOON) {
-                Box(Modifier.matchParentSize().border(1.5.dp, Color(0x5978BEFF), RoundedCornerShape(20.dp)))
+                Box(Modifier.matchParentSize().border(1.dp, Color(0x2E78BEFF), RoundedCornerShape(20.dp)))
             }
         }
         if (swap) speedGauge(Modifier.weight(0.3f).fillMaxHeight()) else powerGauge(Modifier.weight(0.3f).fillMaxHeight())
@@ -428,11 +450,11 @@ private fun next(s: GaugeStyle) = GaugeStyle.values()[(s.ordinal + 1) % GaugeSty
 
 /** Վերևի տողը՝ D | մարտկոց, պաշար / ծախս | ջերմաստիճաններ (բաժանարար գծերով)։ */
 @Composable
-private fun GaugeWithCaption(caption: String, modifier: Modifier, gauge: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+private fun GaugeWithCaption(caption: String?, modifier: Modifier, gauge: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         gauge()
-        // ~1 սմ վերև՝ սարքի աղեղի բացվածքի մեջ
-        Text(caption, color = TextSecondary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+        // ~1 սմ վերև՝ սարքի աղեղի բացվածքի մեջ (3D-ում՝ null, տեքստը գծվում է շրջանակի ներսում)
+        if (caption != null) Text(caption, color = TextSecondary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.offset(y = (-36).dp))
     }
 }
@@ -451,12 +473,9 @@ private fun ClusterHeader(state: DashboardUiState, extras: KomClusterExtras.Extr
         Text(g, color = gc, fontSize = 40.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.CenterStart))
         BatteryBar(state.soc ?: 0, state.isCharging,
             state.estimatedRangeKm?.let { "~ ${"%.0f".format(it)} km" } ?: "~ — km")
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.align(Alignment.CenterEnd)) {
-            TempRow(state.insideTemp?.let { "$it°" }, Icons.Outlined.DirectionsCar)
-            TempRow(state.exteriorTemp?.let { "$it°" }, Icons.Outlined.WbSunny)
-            // Բարձրությունը ծովի մակարդակից (մեքենայից կամ GPS-ից)
-            TempRow(extras.altitudeM?.let { "$it m" }, Icons.Outlined.Terrain)
-        }
+        // Առաջին տողում բարձրությունը, երկրորդում ջերմաստիճանները՝ «մեքենա | դրսում» (ձախից հավասարեցված)
+        CornerInfo(InfoRows.TWO, withAlt = true, state.insideTemp?.let { "$it°" } ?: "—", state.exteriorTemp?.let { "$it°" } ?: "—",
+            extras.altitudeM?.let { "$it m" } ?: "— m", Modifier.align(Alignment.CenterEnd))
     }
 }
 
@@ -492,7 +511,9 @@ private fun BatteryBar(soc: Int, charging: Boolean, range: String) {
             val r = CornerRadius(12.dp.toPx())
             drawRoundRect(Road, cornerRadius = r)
             clipRect(right = size.width * f) {
-                drawRoundRect(socColor(f * 100f), cornerRadius = r, alpha = pulse)
+                // նախկին գրադիենտը՝ կարմիր → դեղին → կանաչ ամբողջ լայնքով, երևում է լցված մասը
+                drawRoundRect(Brush.horizontalGradient(listOf(Color(0xFFE5322D), Color(0xFFF5C518), AccentGreen), startX = 0f, endX = size.width),
+                    cornerRadius = r, alpha = pulse)
             }
             // Նուրբ ուրվագիծ՝ որ երևա, թե որքան է պակասել 100%-ից
             val sw = 1.5.dp.toPx()
@@ -523,7 +544,7 @@ private fun socColor(soc: Float): Color = when {
 private fun Gauge(
     value: Float, min: Float, max: Float, step: Float, unit: String, label: String,
     color: Color, style: GaugeStyle, onTap: () -> Unit, modifier: Modifier,
-    limit: Float = 0f, overLimit: Boolean = false, d3: Boolean = false, glass: Boolean = false,
+    limit: Float = 0f, overLimit: Boolean = false, d3: Boolean = false, glass: Boolean = false, caption: String = "",
 ) {
     BoxWithConstraints(
         modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onTap),
@@ -553,7 +574,7 @@ private fun Gauge(
             else -> Box(Modifier.size(side), contentAlignment = Alignment.Center) {
                 if (d3 && style == GaugeStyle.NEEDLE) {
                     // 3D․ ստատիկ շերտը (եզր, դեմք, սանդղակ) առանձին է, որ սլաքի շարժման ժամանակ չվերագծվի
-                    Dial3DStatic(min, max, step, limit, overLimit, glass)
+                    Dial3DStatic(min, max, step, limit, overLimit, glass, caption)
                     Canvas(Modifier.fillMaxSize()) { drawDial3DDynamic(value, min, max, color) }
                 } else {
                     Canvas(Modifier.fillMaxSize()) { drawDial(value, min, max, step, color, style == GaugeStyle.NEEDLE, limit, overLimit) }
@@ -576,16 +597,17 @@ private fun Gauge(
 }
 
 @Composable
-private fun Dial3DStatic(min: Float, max: Float, step: Float, limit: Float, overLimit: Boolean, glass: Boolean) {
-    Canvas(Modifier.fillMaxSize()) { drawDial3DStatic(min, max, step, limit, overLimit, glass) }
+private fun Dial3DStatic(min: Float, max: Float, step: Float, limit: Float, overLimit: Boolean, glass: Boolean, caption: String) {
+    Canvas(Modifier.fillMaxSize()) { drawDial3DStatic(min, max, step, limit, overLimit, glass, caption) }
 }
 
 /** 3D սարքի ստատիկ մասը․ ստվեր, մետաղյա եզր, խորությամբ դեմք, ուղի, սանդղակ, սահմանափակման նշան։ */
-private fun DrawScope.drawDial3DStatic(min: Float, max: Float, step: Float, limit: Float, overLimit: Boolean, glass: Boolean) {
-    val stroke = size.minDimension * 0.05f
-    val radius = size.minDimension / 2 - stroke
+private fun DrawScope.drawDial3DStatic(min: Float, max: Float, step: Float, limit: Float, overLimit: Boolean, glass: Boolean, caption: String) {
+    // 3D․ եզրը՝ ամբողջ քառակուսու չափով, սանդղակը՝ փոքր, որ «Միջ.» տեքստը տեղավորվի ներքևի բացվածքում
+    val stroke = size.minDimension * 0.045f
+    val radius = size.minDimension * 0.40f
     val c = center
-    val bezel = radius * 1.1f
+    val bezel = size.minDimension * 0.495f
     fun ang(v: Float) = START + SWEEP * ((v.coerceIn(min, max) - min) / (max - min))
     // փափուկ ստվեր ներքևում
     drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent), center = c + Offset(0f, radius * 0.08f), radius = bezel * 1.08f),
@@ -595,11 +617,11 @@ private fun DrawScope.drawDial3DStatic(min: Float, max: Float, step: Float, limi
         listOf(Color(0xFFDFE7F2), Color(0xFF7F8DA3), Color(0xFF2B3649), Color(0xFF8A98AD), Color(0xFF1B2433)),
         start = Offset(c.x - bezel, c.y - bezel), end = Offset(c.x + bezel, c.y + bezel),
     ), radius = bezel, center = c)
-    drawCircle(Color(0xFF05080F), radius = radius * 1.035f, center = c)
+    drawCircle(Color(0xFF05080F), radius = bezel * 0.94f, center = c)
     // դեմք՝ վերևից լուսավորված
     val faceColors = if (glass) listOf(Color(0x5A28466E), Color(0x730A1428), Color(0xB303060E))
         else listOf(Color(0xFF1D3152), Color(0xFF0C1628), Color(0xFF03060E))
-    drawCircle(Brush.radialGradient(faceColors, center = c + Offset(0f, -radius * 0.25f), radius = radius * 1.05f), radius = radius * 1.02f, center = c)
+    drawCircle(Brush.radialGradient(faceColors, center = c + Offset(0f, -radius * 0.25f), radius = bezel), radius = bezel * 0.925f, center = c)
     val tl = Offset(c.x - radius, c.y - radius)
     val arcSize = Size(radius * 2, radius * 2)
     drawArc(Color.Black.copy(alpha = 0.55f), START, SWEEP, false, tl, arcSize, style = Stroke(stroke * 1.1f, cap = StrokeCap.Round))
@@ -641,12 +663,22 @@ private fun DrawScope.drawDial3DStatic(min: Float, max: Float, step: Float, limi
         }
         drawContext.canvas.nativeCanvas.drawText(limit.roundToInt().toString(), p.x, p.y + tp.textSize / 3, tp)
     }
+    if (caption.isNotEmpty()) {
+        val cp = android.graphics.Paint().apply {
+            this.color = android.graphics.Color.rgb(185, 198, 220); textSize = size.minDimension * 0.05f; isFakeBoldText = true
+            textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true
+        }
+        val maxW = size.minDimension * 0.56f
+        val tw = cp.measureText(caption)
+        if (tw > maxW) cp.textSize *= maxW / tw
+        drawContext.canvas.nativeCanvas.drawText(caption, c.x, c.y + size.minDimension * 0.37f, cp)
+    }
 }
 
 /** 3D սարքի շարժվող մասը․ փայլող արժեքի աղեղ, երկգույն սլաք՝ ստվերով, ուռուցիկ կենտրոն, ապակու փայլ։ */
 private fun DrawScope.drawDial3DDynamic(value: Float, min: Float, max: Float, color: Color) {
-    val stroke = size.minDimension * 0.05f
-    val radius = size.minDimension / 2 - stroke
+    val stroke = size.minDimension * 0.045f
+    val radius = size.minDimension * 0.40f
     val c = center
     fun ang(v: Float) = START + SWEEP * ((v.coerceIn(min, max) - min) / (max - min))
     val tl = Offset(c.x - radius, c.y - radius)
@@ -677,8 +709,9 @@ private fun DrawScope.drawDial3DDynamic(value: Float, min: Float, max: Float, co
     drawCircle(Brush.radialGradient(listOf(Color(0xFF44536D), Color(0xFF1A2438), Color(0xFF0A0F1A)), center = c + Offset(-hr * 0.3f, -hr * 0.4f), radius = hr * 1.2f), hr, c)
     drawCircle(Color(0x59C8D7F0), hr, c, style = Stroke(3f))
     // ապակու փայլ վերևում
-    drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.13f), Color.Transparent), startY = c.y - radius, endY = c.y),
-        topLeft = Offset(c.x - radius * 0.95f, c.y - radius * 1.02f), size = Size(radius * 1.8f, radius * 1.0f))
+    val gb = size.minDimension * 0.46f
+    drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.13f), Color.Transparent), startY = c.y - gb, endY = c.y),
+        topLeft = Offset(c.x - gb * 0.95f, c.y - gb * 1.0f), size = Size(gb * 1.8f, gb * 1.0f))
 }
 
 private const val START = 135f

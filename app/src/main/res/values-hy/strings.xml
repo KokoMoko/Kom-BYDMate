@@ -1941,4 +1941,6 @@
     <string name="kom_cluster_info_rows">Ջերմաստիճան և բարձրություն</string>
     <string name="kom_cluster_info_two">Երկու տողով</string>
     <string name="kom_cluster_info_one">Մեկ տողով</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_lagoon_clear">Վերին մասի թափանցիկություն․ %1$d%%</string>
 </resources>

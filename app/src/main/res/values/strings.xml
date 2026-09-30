@@ -2223,4 +2223,6 @@
     <string name="kom_cluster_info_rows">Температура и высота</string>
     <string name="kom_cluster_info_two">Две строки</string>
     <string name="kom_cluster_info_one">Одна строка</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_lagoon_clear">Прозрачность верха: %1$d%%</string>
 </resources>

@@ -114,6 +114,7 @@ STRINGS = {
     "kom_cluster_info_rows": ("Температура и высота", "Temperature and altitude", "Ջերմաստիճան և բարձրություն"),
     "kom_cluster_info_two": ("Две строки", "Two rows", "Երկու տողով"),
     "kom_cluster_info_one": ("Одна строка", "One row", "Մեկ տողով"),
+    "kom_cluster_lagoon_clear": ("Прозрачность верха: %1$d%%", "Top transparency: %1$d%%", "Վերին մասի թափանցիկություն․ %1$d%%"),
     "kom_can_icon_test": ("Тест значков CAN (HUD / экран водителя)", "CAN icon test (HUD / driver display)"),
     "kom_settings_plate": ("Номер автомобиля", "License plate"),
     "kom_settings_plate_hint": (

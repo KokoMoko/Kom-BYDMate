@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -194,7 +195,7 @@ internal fun CornerInfo(rows: InfoRows, withAlt: Boolean, inside: String, outsid
             InfoItem(Icons.Outlined.WbSunny, outside, fs)
         }
     } else {
-        Column(modifier, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(modifier, horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(3.dp)) {
             if (withAlt) {
                 InfoItem(Icons.Outlined.Terrain, alt, fs)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -208,18 +209,17 @@ internal fun CornerInfo(rows: InfoRows, withAlt: Boolean, inside: String, outsid
     }
 }
 
-/** Ալիքային ոճերի վերին տողը՝ փոխանցում | բարձրություն | ջերմաստիճաններ։ */
+/** Ալիքային ոճերի վերին տողը՝ մեկ տողով․ փոխանցում | բարձրություն | մեքենա | դրսում (նուրբ ուղղահայաց գծերով)։ */
 @Composable
 internal fun WaveHeader(gear: String, gearColor: Color, inside: String, outside: String, alt: String, modifier: Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text(gear, color = gearColor, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+        Text(gear, color = gearColor, fontSize = 32.sp, fontWeight = FontWeight.Bold)
         InfoSep()
-        InfoItem(Icons.Outlined.Terrain, alt, 22)
+        InfoItem(Icons.Outlined.Terrain, alt, 18)
         InfoSep()
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            InfoItem(Icons.Outlined.DirectionsCar, inside, 16)
-            InfoItem(Icons.Outlined.WbSunny, outside, 16)
-        }
+        InfoItem(Icons.Outlined.DirectionsCar, inside, 18)
+        InfoSep()
+        InfoItem(Icons.Outlined.WbSunny, outside, 18)
     }
 }
 
@@ -245,14 +245,15 @@ internal fun rememberCycleIndex(active: Boolean): Int {
  */
 @Composable
 internal fun ArchCenter(
-    look: ClusterLook, gaugeSide: Dp, captionH: Dp, soc: Int, rangeText: String,
+    look: ClusterLook, gaugeSide: Dp, captionH: Dp, gaugeTopF: Float, soc: Int, rangeText: String,
     gear: String, gearColor: Color, inside: String, outside: String, alt: String,
     road: @Composable (Modifier) -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val w = maxWidth
         val gaugeBoxH = maxHeight - captionH
-        val topY = (gaugeBoxH - gaugeSide) / 2 + gaugeSide * 0.005f
+        // վերին եզրը՝ արագաչափի վերին եզրի մակարդակին (3D՝ եզրի, հարթ՝ աղեղի վերին եզր)
+        val topY = (gaugeBoxH - gaugeSide) / 2 + gaugeSide * gaugeTopF
         val outer = min(gaugeSide * 0.495f * (340f / 265f), w / 2 - 6.dp)
         val lw = gaugeSide * (if (look.d3) 0.072f else 0.045f)
         val r = outer - lw / 2
@@ -265,8 +266,16 @@ internal fun ArchCenter(
         Text(gear, color = gearColor, fontSize = 32.sp, fontWeight = FontWeight.Bold,
             modifier = Modifier.align(Alignment.TopStart).padding(start = 4.dp))
         val underTop = cy - r + lw / 2
+        // Ջերմաստիճանները (և բարձրությունը)՝ կամարից 0.5 սմ (~19dp) աջ, տողերը ձախից հավասարեցված։
+        // Կամարի արտաքին եզրի x-ը տվյալ բարձրության վրա՝ ամենաներքևի տողի համար (այնտեղ կամարը ամենալայնն է)։
+        val twoRows = look.infoRows == InfoRows.TWO && (look.archLabels == ArchLabels.CYCLE)
+        val rowsCount = if (look.infoRows == InfoRows.ONE) 1 else 2
+        val lowestY = 2.dp + 26.dp * rowsCount
+        val dy = (cy - lowestY).value.coerceIn(0f, outer.value)
+        val archHalf = kotlin.math.sqrt((outer.value * outer.value - dy * dy).coerceAtLeast(0f)).dp
+        val infoX = w / 2 + archHalf + 19.dp
         CornerInfo(look.infoRows, withAlt = look.archLabels == ArchLabels.CYCLE, inside, outside, alt,
-            Modifier.align(Alignment.TopEnd).padding(end = 4.dp, top = 2.dp))
+            Modifier.align(Alignment.TopStart).offset(x = infoX, y = 2.dp))
         val a0 = Math.toRadians((270.0 - sweep / 2))
         val endDx = (cos(a0).toFloat() * r.value).dp          // < 0
         val endDy = (sin(a0).toFloat() * r.value).dp
@@ -281,9 +290,12 @@ internal fun ArchCenter(
             BigNumber("$soc%", Modifier.align(Alignment.TopEnd).offset(x = -sideInset, y = cy + endDy - 44.dp), 24)
         } else {
             val idx = rememberCycleIndex(true)
-            Crossfade(targetState = idx, animationSpec = tween(450), label = "arch-cycle",
-                modifier = Modifier.align(Alignment.TopCenter).offset(y = underTop + 20.dp)) { i ->
-                BigNumber(if (i == 0) rangeText else "$soc%", Modifier, 32)
+            // պարզ fade՝ երկու թիվն էլ ճիշտ կենտրոնում (Box-ը ամբողջ լայնքով, պարունակությունը՝ կենտրոնում)
+            Crossfade(targetState = idx, animationSpec = tween(600), label = "arch-cycle",
+                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().offset(y = underTop + 20.dp)) { i ->
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    BigNumber(if (i == 0) rangeText else "$soc%", Modifier, 32)
+                }
             }
         }
     }
