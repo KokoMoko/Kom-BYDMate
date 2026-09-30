@@ -1,23 +1,45 @@
-<!-- Kom-BYDMate header: keep this block small, the rest of the file is the upstream README (easier merges) -->
-# Kom-BYDMate — an unofficial fork of BYDMate
+<!-- Kom-BYDMate project header. The upstream README is intentionally retained below to keep provenance clear and simplify upstream merges. -->
+# Kom-BYDMate
 
-> **Unofficial, independent, noncommercial fork** of [BYDMate](https://github.com/AndyShaman/BYDMate) by AndyShaman.
-> It is **not** made, endorsed or supported by the BYDMate author, and it is **not** affiliated with BYD.
-> Please do not send questions about this fork to the original project — use this repository's Issues instead.
->
-> **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0) (see [`LICENSE`](LICENSE)) — the same terms as the original. Personal / noncommercial use only.
+### Enhanced BYD DiLink dashboard, cluster and driver-assistance experience
+
+**Kom-BYDMate** is an independent, unofficial and noncommercial derivative of [BYDMate](https://github.com/AndyShaman/BYDMate), created to extend the original project with a redesigned dashboard and instrument-cluster experience, Armenian localization, navigation enhancements and additional vehicle-integration features.
+
+> **Project status:** independent community fork / experimental software.  
+> **Upstream:** [AndyShaman/BYDMate](https://github.com/AndyShaman/BYDMate)  
+> **License:** [PolyForm Noncommercial 1.0.0](LICENSE) — personal and other permitted noncommercial use only.  
+> **Affiliation:** Kom-BYDMate is not made, endorsed or supported by the BYDMate author and is not affiliated with BYD.
 >
 > Required Notice: Copyright AndyShaman (https://github.com/AndyShaman/BYDMate)
 >
-> Fork changes © 2026 KomS ([github.com/KokoMoko](https://github.com/KokoMoko)), under the same license.
+> Kom-BYDMate-specific changes © 2026 KomS ([KokoMoko](https://github.com/KokoMoko)), distributed under the same license.
 
-**What Kom-BYDMate adds** (tested on BYD Sealion 06, DiLink 5):
+## What Kom-BYDMate Adds
 
-- **Cluster page** with four looks — Classic, Lagoon, Tide, Arch — and optional **3D gauges**; speed-limit ring on the speedometer (Navigator / OpenStreetMap), overspeed beep, average speed and consumption, altitude, brake lights and headlights on the car, your licence plate.
-- **Driver display & HUD:** Yandex Navigator maneuvers through the car's own navigation card, the current Yandex Music track on the driver display Music card, and navigation automatically returns to the driver display a few seconds after you scroll to another card.
-- **Armenian UI** (plus Russian and English), home-screen widgets on the dashboard, autostart of Navigator and Yandex Music in the background, a close button for split screen.
+The project currently extends upstream BYDMate in several areas, with development and testing focused on **BYD Sealion 06 / DiLink 5**:
 
-**Install:** get the APK from this repository's [Releases](../../releases). The package is `kom.bydmate` with its own signing key. Official BYDMate must be uninstalled first — both use the same helper service. Everything below this line is the original BYDMate README and describes the upstream app.
+- **Redesigned dashboard** with configurable information tiles, contextual vehicle data and a dedicated speedometer-oriented driving view.
+- **Custom instrument-cluster experience** with Classic, Lagoon, Tide and Arch themes, optional 3D gauges, configurable layouts and additional live driving information.
+- **Navigation and speed-limit enhancements**, including Yandex Navigator integration, OpenStreetMap-based speed-limit support, speed-limit visualization and overspeed alerts.
+- **Driver-display integration**, including navigation return behavior and Yandex Music information on the vehicle display.
+- **Armenian localization**, alongside Russian and English resources used by the Kom-BYDMate build.
+- **Dashboard widget architecture** that allows information blocks to be selected and positioned more flexibly.
+- **Convenience and startup features**, including application autostart handling and additional split-screen behavior.
+- **Separate application identity** using package `kom.bydmate`, separate signing and Kom-specific versioning such as `3.19.3-kom.8`.
+
+## Relationship to BYDMate
+
+Kom-BYDMate preserves the original project's Git history and tracks BYDMate as an upstream repository. This is intentional: it keeps authorship and technical provenance transparent and makes it possible to merge compatible upstream fixes and improvements while maintaining the Kom-specific development line.
+
+The original BYDMate project remains the source of the core codebase and many underlying vehicle-integration capabilities. Kom-BYDMate should therefore be treated as a derivative project, not as an independently reimplemented replacement.
+
+## Installation
+
+Download a Kom-BYDMate APK from this repository's [Releases](../../releases). The application package is `kom.bydmate` and releases are signed independently from upstream BYDMate.
+
+**Important:** uninstall the official BYDMate application before installing Kom-BYDMate because the two variants currently rely on the same helper-service architecture.
+
+Everything below this line is retained from the upstream BYDMate README for technical documentation and reference.
 
 ---
 
