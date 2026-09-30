@@ -56,6 +56,9 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
@@ -227,6 +230,11 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                         Text(stringResource(R.string.kom_cluster_3d), color = TextPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         androidx.compose.material3.Switch(checked = look.d3, onCheckedChange = { upd(look.copy(d3 = it)) })
                     }
+                    if (look.theme == ClusterTheme.LAGOON || look.theme == ClusterTheme.TIDE) {
+                        Text(stringResource(R.string.kom_cluster_numbers), color = TextPrimary, fontSize = 15.sp)
+                        LookChips(listOf(ArchLabels.ENDS to R.string.kom_cluster_numbers_sides, ArchLabels.CYCLE to R.string.kom_cluster_numbers_road),
+                            look.archLabels) { upd(look.copy(archLabels = it)) }
+                    }
                     if (look.theme == ClusterTheme.LAGOON) {
                         Text(stringResource(R.string.kom_cluster_lagoon_clear, lagoonClear), color = TextPrimary, fontSize = 15.sp)
                         Slider(
@@ -357,6 +365,31 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
         val innerW = maxWidth - 24.dp
         val innerH = maxHeight - 16.dp
         val gaugeSide = min(innerW * 0.3f, innerH - captionH)
+        if (theme == ClusterTheme.LAGOON) {
+            // Լիճ՝ կենտրոնում լրիվ, դեպի սարքերի կենտրոնները գրադիենտով մարում է (այնտեղ՝ 100% թափանցիկ),
+            // կենտրոնական մասի եզրերին՝ նուրբ ուղղահայաց գծեր (սարքերի և լճի շրջանակների փոխարեն)
+            Canvas(Modifier.matchParentSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
+                val padX = 12.dp.toPx(); val padY = 8.dp.toPx(); val iw = size.width - 2 * padX
+                val xL = padX + iw * 0.15f; val x0 = padX + iw * 0.3f; val x1 = padX + iw * 0.7f; val xR = padX + iw * 0.85f
+                val topA = 1f - lagoonClear / 100f
+                drawRect(Brush.verticalGradient(0f to Color(0xFF0B2A5A).copy(alpha = topA), 0.5f to Color(0xFF0A3D7A),
+                    1f to Color(0xFF06214A)), topLeft = Offset(0f, padY), size = Size(size.width, size.height - 2 * padY))
+                drawRect(Brush.radialGradient(listOf(Color(0x5978C8FF), Color.Transparent), center = Offset(size.width / 2, size.height * 0.56f),
+                    radius = (x1 - x0) * 0.6f))
+                val top = padY + 64.dp.toPx(); val bot = size.height - padY - 30.dp.toPx()
+                val level = bot - (bot - top) * soc / 100f
+                drawWave(0f, size.width, level, waveT, Color(0xFF35E0FF), Color(0xFF0A5FB4), 14.dp.toPx())
+                val w = size.width
+                drawRect(Brush.horizontalGradient(0f to Color.Transparent, xL / w to Color.Transparent, x0 / w to Color.Black,
+                    x1 / w to Color.Black, xR / w to Color.Transparent, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+                // գծերը՝ ջերմաստիճանների բաժանարարների գույնով, վերին թափանցիկությունը դրանց վրա էլ է ազդում
+                val sepC = TextSecondary.copy(alpha = 0.5f)
+                val lineBrush = Brush.verticalGradient(0f to sepC.copy(alpha = 0.5f * topA), 0.5f to sepC, 1f to sepC,
+                    startY = padY, endY = size.height - padY)
+                drawLine(lineBrush, Offset(x0, padY), Offset(x0, size.height - padY), strokeWidth = 1.5.dp.toPx())
+                drawLine(lineBrush, Offset(x1, padY), Offset(x1, size.height - padY), strokeWidth = 1.5.dp.toPx())
+            }
+        }
         if (theme == ClusterTheme.TIDE) {
             // Մակընթացություն՝ ֆոնը և ալիքը ամբողջ լայնքով (սարքերի տակով)
             val (c1, c2) = tideColors(soc)
@@ -373,7 +406,7 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
         // Արագաչափը՝ թույլատրելի արագությունը սանդղակի վրա կարմիր շրջանակով, տակը՝ միջին արագությունը
         val speedCaption = stringResource(R.string.kom_cluster_avg_speed, extras.avgSpeedKmh?.toString() ?: "—")
         val powerCaption = stringResource(R.string.kom_cluster_avg_consumption, state.consumption?.let { "%.1f".format(it) } ?: "—")
-        val gaugeFrame = if (theme == ClusterTheme.LAGOON) Modifier.border(1.dp, Color(0x2E78BEFF), RoundedCornerShape(20.dp)) else Modifier
+        val gaugeFrame = Modifier
         val speedGauge: @Composable (Modifier) -> Unit = { m ->
             GaugeWithCaption(if (speedCaptionInside) null else speedCaption, m.then(gaugeFrame)) {
                 Gauge(
@@ -415,30 +448,25 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
                     Spacer(Modifier.height(6.dp))
                     road(Modifier.fillMaxWidth().weight(1f))
                 }
-                ClusterTheme.LAGOON, ClusterTheme.TIDE -> Box(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp))) {
-                    if (theme == ClusterTheme.LAGOON) {
-                        // Լիճ՝ կապույտ վահանակ, ալիքի մակարդակը՝ լիցքը
-                        Canvas(Modifier.fillMaxSize()) {
-                            // վերին մասը՝ ըստ կարգավորման թափանցիկ, մեջտեղից ներքև՝ լրիվ
-                            val topA = 1f - lagoonClear / 100f
-                            drawRect(Brush.verticalGradient(0f to Color(0xFF0B2A5A).copy(alpha = topA), 0.5f to Color(0xFF0A3D7A),
-                                1f to Color(0xFF06214A)))
-                            drawRect(Brush.radialGradient(listOf(Color(0x5978C8FF), Color.Transparent), center = Offset(size.width / 2, size.height * 0.56f), radius = size.width * 0.6f))
-                            val top = 64.dp.toPx(); val bot = size.height - 30.dp.toPx()
-                            val level = bot - (bot - top) * soc / 100f
-                            drawWave(0f, size.width, level, waveT, Color(0xFF35E0FF), Color(0xFF0A5FB4), 14.dp.toPx())
-                        }
-                    }
+                ClusterTheme.LAGOON, ClusterTheme.TIDE -> Box(Modifier.fillMaxSize()) {
                     road(Modifier.fillMaxSize().padding(top = 70.dp))
                     WaveHeader(gearText, gearColor, inside, outside, altText, Modifier.align(Alignment.TopCenter).padding(top = 6.dp))
-                    BigNumber("$soc%", Modifier.align(Alignment.CenterStart).padding(start = 12.dp))
-                    BigNumber(rangeText, Modifier.align(Alignment.CenterEnd).padding(end = 12.dp))
+                    if (look.archLabels == ArchLabels.ENDS) {
+                        BigNumber("$soc%", Modifier.align(Alignment.CenterStart).padding(start = 12.dp))
+                        BigNumber(rangeText, Modifier.align(Alignment.CenterEnd).padding(end = 12.dp))
+                    } else {
+                        // ճանապարհի վերջում, կենտրոնում՝ 5 վ-ը մեկ պարզ fade (տեքստերը չեն շարժվում)
+                        val idx = rememberCycleIndex(true)
+                        androidx.compose.animation.Crossfade(targetState = idx, animationSpec = tween(600), label = "wave-cycle",
+                            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(top = 74.dp)) { i ->
+                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                BigNumber(if (i == 0) rangeText else "$soc%", Modifier, 30)
+                            }
+                        }
+                    }
                 }
                 ClusterTheme.ARCH -> ArchCenter(look, gaugeSide, captionH, if (speedCaptionInside) 0.005f else 0.025f,
                     soc, rangeText, gearText, gearColor, inside, outside, altText, road)
-            }
-            if (theme == ClusterTheme.LAGOON) {
-                Box(Modifier.matchParentSize().border(1.dp, Color(0x2E78BEFF), RoundedCornerShape(20.dp)))
             }
         }
         if (swap) speedGauge(Modifier.weight(0.3f).fillMaxHeight()) else powerGauge(Modifier.weight(0.3f).fillMaxHeight())

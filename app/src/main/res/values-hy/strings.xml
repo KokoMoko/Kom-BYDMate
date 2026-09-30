@@ -1943,4 +1943,8 @@
     <string name="kom_cluster_info_one">Մեկ տողով</string>
     <!-- Kom-BYDMate -->
     <string name="kom_cluster_lagoon_clear">Վերին մասի թափանցիկություն․ %1$d%%</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_numbers">Տոկոս և պաշար</string>
+    <string name="kom_cluster_numbers_sides">Կողքերին</string>
+    <string name="kom_cluster_numbers_road">Ճանապարհի վերջում, հերթափոխով</string>
 </resources>

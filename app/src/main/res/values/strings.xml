@@ -2225,4 +2225,8 @@
     <string name="kom_cluster_info_one">Одна строка</string>
     <!-- Kom-BYDMate -->
     <string name="kom_cluster_lagoon_clear">Прозрачность верха: %1$d%%</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_numbers">Проценты и запас хода</string>
+    <string name="kom_cluster_numbers_sides">По бокам</string>
+    <string name="kom_cluster_numbers_road">В конце дороги, по очереди</string>
 </resources>

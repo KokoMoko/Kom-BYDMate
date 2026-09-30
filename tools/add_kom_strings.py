@@ -115,6 +115,9 @@ STRINGS = {
     "kom_cluster_info_two": ("Две строки", "Two rows", "Երկու տողով"),
     "kom_cluster_info_one": ("Одна строка", "One row", "Մեկ տողով"),
     "kom_cluster_lagoon_clear": ("Прозрачность верха: %1$d%%", "Top transparency: %1$d%%", "Վերին մասի թափանցիկություն․ %1$d%%"),
+    "kom_cluster_numbers": ("Проценты и запас хода", "Charge and range", "Տոկոս և պաշար"),
+    "kom_cluster_numbers_sides": ("По бокам", "At the sides", "Կողքերին"),
+    "kom_cluster_numbers_road": ("В конце дороги, по очереди", "At the road end, alternating", "Ճանապարհի վերջում, հերթափոխով"),
     "kom_can_icon_test": ("Тест значков CAN (HUD / экран водителя)", "CAN icon test (HUD / driver display)"),
     "kom_settings_plate": ("Номер автомобиля", "License plate"),
     "kom_settings_plate_hint": (

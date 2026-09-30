@@ -2058,4 +2058,8 @@
     <string name="kom_cluster_info_one">One row</string>
     <!-- Kom-BYDMate -->
     <string name="kom_cluster_lagoon_clear">Top transparency: %1$d%%</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_numbers">Charge and range</string>
+    <string name="kom_cluster_numbers_sides">At the sides</string>
+    <string name="kom_cluster_numbers_road">At the road end, alternating</string>
 </resources>
