@@ -120,6 +120,10 @@ STRINGS = {
     "kom_cluster_numbers_road": ("В конце дороги, по очереди", "At the road end, alternating", "Ճանապարհի վերջում, հերթափոխով"),
     "kom_about_license": ("Лицензия:", "License:", "Լիցենզիա՝"),
     "kom_about_unofficial": ("Неофициальная некоммерческая версия, не связана с автором BYDMate и с BYD.", "Unofficial noncommercial fork, not affiliated with the BYDMate author or with BYD.", "Ոչ պաշտոնական, ոչ առևտրային տարբերակ, կապված չէ BYDMate-ի հեղինակի և BYD-ի հետ։"),
+    "kom_widget_suggest_phone": ("Сюда подходит любой виджет Android. У автора — виджет «Телефон» машины.", "Any Android widget fits here. The author uses the car's Phone widget.", "Այստեղ կարող է լինել ցանկացած Android վիջեթ։ Հեղինակի տարբերակում՝ մեքենայի «Հեռախոս» վիջեթը։"),
+    "kom_widget_suggest_music": ("Сюда подходит любой виджет Android. У автора — Яндекс Музыка; подойдёт виджет любого плеера (Spotify, YouTube Music…).", "Any Android widget fits here. The author uses Yandex Music; any player's widget works too (Spotify, YouTube Music…).", "Այստեղ կարող է լինել ցանկացած Android վիջեթ։ Հեղինակի տարբերակում՝ Yandex Music, կհամապատասխանի ցանկացած նվագարկչի վիջեթ (Spotify, YouTube Music…)։"),
+    "kom_widget_suggest_weather": ("Сюда подходит любой виджет Android. У автора — AccuWeather (бесплатно).", "Any Android widget fits here. The author uses AccuWeather (free).", "Այստեղ կարող է լինել ցանկացած Android վիջեթ։ Հեղինակի տարբերակում՝ AccuWeather (անվճար)։"),
+    "kom_not_installed": ("не установлено", "not installed", "տեղադրված չէ"),
     "kom_can_icon_test": ("Тест значков CAN (HUD / экран водителя)", "CAN icon test (HUD / driver display)"),
     "kom_settings_plate": ("Номер автомобиля", "License plate"),
     "kom_settings_plate_hint": (

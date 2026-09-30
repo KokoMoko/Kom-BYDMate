@@ -135,6 +135,6 @@ object KomAutostart {
         }.onFailure { Log.w(TAG, "bring Kom to front failed: ${it.message}") }
     }
 
-    private fun isInstalled(ctx: Context, pkg: String) =
+    internal fun isInstalled(ctx: Context, pkg: String) =
         runCatching { ctx.packageManager.getApplicationInfo(pkg, 0) }.isSuccess
 }

@@ -171,6 +171,7 @@ fun DashboardWidgetSlot(
     emptyHint: String,
     requestGrant: ((Boolean) -> Unit) -> Unit,
     modifier: Modifier = Modifier,
+    suggestion: String? = null,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -353,6 +354,10 @@ fun DashboardWidgetSlot(
             ) {
                 Text("＋", color = AccentGreen, fontSize = 30.sp)
                 Text(emptyHint, color = TextSecondary, fontSize = 14.sp)
+                // նոր օգտատիրոջ համար՝ ինչ կարելի է դնել այստեղ (հեղինակի տարբերակի օրինակով)
+                if (suggestion != null) Text(suggestion, color = TextMuted, fontSize = 12.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             }
         }
     }

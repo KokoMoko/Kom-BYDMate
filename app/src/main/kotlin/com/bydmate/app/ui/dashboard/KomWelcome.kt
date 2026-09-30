@@ -134,6 +134,10 @@ fun KomAutostartBlock() {
     var navi by remember { mutableStateOf(KomPrefs.autostartNavi(context)) }
     var music by remember { mutableStateOf(KomPrefs.autostartMusic(context)) }
     var play by remember { mutableStateOf(KomPrefs.autostartMusicPlay(context)) }
+    // Նոր օգտատեր՝ առանց Yandex Navigator / Music․ փոխարկիչն անջատված է և նշված «տեղադրված չէ»
+    val naviOk = remember { KomAutostart.isInstalled(context, KomAutostart.NAVI_PKG) }
+    val musicOk = remember { KomAutostart.isInstalled(context, KomAutostart.MUSIC_PKG) }
+    val notInstalled = " · " + stringResource(R.string.kom_not_installed)
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -142,19 +146,21 @@ fun KomAutostartBlock() {
         Column(Modifier.padding(12.dp)) {
             Text(stringResource(R.string.kom_autostart_title), color = TextPrimary, fontSize = 16.sp)
             androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(stringResource(R.string.kom_autostart_navi), color = TextPrimary, fontSize = 14.sp,
-                    modifier = Modifier.weight(1f))
-                androidx.compose.material3.Switch(checked = navi, onCheckedChange = { navi = it; KomPrefs.setAutostartNavi(context, it) })
+                Text(stringResource(R.string.kom_autostart_navi) + if (naviOk) "" else notInstalled,
+                    color = if (naviOk) TextPrimary else TextMuted, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                androidx.compose.material3.Switch(checked = navi && naviOk, enabled = naviOk,
+                    onCheckedChange = { navi = it; KomPrefs.setAutostartNavi(context, it) })
             }
             androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(stringResource(R.string.kom_autostart_music), color = TextPrimary, fontSize = 14.sp,
-                    modifier = Modifier.weight(1f))
-                androidx.compose.material3.Switch(checked = music, onCheckedChange = { music = it; KomPrefs.setAutostartMusic(context, it) })
+                Text(stringResource(R.string.kom_autostart_music) + if (musicOk) "" else notInstalled,
+                    color = if (musicOk) TextPrimary else TextMuted, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                androidx.compose.material3.Switch(checked = music && musicOk, enabled = musicOk,
+                    onCheckedChange = { music = it; KomPrefs.setAutostartMusic(context, it) })
             }
             androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(stringResource(R.string.kom_autostart_music_play), color = if (music) TextPrimary else TextMuted,
+                Text(stringResource(R.string.kom_autostart_music_play), color = if (music && musicOk) TextPrimary else TextMuted,
                     fontSize = 14.sp, modifier = Modifier.weight(1f).padding(start = 16.dp))
-                androidx.compose.material3.Switch(checked = play, enabled = music,
+                androidx.compose.material3.Switch(checked = play && musicOk, enabled = music && musicOk,
                     onCheckedChange = { play = it; KomPrefs.setAutostartMusicPlay(context, it) })
             }
             Text(stringResource(R.string.kom_autostart_hint), color = TextMuted, fontSize = 13.sp,

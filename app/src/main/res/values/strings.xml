@@ -2232,4 +2232,9 @@
     <!-- Kom-BYDMate -->
     <string name="kom_about_license">Лицензия:</string>
     <string name="kom_about_unofficial">Неофициальная некоммерческая версия, не связана с автором BYDMate и с BYD.</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_widget_suggest_phone">Сюда подходит любой виджет Android. У автора — виджет «Телефон» машины.</string>
+    <string name="kom_widget_suggest_music">Сюда подходит любой виджет Android. У автора — Яндекс Музыка; подойдёт виджет любого плеера (Spotify, YouTube Music…).</string>
+    <string name="kom_widget_suggest_weather">Сюда подходит любой виджет Android. У автора — AccuWeather (бесплатно).</string>
+    <string name="kom_not_installed">не установлено</string>
 </resources>

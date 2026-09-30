@@ -2065,4 +2065,9 @@
     <!-- Kom-BYDMate -->
     <string name="kom_about_license">License:</string>
     <string name="kom_about_unofficial">Unofficial noncommercial fork, not affiliated with the BYDMate author or with BYD.</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_widget_suggest_phone">Any Android widget fits here. The author uses the car\'s Phone widget.</string>
+    <string name="kom_widget_suggest_music">Any Android widget fits here. The author uses Yandex Music; any player\'s widget works too (Spotify, YouTube Music…).</string>
+    <string name="kom_widget_suggest_weather">Any Android widget fits here. The author uses AccuWeather (free).</string>
+    <string name="kom_not_installed">not installed</string>
 </resources>

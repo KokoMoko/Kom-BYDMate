@@ -187,7 +187,8 @@ fun DashboardScreen(
                         ) {
                             DashboardWidgetSlot(
                                 slot = DashboardWidgets.SLOT_PHONE,
-                                emptyHint = stringResource(R.string.kom_widget_hint_phone),
+                                emptyHint = stringResource(R.string.kom_widget_hint_generic),
+                                suggestion = stringResource(R.string.kom_widget_suggest_phone),
                                 requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
                                 modifier = Modifier.weight(1f).fillMaxHeight(),
                             )
@@ -200,7 +201,8 @@ fun DashboardScreen(
                         }
                         DashboardWidgetSlot(
                             slot = DashboardWidgets.SLOT_LEFT,
-                            emptyHint = stringResource(R.string.kom_widget_hint_music),
+                            emptyHint = stringResource(R.string.kom_widget_hint_generic),
+                                suggestion = stringResource(R.string.kom_widget_suggest_music),
                             requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
                             modifier = Modifier.fillMaxWidth().weight(1f),
                         )
@@ -335,7 +337,8 @@ fun DashboardScreen(
                 )
                 DashboardWidgetSlot(
                     slot = DashboardWidgets.SLOT_RIGHT,
-                    emptyHint = stringResource(R.string.kom_widget_hint_weather),
+                    emptyHint = stringResource(R.string.kom_widget_hint_generic),
+                                suggestion = stringResource(R.string.kom_widget_suggest_weather),
                     requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
                     modifier = Modifier.fillMaxWidth().weight(0.64f),
                 )

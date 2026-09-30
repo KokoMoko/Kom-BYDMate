@@ -1950,4 +1950,9 @@
     <!-- Kom-BYDMate -->
     <string name="kom_about_license">Լիցենզիա՝</string>
     <string name="kom_about_unofficial">Ոչ պաշտոնական, ոչ առևտրային տարբերակ, կապված չէ BYDMate-ի հեղինակի և BYD-ի հետ։</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_widget_suggest_phone">Այստեղ կարող է լինել ցանկացած Android վիջեթ։ Հեղինակի տարբերակում՝ մեքենայի «Հեռախոս» վիջեթը։</string>
+    <string name="kom_widget_suggest_music">Այստեղ կարող է լինել ցանկացած Android վիջեթ։ Հեղինակի տարբերակում՝ Yandex Music, կհամապատասխանի ցանկացած նվագարկչի վիջեթ (Spotify, YouTube Music…)։</string>
+    <string name="kom_widget_suggest_weather">Այստեղ կարող է լինել ցանկացած Android վիջեթ։ Հեղինակի տարբերակում՝ AccuWeather (անվճար)։</string>
+    <string name="kom_not_installed">տեղադրված չէ</string>
 </resources>
