@@ -55,7 +55,7 @@ object KomCanGuidance {
                 if (guiding) {
                     val kind = toInstrumentKind(s.maneuverGaode)
                     val dist = s.distanceMeters
-                    val road = s.road.take(32)
+                    val road = s.road.take(32).ifEmpty { " " }  // մեքենան դատարկ buffer-ը մերժում է
                     // Հեռավորությունը՝ 10 մ ճշտությամբ, որ ամեն մետրի համար չգրենք
                     val key = Triple(kind, dist / 10, road)
                     if (key != lastKey) {

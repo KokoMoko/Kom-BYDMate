@@ -1146,6 +1146,8 @@
     <string name="settings_voice_button_mic_header">Կոճակ և խոսափող</string>
     <string name="settings_voice_enable_label">Ձայնային հրամաններ</string>
     <string name="settings_voice_enable_description">Ղեկի հրամաններ, ամբողջովին առանց ինտերնետի</string>
+    <string name="settings_voice_close_after_command_label">Փակել օգնականը կատարված հրամանից հետո</string>
+    <string name="settings_voice_close_after_command_description">Կատարված հրամանից կամ պատասխանից հետո օգնականը ինքն է փակվում։ Եթե օգնականը հարց է տվել, սպասում է ձեր պատասխանին։</string>
     <string name="settings_voice_model_downloading">Ներբեռնվում է… %1$d%%</string>
     <string name="settings_voice_model_unpacking">Բացվում է… %1$d%%</string>
     <string name="voice_listening">Լսում եմ</string>
@@ -1333,7 +1335,12 @@
     <string name="settings_hud_status_connecting">Միանում ենք շինային…</string>
     <string name="settings_hud_status_on">Հոսք դեպի HUD</string>
     <string name="settings_hud_status_bind_failed">Չհաջողվեց միանալ SOME/IP շինային</string>
-    <string name="settings_hud_hint">Անհրաժեշտ է պրոյեկցիոն էկրանով կոմպլեկտացիա։ Տվյալները գալիս են Yandex Navigator-ի պատուհանից։ Երթուղու ընթացքում վարորդի էկրանը ձախ կողմում ցույց է տալիս նավիգացիայի սլաք, սա նորմալ է</string>
+    <string name="settings_hud_hint">Անհրաժեշտ է պրոյեկցիոն էկրանով կոմպլեկտացիա։ Տվյալները գալիս են Yandex Navigator-ի պատուհանից</string>
+    <string name="settings_hud_mode_title">HUD-ի ռեժիմ</string>
+    <string name="settings_hud_mode_1">Ռեժիմ 1</string>
+    <string name="settings_hud_mode_2">Ռեժիմ 2</string>
+    <string name="settings_hud_mode_1_desc">Ռեժիմ 1։ Հուշումները գնում են ապակու վրա, ծրագիրը վարորդի էկրանին չի դիպչում։</string>
+    <string name="settings_hud_mode_2_desc">Ռեժիմ 2։ Երթուղու ընթացքում մեքենան անցնում է նավիգացիայի ռեժիմի։ Փորձեք, եթե 1-ին ռեժիմում ապակին դատարկ է մնում։ Վարորդի էկրանը ցույց է տալիս սլաք, վարորդի էկրանի հավելվածները և տեսախցիկները կարող են չերևալ։</string>
     <string name="settings_blindspot_header">Մեռյալ գոտիներ</string>
     <string name="settings_blindspot_title">Տեսախցիկ՝ շրջադարձի ազդանշանով</string>
     <string name="settings_blindspot_desc">Ձախ շրջադարձի ազդանշան՝ ձախ տեսախցիկը վարորդի էկրանին, աջը՝ փոքր պատուհան հիմնական էկրանին։ Լռելյայն անջատված է։</string>
@@ -1919,7 +1926,6 @@
     <string name="kom_cluster_swap">Տեղերով փոխել արագաչափը և հզորությունը</string>
     <string name="kom_speed_alert_title">Արագության գերազանցման ձայն</string>
     <string name="kom_speed_alert_hint">Ազդանշան, երբ արագությունը սահմանափակումից + շեղումից բարձր է (մուգ կարմիր շրջան)։ Կրկնվում է 10 վայրկյանը մեկ։</string>
-    <!-- Kom-BYDMate -->
     <string name="kom_cluster_avg_speed">Միջ.՝ %1$s կմ/ժ</string>
     <string name="kom_cluster_avg_consumption">Միջ.՝ %1$s kWh/100</string>
 </resources>
