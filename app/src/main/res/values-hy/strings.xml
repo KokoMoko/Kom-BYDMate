@@ -1917,7 +1917,7 @@
     <string name="kom_cluster_charging_blocked">Լիցքավորման ժամանակ նավիգացիան վարորդի էկրանին հասանելի չէ</string>
     <string name="kom_can_icon_test">CAN պատկերակների թեստ (HUD / վարորդի էկրան)</string>
     <string name="kom_settings_plate">Մեքենայի համարանիշ</string>
-    <string name="kom_settings_plate_hint">Ցույց է տրվում մեքենայի վրա Cluster էջում, օր․ 09 YY 979։ Դատարկ՝ առանց համարի։</string>
+    <string name="kom_settings_plate_hint">Ցույց է տրվում մեքենայի վրա Cluster էջում, օր․ 00 AA 000։ Դատարկ՝ առանց համարի։</string>
     <string name="kom_tsr_log_start">▶ Գրանցել TSR (տեսախցիկի նշաններ) ուղևորության ընթացքում</string>
     <string name="kom_tsr_log_stop">■ Կանգնեցնել TSR-ի գրանցումը</string>
     <string name="kom_cluster_return_title">Նավիգացիան վերադարձնել վարորդի էկրան</string>
@@ -1947,4 +1947,7 @@
     <string name="kom_cluster_numbers">Տոկոս և պաշար</string>
     <string name="kom_cluster_numbers_sides">Կողքերին</string>
     <string name="kom_cluster_numbers_road">Ճանապարհի վերջում, հերթափոխով</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_about_license">Լիցենզիա՝</string>
+    <string name="kom_about_unofficial">Ոչ պաշտոնական, ոչ առևտրային տարբերակ, կապված չէ BYDMate-ի հեղինակի և BYD-ի հետ։</string>
 </resources>

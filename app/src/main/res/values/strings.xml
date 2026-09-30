@@ -2195,7 +2195,7 @@
     <string name="kom_can_icon_test">Тест значков CAN (HUD / экран водителя)</string>
     <!-- Kom-BYDMate -->
     <string name="kom_settings_plate">Номер автомобиля</string>
-    <string name="kom_settings_plate_hint">Показывается на машине на странице Cluster, например 09 YY 979. Пусто — номер без текста.</string>
+    <string name="kom_settings_plate_hint">Показывается на машине на странице Cluster, например 00 AA 000. Пусто — номер без текста.</string>
     <!-- Kom-BYDMate -->
     <string name="kom_tsr_log_start">▶ Запись TSR (сигналы камеры) в поездке</string>
     <string name="kom_tsr_log_stop">■ Остановить запись TSR</string>
@@ -2229,4 +2229,7 @@
     <string name="kom_cluster_numbers">Проценты и запас хода</string>
     <string name="kom_cluster_numbers_sides">По бокам</string>
     <string name="kom_cluster_numbers_road">В конце дороги, по очереди</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_about_license">Лицензия:</string>
+    <string name="kom_about_unofficial">Неофициальная некоммерческая версия, не связана с автором BYDMate и с BYD.</string>
 </resources>

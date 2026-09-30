@@ -1,7 +1,25 @@
-> **Kom-BYDMate** — [BYDMate](https://github.com/AndyShaman/BYDMate)-ի անձնական, ոչ կոմերցիոն տարբերակ
-> (փաթեթ՝ `kom.bydmate`)։ Լիցենզիա՝ PolyForm Noncommercial 1.0.0 (տես `LICENSE`)։
+<!-- Kom-BYDMate header: keep this block small, the rest of the file is the upstream README (easier merges) -->
+# Kom-BYDMate — an unofficial fork of BYDMate
+
+> **Unofficial, independent, noncommercial fork** of [BYDMate](https://github.com/AndyShaman/BYDMate) by AndyShaman.
+> It is **not** made, endorsed or supported by the BYDMate author, and it is **not** affiliated with BYD.
+> Please do not send questions about this fork to the original project — use this repository's Issues instead.
+>
+> **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0) (see [`LICENSE`](LICENSE)) — the same terms as the original. Personal / noncommercial use only.
 >
 > Required Notice: Copyright AndyShaman (https://github.com/AndyShaman/BYDMate)
+>
+> Fork changes © 2026 KomS ([github.com/KokoMoko](https://github.com/KokoMoko)), under the same license.
+
+**What Kom-BYDMate adds** (tested on BYD Sealion 06, DiLink 5):
+
+- **Cluster page** with four looks — Classic, Lagoon, Tide, Arch — and optional **3D gauges**; speed-limit ring on the speedometer (Navigator / OpenStreetMap), overspeed beep, average speed and consumption, altitude, brake lights and headlights on the car, your licence plate.
+- **Driver display & HUD:** Yandex Navigator maneuvers through the car's own navigation card, the current Yandex Music track on the driver display Music card, and navigation automatically returns to the driver display a few seconds after you scroll to another card.
+- **Armenian UI** (plus Russian and English), home-screen widgets on the dashboard, autostart of Navigator and Yandex Music in the background, a close button for split screen.
+
+**Install:** get the APK from this repository's [Releases](../../releases). The package is `kom.bydmate` with its own signing key. Official BYDMate must be uninstalled first — both use the same helper service. Everything below this line is the original BYDMate README and describes the upstream app.
+
+---
 
 <div align="center">
 

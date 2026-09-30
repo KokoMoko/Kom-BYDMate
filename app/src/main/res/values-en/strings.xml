@@ -2028,7 +2028,7 @@
     <string name="kom_can_icon_test">CAN icon test (HUD / driver display)</string>
     <!-- Kom-BYDMate -->
     <string name="kom_settings_plate">License plate</string>
-    <string name="kom_settings_plate_hint">Shown on the car on the Cluster page, e.g. 09 YY 979. Empty — a blank plate.</string>
+    <string name="kom_settings_plate_hint">Shown on the car on the Cluster page, e.g. 00 AA 000. Empty — a blank plate.</string>
     <!-- Kom-BYDMate -->
     <string name="kom_tsr_log_start">▶ Record TSR (camera signs) during the drive</string>
     <string name="kom_tsr_log_stop">■ Stop TSR recording</string>
@@ -2062,4 +2062,7 @@
     <string name="kom_cluster_numbers">Charge and range</string>
     <string name="kom_cluster_numbers_sides">At the sides</string>
     <string name="kom_cluster_numbers_road">At the road end, alternating</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_about_license">License:</string>
+    <string name="kom_about_unofficial">Unofficial noncommercial fork, not affiliated with the BYDMate author or with BYD.</string>
 </resources>

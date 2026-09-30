@@ -234,7 +234,7 @@ fun KomPlateBlock() {
                     KomPrefs.setPlate(context, value)
                 },
                 label = { Text(stringResource(R.string.kom_settings_plate)) },
-                placeholder = { Text("09 YY 979") },
+                placeholder = { Text("00 AA 000") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )

@@ -3,7 +3,12 @@ name: Build Kom-BYDMate APK
 on:
   push:
     branches: [main]
+    tags: ['v*-kom.*']
   workflow_dispatch:
+
+# a tag (e.g. v3.19.3-kom.7) also publishes a GitHub release with the APK and the license notice
+permissions:
+  contents: write
 
 concurrency:
   group: build-${{ github.ref }}
@@ -47,6 +52,13 @@ jobs:
         with:
           name: Kom-BYDMate-apk
           path: app/build/outputs/apk/release/*.apk
+
+      - name: Publish release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/release/*.apk
+          body_path: .github/RELEASE_NOTICE.md
 
       - name: Upload reports on failure
         if: failure()

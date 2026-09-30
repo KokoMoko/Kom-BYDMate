@@ -3084,7 +3084,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Kom-BYDMate: «© 2026 KomS | github.com/KokoMoko» և «Inspired by AndyShaman BYDMate»
-            // (վերջինը՝ հղում բնօրինակին)։ Required Notice-ը մնում է repo-ի LICENSE/README-ում։
+            // (վերջինը՝ հղում բնօրինակին), ներքևում՝ Required Notice և լիցենզիա (հանրային տարածման համար)։
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.kom_about_copyright), color = TextPrimary, fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold)
@@ -3111,6 +3111,21 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                     }
                 )
             }
+            // Լիցենզիայի պարտադիր ծանուցումը (PolyForm Noncommercial 1.0.0, «Notices»)՝ APK-ն տարածելիս
+            Text("Required Notice: Copyright AndyShaman (https://github.com/AndyShaman/BYDMate)", color = TextSecondary, fontSize = 12.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.kom_about_license) + " ", color = TextSecondary, fontSize = 12.sp)
+                Text(
+                    text = "PolyForm Noncommercial 1.0.0",
+                    color = AccentBlue,
+                    fontSize = 12.sp,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://polyformproject.org/licenses/noncommercial/1.0.0")))
+                    }
+                )
+            }
+            Text(stringResource(R.string.kom_about_unofficial), color = TextMuted, fontSize = 12.sp)
             Spacer(Modifier.height(8.dp))
             Text(
                 text = stringResource(R.string.settings_weather_attribution),
