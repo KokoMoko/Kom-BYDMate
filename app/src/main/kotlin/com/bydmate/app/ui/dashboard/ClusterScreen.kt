@@ -119,6 +119,21 @@ object ClusterPrefs {
     /** true՝ հզորությունը ձախից, արագաչափը՝ աջից։ */
     fun swapGauges(ctx: Context) = p(ctx).getBoolean("swap_gauges", false)
     fun setSwapGauges(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("swap_gauges", v).apply()
+
+    /** Ոճը, 3D-ն, կամարի թվերը և ջերմաստիճանների դասավորությունը (տես KomClusterThemes.kt)։ */
+    fun look(ctx: Context): ClusterLook {
+        val s = p(ctx)
+        fun <E : Enum<E>> e(key: String, def: E, all: Array<E>) = s.getString(key, null)?.let { n -> all.firstOrNull { it.name == n } } ?: def
+        return ClusterLook(
+            theme = e("theme", ClusterTheme.CLASSIC, ClusterTheme.values()),
+            d3 = s.getBoolean("gauge_3d", true),
+            archLabels = e("arch_labels", ArchLabels.ENDS, ArchLabels.values()),
+            infoRows = e("info_rows", InfoRows.TWO, InfoRows.values()),
+        )
+    }
+    fun setLook(ctx: Context, l: ClusterLook) = p(ctx).edit()
+        .putString("theme", l.theme.name).putBoolean("gauge_3d", l.d3)
+        .putString("arch_labels", l.archLabels.name).putString("info_rows", l.infoRows.name).apply()
 }
 
 private val Track = Color(0xFF1B2B45)
@@ -147,6 +162,7 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
     var topPct by remember { mutableIntStateOf(ClusterPrefs.topPct(context)) }
     var showSettings by remember { mutableStateOf(false) }
     var swapGauges by remember { mutableStateOf(ClusterPrefs.swapGauges(context)) }
+    var look by remember { mutableStateOf(ClusterPrefs.look(context)) }
 
     Column(
         modifier = Modifier
@@ -165,7 +181,7 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
             val topH = maxHeight * (topPct / 100f)
             Column(Modifier.fillMaxSize()) {
-                ClusterTop(state, swapGauges, Modifier.fillMaxWidth().height(topH))
+                ClusterTop(state, swapGauges, look, Modifier.fillMaxWidth().height(topH))
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     DashboardWidgetSlot(DashboardWidgets.scoped("cluster", DashboardWidgets.SLOT_PHONE), stringResource(R.string.kom_widget_hint_phone),
@@ -195,6 +211,26 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                         onValueChangeFinished = { ClusterPrefs.setTopPct(context, topPct) },
                         valueRange = 50f..75f,
                     )
+                    // Ոճ, 3D, կամարի թվեր, ջերմաստիճանների դասավորություն
+                    fun upd(l: ClusterLook) { look = l; ClusterPrefs.setLook(context, l) }
+                    Text(stringResource(R.string.kom_cluster_theme), color = TextPrimary, fontSize = 15.sp)
+                    LookChips(
+                        listOf(ClusterTheme.CLASSIC to R.string.kom_cluster_theme_classic, ClusterTheme.LAGOON to R.string.kom_cluster_theme_lagoon,
+                            ClusterTheme.TIDE to R.string.kom_cluster_theme_tide, ClusterTheme.ARCH to R.string.kom_cluster_theme_arch),
+                        look.theme,
+                    ) { upd(look.copy(theme = it)) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.kom_cluster_3d), color = TextPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        androidx.compose.material3.Switch(checked = look.d3, onCheckedChange = { upd(look.copy(d3 = it)) })
+                    }
+                    if (look.theme == ClusterTheme.ARCH) {
+                        Text(stringResource(R.string.kom_cluster_arch_numbers), color = TextPrimary, fontSize = 15.sp)
+                        LookChips(listOf(ArchLabels.ENDS to R.string.kom_cluster_arch_ends, ArchLabels.CYCLE to R.string.kom_cluster_arch_cycle),
+                            look.archLabels) { upd(look.copy(archLabels = it)) }
+                        Text(stringResource(R.string.kom_cluster_info_rows), color = TextPrimary, fontSize = 15.sp)
+                        LookChips(listOf(InfoRows.TWO to R.string.kom_cluster_info_two, InfoRows.ONE to R.string.kom_cluster_info_one),
+                            look.infoRows) { upd(look.copy(infoRows = it)) }
+                    }
                     Text(stringResource(R.string.kom_cluster_style_hint), color = TextMuted, fontSize = 13.sp)
                     // Արագաչափը և հզորությունը՝ տեղերով փոխել
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -215,8 +251,19 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun ClusterTop(state: DashboardUiState, swap: Boolean, modifier: Modifier) {
+private fun <T> LookChips(options: List<Pair<T, Int>>, selected: T, onPick: (T) -> Unit) {
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        options.forEach { (v, label) ->
+            androidx.compose.material3.FilterChip(selected = v == selected, onClick = { onPick(v) },
+                label = { Text(stringResource(label)) })
+        }
+    }
+}
+
+@Composable
+private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook, modifier: Modifier) {
     val context = LocalContext.current
     var powerStyle by remember { mutableStateOf(ClusterPrefs.powerStyle(context)) }
     var speedStyle by remember { mutableStateOf(ClusterPrefs.speedStyle(context)) }
@@ -276,11 +323,38 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, modifier: Modifie
     )
 
     val shape = RoundedCornerShape(16.dp)
-    Row(
-        modifier = modifier.clip(shape).border(1.dp, CardBorder, shape).padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    val theme = look.theme
+    val waves = theme == ClusterTheme.LAGOON || theme == ClusterTheme.TIDE
+    val waveT = rememberWaveClock(waves)
+    val soc = state.soc ?: 0
+    val rangeText = state.estimatedRangeKm?.let { "~${"%.0f".format(it)} km" } ?: "~— km"
+    val (gearText, gearColor) = when (state.gear) {
+        1 -> "P" to TextSecondary
+        2 -> "R" to Amber
+        3 -> "N" to TextSecondary
+        4 -> "D" to AccentGreen
+        else -> "–" to TextMuted
+    }
+    val inside = state.insideTemp?.let { "$it°" } ?: "—"
+    val outside = state.exteriorTemp?.let { "$it°" } ?: "—"
+    val captionH = 22.dp
+    BoxWithConstraints(modifier.clip(shape).border(1.dp, CardBorder, shape)) {
+        val innerW = maxWidth - 24.dp
+        val innerH = maxHeight - 16.dp
+        val gaugeSide = min(innerW * 0.3f, innerH - captionH)
+        if (theme == ClusterTheme.TIDE) {
+            // Մակընթացություն՝ ֆոնը և ալիքը ամբողջ լայնքով (սարքերի տակով)
+            val (c1, c2) = tideColors(soc)
+            Canvas(Modifier.matchParentSize()) {
+                drawRect(Brush.verticalGradient(listOf(Color(0xFF0A2248), Color(0xFF061633))))
+                drawRect(Brush.radialGradient(listOf(Color(0x405AAAFF), Color.Transparent), center = Offset(size.width / 2, size.height * 0.6f), radius = size.width * 0.5f))
+                val level = size.height - 24.dp.toPx() - (size.height * 0.62f) * soc / 100f
+                drawWave(0f, size.width, level, waveT * (1f + speed / 50f), c1, c2, 18.dp.toPx() * size.height / 480.dp.toPx())
+            }
+        }
+        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         val extras by KomClusterExtras.extras.collectAsStateWithLifecycle()
+        val altText = extras.altitudeM?.let { "$it m" } ?: "— m"
         // Արագաչափը՝ թույլատրելի արագությունը սանդղակի վրա կարմիր շրջանակով, տակը՝ միջին արագությունը
         val speedGauge: @Composable (Modifier) -> Unit = { m ->
             GaugeWithCaption(stringResource(R.string.kom_cluster_avg_speed, extras.avgSpeedKmh?.toString() ?: "—"), m) {
@@ -291,6 +365,7 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, modifier: Modifie
                     modifier = Modifier.fillMaxWidth().weight(1f),
                     limit = if (navLimit > 0) navLimit.toFloat() else 0f,
                     overLimit = navLimit > 0 && speed > upper,
+                    d3 = look.d3, glass = theme == ClusterTheme.TIDE,
                 )
             }
         }
@@ -302,22 +377,50 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, modifier: Modifie
                     color = powerColor, style = powerStyle,
                     onTap = { powerStyle = next(powerStyle); ClusterPrefs.setPowerStyle(context, powerStyle) },
                     modifier = Modifier.fillMaxWidth().weight(1f),
+                    d3 = look.d3, glass = theme == ClusterTheme.TIDE,
                 )
             }
         }
+        // Արգելակման լույսեր՝ իրական ոտնակից (ակնթարթային)․ եթե ազդանշան չկա՝ արագության նվազումից
+        val stoppedInGear = rawSpeed < 0.5f && state.gear != null && state.gear != 1
+        val pedal = state.brakePedal
+        val braking = if (pedal != null) pedal > 0 || stoppedInGear
+            else decelBraking || (rawSpeed > 2f && rawPower < -5f && !state.isCharging) || stoppedInGear
+        val road: @Composable (Modifier) -> Unit = { m ->
+            RoadScene(speedKmh = speed, braking = braking, headlights = state.headlightsOn, modifier = m, translucent = theme != ClusterTheme.CLASSIC)
+        }
         if (swap) powerGauge(Modifier.weight(0.3f).fillMaxHeight()) else speedGauge(Modifier.weight(0.3f).fillMaxHeight())
-        Column(Modifier.weight(0.4f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
-            ClusterHeader(state, extras)
-            Spacer(Modifier.height(6.dp))
-            // Արգելակման լույսեր՝ իրական ոտնակից (ակնթարթային)․ եթե ազդանշան չկա՝ արագության նվազումից
-            val stoppedInGear = rawSpeed < 0.5f && state.gear != null && state.gear != 1
-            val pedal = state.brakePedal
-            RoadScene(speedKmh = speed, braking = if (pedal != null) pedal > 0 || stoppedInGear
-                else decelBraking || (rawSpeed > 2f && rawPower < -5f && !state.isCharging) || stoppedInGear,
-                headlights = state.headlightsOn,
-                modifier = Modifier.fillMaxWidth().weight(1f))
+        Box(Modifier.weight(0.4f).fillMaxHeight()) {
+            when (theme) {
+                ClusterTheme.CLASSIC -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    ClusterHeader(state, extras)
+                    Spacer(Modifier.height(6.dp))
+                    road(Modifier.fillMaxWidth().weight(1f))
+                }
+                ClusterTheme.LAGOON, ClusterTheme.TIDE -> Box(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp))) {
+                    if (theme == ClusterTheme.LAGOON) {
+                        // Լիճ՝ կապույտ վահանակ, ալիքի մակարդակը՝ լիցքը
+                        Canvas(Modifier.fillMaxSize()) {
+                            drawRect(Brush.verticalGradient(listOf(Color(0xFF0B2A5A), Color(0xFF0A3D7A), Color(0xFF06214A))))
+                            drawRect(Brush.radialGradient(listOf(Color(0x5978C8FF), Color.Transparent), center = Offset(size.width / 2, size.height * 0.56f), radius = size.width * 0.6f))
+                            val top = 64.dp.toPx(); val bot = size.height - 30.dp.toPx()
+                            val level = bot - (bot - top) * soc / 100f
+                            drawWave(0f, size.width, level, waveT * (1f + speed / 50f), Color(0xFF35E0FF), Color(0xFF0A5FB4), 14.dp.toPx())
+                        }
+                    }
+                    road(Modifier.fillMaxSize().padding(top = 70.dp))
+                    WaveHeader(gearText, gearColor, inside, outside, altText, Modifier.align(Alignment.TopCenter).padding(top = 6.dp))
+                    BigNumber("$soc%", Modifier.align(Alignment.CenterStart).padding(start = 12.dp))
+                    BigNumber(rangeText, Modifier.align(Alignment.CenterEnd).padding(end = 12.dp))
+                }
+                ClusterTheme.ARCH -> ArchCenter(look, gaugeSide, captionH, soc, rangeText, gearText, gearColor, inside, outside, altText, road)
+            }
+            if (theme == ClusterTheme.LAGOON) {
+                Box(Modifier.matchParentSize().border(1.5.dp, Color(0x5978BEFF), RoundedCornerShape(20.dp)))
+            }
         }
         if (swap) speedGauge(Modifier.weight(0.3f).fillMaxHeight()) else powerGauge(Modifier.weight(0.3f).fillMaxHeight())
+        }
     }
 }
 
@@ -420,7 +523,7 @@ private fun socColor(soc: Float): Color = when {
 private fun Gauge(
     value: Float, min: Float, max: Float, step: Float, unit: String, label: String,
     color: Color, style: GaugeStyle, onTap: () -> Unit, modifier: Modifier,
-    limit: Float = 0f, overLimit: Boolean = false,
+    limit: Float = 0f, overLimit: Boolean = false, d3: Boolean = false, glass: Boolean = false,
 ) {
     BoxWithConstraints(
         modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onTap),
@@ -448,7 +551,13 @@ private fun Gauge(
                 Text("$unit · $label", color = TextSecondary, fontSize = (side.value * 0.07f).sp)
             }
             else -> Box(Modifier.size(side), contentAlignment = Alignment.Center) {
-                Canvas(Modifier.fillMaxSize()) { drawDial(value, min, max, step, color, style == GaugeStyle.NEEDLE, limit, overLimit) }
+                if (d3 && style == GaugeStyle.NEEDLE) {
+                    // 3D․ ստատիկ շերտը (եզր, դեմք, սանդղակ) առանձին է, որ սլաքի շարժման ժամանակ չվերագծվի
+                    Dial3DStatic(min, max, step, limit, overLimit, glass)
+                    Canvas(Modifier.fillMaxSize()) { drawDial3DDynamic(value, min, max, color) }
+                } else {
+                    Canvas(Modifier.fillMaxSize()) { drawDial(value, min, max, step, color, style == GaugeStyle.NEEDLE, limit, overLimit) }
+                }
                 // Թիվը՝ ճիշտ կենտրոնում (սլաքի առանցքի շրջանում), միավորը՝ առանձին, կենտրոնից ներքև
                 val needle = style == GaugeStyle.NEEDLE
                 Text(
@@ -464,6 +573,112 @@ private fun Gauge(
             }
         }
     }
+}
+
+@Composable
+private fun Dial3DStatic(min: Float, max: Float, step: Float, limit: Float, overLimit: Boolean, glass: Boolean) {
+    Canvas(Modifier.fillMaxSize()) { drawDial3DStatic(min, max, step, limit, overLimit, glass) }
+}
+
+/** 3D սարքի ստատիկ մասը․ ստվեր, մետաղյա եզր, խորությամբ դեմք, ուղի, սանդղակ, սահմանափակման նշան։ */
+private fun DrawScope.drawDial3DStatic(min: Float, max: Float, step: Float, limit: Float, overLimit: Boolean, glass: Boolean) {
+    val stroke = size.minDimension * 0.05f
+    val radius = size.minDimension / 2 - stroke
+    val c = center
+    val bezel = radius * 1.1f
+    fun ang(v: Float) = START + SWEEP * ((v.coerceIn(min, max) - min) / (max - min))
+    // փափուկ ստվեր ներքևում
+    drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent), center = c + Offset(0f, radius * 0.08f), radius = bezel * 1.08f),
+        radius = bezel * 1.08f, center = c + Offset(0f, radius * 0.08f))
+    // մետաղյա եզր
+    drawCircle(Brush.linearGradient(
+        listOf(Color(0xFFDFE7F2), Color(0xFF7F8DA3), Color(0xFF2B3649), Color(0xFF8A98AD), Color(0xFF1B2433)),
+        start = Offset(c.x - bezel, c.y - bezel), end = Offset(c.x + bezel, c.y + bezel),
+    ), radius = bezel, center = c)
+    drawCircle(Color(0xFF05080F), radius = radius * 1.035f, center = c)
+    // դեմք՝ վերևից լուսավորված
+    val faceColors = if (glass) listOf(Color(0x5A28466E), Color(0x730A1428), Color(0xB303060E))
+        else listOf(Color(0xFF1D3152), Color(0xFF0C1628), Color(0xFF03060E))
+    drawCircle(Brush.radialGradient(faceColors, center = c + Offset(0f, -radius * 0.25f), radius = radius * 1.05f), radius = radius * 1.02f, center = c)
+    val tl = Offset(c.x - radius, c.y - radius)
+    val arcSize = Size(radius * 2, radius * 2)
+    drawArc(Color.Black.copy(alpha = 0.55f), START, SWEEP, false, tl, arcSize, style = Stroke(stroke * 1.1f, cap = StrokeCap.Round))
+    drawArc(Color(0x2E5A78AA), START, SWEEP, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+    if (min < 0f) drawArc(AccentGreen.copy(alpha = 0.3f), START, ang(0f) - START, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+    val paint = android.graphics.Paint().apply {
+        this.color = android.graphics.Color.rgb(200, 212, 232); textSize = size.minDimension * 0.055f
+        textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true; isFakeBoldText = true
+        setShadowLayer(3f, 0f, 2f, android.graphics.Color.argb(160, 0, 0, 0))
+    }
+    var v = min
+    while (v <= max + 0.01f) {
+        val rad = Math.toRadians(ang(v).toDouble())
+        val cs = cos(rad).toFloat(); val sn = sin(rad).toFloat()
+        drawLine(Color(0xFFC8D4E8), Offset(c.x + cs * radius * 0.80f, c.y + sn * radius * 0.80f),
+            Offset(c.x + cs * radius * 0.92f, c.y + sn * radius * 0.92f), strokeWidth = 4f, cap = StrokeCap.Round)
+        val h = v + step / 2
+        if (h < max) {
+            val rh = Math.toRadians(ang(h).toDouble())
+            drawLine(Color(0x80C8D4E8), Offset(c.x + cos(rh).toFloat() * radius * 0.85f, c.y + sin(rh).toFloat() * radius * 0.85f),
+                Offset(c.x + cos(rh).toFloat() * radius * 0.92f, c.y + sin(rh).toFloat() * radius * 0.92f), strokeWidth = 2f)
+        }
+        if (limit <= 0f || kotlin.math.abs(v - limit) > 0.5f) {
+            drawContext.canvas.nativeCanvas.drawText(v.roundToInt().toString(),
+                c.x + cs * radius * 0.66f, c.y + sn * radius * 0.66f + paint.textSize / 3, paint)
+        }
+        v += step
+    }
+    if (limit > 0f) {
+        val rad = Math.toRadians(ang(limit).toDouble())
+        val p = Offset(c.x + cos(rad).toFloat() * radius * 0.66f, c.y + sin(rad).toFloat() * radius * 0.66f)
+        val r = size.minDimension * 0.075f
+        drawCircle(if (overLimit) Color(0xFF991B1B) else Color(0xFFF4F7FB), r, p)
+        drawCircle(Color(0xFFE53935), r, p, style = Stroke(size.minDimension * 0.014f))
+        val tp = android.graphics.Paint().apply {
+            this.color = if (overLimit) android.graphics.Color.WHITE else android.graphics.Color.rgb(17, 17, 17)
+            textSize = size.minDimension * 0.06f; isFakeBoldText = true
+            textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true
+        }
+        drawContext.canvas.nativeCanvas.drawText(limit.roundToInt().toString(), p.x, p.y + tp.textSize / 3, tp)
+    }
+}
+
+/** 3D սարքի շարժվող մասը․ փայլող արժեքի աղեղ, երկգույն սլաք՝ ստվերով, ուռուցիկ կենտրոն, ապակու փայլ։ */
+private fun DrawScope.drawDial3DDynamic(value: Float, min: Float, max: Float, color: Color) {
+    val stroke = size.minDimension * 0.05f
+    val radius = size.minDimension / 2 - stroke
+    val c = center
+    fun ang(v: Float) = START + SWEEP * ((v.coerceIn(min, max) - min) / (max - min))
+    val tl = Offset(c.x - radius, c.y - radius)
+    val arcSize = Size(radius * 2, radius * 2)
+    val zeroA = ang(0f)
+    val a = ang(value)
+    val from = kotlin.math.min(zeroA, a)
+    val sweep = kotlin.math.abs(a - zeroA).coerceAtLeast(0.5f)
+    drawArc(color.copy(alpha = 0.28f), from, sweep, false, tl, arcSize, style = Stroke(stroke * 2.1f, cap = StrokeCap.Round))
+    drawArc(color, from, sweep, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+    // սլաք
+    val rad = Math.toRadians(a.toDouble())
+    val dir = Offset(cos(rad).toFloat(), sin(rad).toFloat())
+    val nrm = Offset(-dir.y, dir.x)
+    val tip = c + dir * (radius * 0.86f)
+    val tail = c - dir * (radius * 0.16f)
+    val half = radius * 0.05f
+    val left = c + nrm * half
+    val right = c - nrm * half
+    val sh = Offset(radius * 0.03f, radius * 0.045f)
+    val shadow = Path().apply { moveTo(tip.x + sh.x, tip.y + sh.y); lineTo(left.x + sh.x, left.y + sh.y); lineTo(tail.x + sh.x, tail.y + sh.y); lineTo(right.x + sh.x, right.y + sh.y); close() }
+    drawPath(shadow, Color.Black.copy(alpha = 0.4f))
+    drawPath(Path().apply { moveTo(tip.x, tip.y); lineTo(left.x, left.y); lineTo(tail.x, tail.y); close() }, Color(0xFFFF7A5C))
+    drawPath(Path().apply { moveTo(tip.x, tip.y); lineTo(right.x, right.y); lineTo(tail.x, tail.y); close() }, Color(0xFFC2321A))
+    // կենտրոնական «գլխիկ»
+    val hr = radius * 0.28f
+    drawCircle(Color.Black.copy(alpha = 0.45f), hr * 1.08f, c + Offset(0f, hr * 0.18f))
+    drawCircle(Brush.radialGradient(listOf(Color(0xFF44536D), Color(0xFF1A2438), Color(0xFF0A0F1A)), center = c + Offset(-hr * 0.3f, -hr * 0.4f), radius = hr * 1.2f), hr, c)
+    drawCircle(Color(0x59C8D7F0), hr, c, style = Stroke(3f))
+    // ապակու փայլ վերևում
+    drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.13f), Color.Transparent), startY = c.y - radius, endY = c.y),
+        topLeft = Offset(c.x - radius * 0.95f, c.y - radius * 1.02f), size = Size(radius * 1.8f, radius * 1.0f))
 }
 
 private const val START = 135f
@@ -537,7 +752,7 @@ private fun DrawScope.drawDial(
  * ժամանակ անիմացիա չկա (և frame-եր չենք ծախսում)։ Արգելակելիս/կանգնած՝ կարմիր լույսերը վառ են։
  */
 @Composable
-private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier, headlights: Boolean = false) {
+private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier, headlights: Boolean = false, translucent: Boolean = false) {
     // Համարանիշը՝ Settings → Application → «License plate» (թարմացվում է 2 վրկ-ը մեկ)
     val ctx = LocalContext.current
     val plate by produceState(initialValue = KomPrefs.plate(ctx)) {
@@ -567,9 +782,16 @@ private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier, hea
         val hw = size.width * 0.48f
         val nw = hw * 0.12f
         val road = Path().apply { moveTo(cx - nw, hy); lineTo(cx + nw, hy); lineTo(cx + hw, by); lineTo(cx - hw, by); close() }
-        drawPath(road, Road)
-        drawLine(RoadEdge, Offset(cx - nw, hy), Offset(cx - hw, by), strokeWidth = 3f)
-        drawLine(RoadEdge, Offset(cx + nw, hy), Offset(cx + hw, by), strokeWidth = 3f)
+        if (translucent) {
+            // նոր ոճերում՝ լուսավոր, կիսաթափանցիկ ճանապարհ (ալիքը/կամարը երևում են)
+            drawPath(road, Brush.verticalGradient(listOf(Color(0x00C8E1FF), Color(0x38C8E1FF)), startY = hy, endY = by))
+            drawLine(Color(0xC078BEFF), Offset(cx - nw, hy), Offset(cx - hw, by), strokeWidth = 3f)
+            drawLine(Color(0xC078BEFF), Offset(cx + nw, hy), Offset(cx + hw, by), strokeWidth = 3f)
+        } else {
+            drawPath(road, Road)
+            drawLine(RoadEdge, Offset(cx - nw, hy), Offset(cx - hw, by), strokeWidth = 3f)
+            drawLine(RoadEdge, Offset(cx + nw, hy), Offset(cx + hw, by), strokeWidth = 3f)
+        }
         val n = 10
         for (lane in listOf(-1f / 3f, 1f / 3f)) {
             for (i in 0 until n) {

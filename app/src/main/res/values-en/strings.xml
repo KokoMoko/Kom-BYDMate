@@ -2043,4 +2043,17 @@
     <!-- Kom-BYDMate -->
     <string name="kom_cluster_avg_speed">Avg: %1$s km/h</string>
     <string name="kom_cluster_avg_consumption">Avg: %1$s kWh/100</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_theme">Style</string>
+    <string name="kom_cluster_theme_classic">Classic</string>
+    <string name="kom_cluster_theme_lagoon">Lagoon</string>
+    <string name="kom_cluster_theme_tide">Tide</string>
+    <string name="kom_cluster_theme_arch">Arch</string>
+    <string name="kom_cluster_3d">3D gauges</string>
+    <string name="kom_cluster_arch_numbers">Arch numbers</string>
+    <string name="kom_cluster_arch_ends">At the ends</string>
+    <string name="kom_cluster_arch_cycle">Alternating (5 s)</string>
+    <string name="kom_cluster_info_rows">Temperature and altitude</string>
+    <string name="kom_cluster_info_two">Two rows</string>
+    <string name="kom_cluster_info_one">One row</string>
 </resources>

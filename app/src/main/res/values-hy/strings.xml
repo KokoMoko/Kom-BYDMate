@@ -1928,4 +1928,17 @@
     <string name="kom_speed_alert_hint">Ազդանշան, երբ արագությունը սահմանափակումից + շեղումից բարձր է (մուգ կարմիր շրջան)։ Կրկնվում է 10 վայրկյանը մեկ։</string>
     <string name="kom_cluster_avg_speed">Միջ.՝ %1$s կմ/ժ</string>
     <string name="kom_cluster_avg_consumption">Միջ.՝ %1$s kWh/100</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_theme">Ոճ</string>
+    <string name="kom_cluster_theme_classic">Դասական</string>
+    <string name="kom_cluster_theme_lagoon">Լիճ</string>
+    <string name="kom_cluster_theme_tide">Մակընթացություն</string>
+    <string name="kom_cluster_theme_arch">Կամար</string>
+    <string name="kom_cluster_3d">3D սարքեր</string>
+    <string name="kom_cluster_arch_numbers">Թվեր կամարի վրա</string>
+    <string name="kom_cluster_arch_ends">Ծայրերին</string>
+    <string name="kom_cluster_arch_cycle">Հերթափոխով (5 վ)</string>
+    <string name="kom_cluster_info_rows">Ջերմաստիճան և բարձրություն</string>
+    <string name="kom_cluster_info_two">Երկու տողով</string>
+    <string name="kom_cluster_info_one">Մեկ տողով</string>
 </resources>

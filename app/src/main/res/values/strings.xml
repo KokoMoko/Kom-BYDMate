@@ -2210,4 +2210,17 @@
     <!-- Kom-BYDMate -->
     <string name="kom_cluster_avg_speed">Сред.: %1$s км/ч</string>
     <string name="kom_cluster_avg_consumption">Сред.: %1$s kWh/100</string>
+    <!-- Kom-BYDMate -->
+    <string name="kom_cluster_theme">Стиль</string>
+    <string name="kom_cluster_theme_classic">Классика</string>
+    <string name="kom_cluster_theme_lagoon">Лагуна</string>
+    <string name="kom_cluster_theme_tide">Прилив</string>
+    <string name="kom_cluster_theme_arch">Арка</string>
+    <string name="kom_cluster_3d">Объёмные приборы (3D)</string>
+    <string name="kom_cluster_arch_numbers">Цифры на арке</string>
+    <string name="kom_cluster_arch_ends">По краям</string>
+    <string name="kom_cluster_arch_cycle">По очереди (5 с)</string>
+    <string name="kom_cluster_info_rows">Температура и высота</string>
+    <string name="kom_cluster_info_two">Две строки</string>
+    <string name="kom_cluster_info_one">Одна строка</string>
 </resources>
