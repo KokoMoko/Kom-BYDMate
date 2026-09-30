@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,17 +72,24 @@ data class ClusterLook(
     val infoRows: InfoRows = InfoRows.TWO,
 )
 
-/** Ալիքի ժամացույց վայրկյաններով (~30 կադր/վ)․ [active]-ը false է՝ կանգնած է (0), frame-եր չի ծախսում։ */
+/**
+ * Ալիքի փուլը (~30 կադր/վ)․ կուտակվում է կադր առ կադր՝ `phase += dt · (1 + speed / 50)`, որ արագության
+ * փոփոխությունը միայն արագացնի/դանդաղեցնի ալիքը։ Նախկինում `t · (1 + speed / 50)` էր, և ամեն արագության
+ * փոփոխության պահին փուլը ցատկում էր (շարժման սկզբում ալիքը «թրթռում» էր)։ [active] = false՝ կանգնած է։
+ */
 @Composable
-internal fun rememberWaveClock(active: Boolean): Float {
+internal fun rememberWavePhase(active: Boolean, speedKmh: Float): Float {
+    val speedNow by rememberUpdatedState(speedKmh)
     val t by produceState(0f, active) {
         if (!active) { value = 0f; return@produceState }
-        var start = 0L
+        var last = 0L
         var lastEmit = 0L
+        var phase = 0f
         while (true) {
             withFrameNanos { now ->
-                if (start == 0L) start = now
-                if (now - lastEmit >= 33_000_000L) { value = (now - start) / 1e9f; lastEmit = now }
+                if (last != 0L) phase += (now - last) / 1e9f * (1f + speedNow.coerceAtLeast(0f) / 50f)
+                last = now
+                if (now - lastEmit >= 33_000_000L) { value = phase; lastEmit = now }
             }
         }
     }

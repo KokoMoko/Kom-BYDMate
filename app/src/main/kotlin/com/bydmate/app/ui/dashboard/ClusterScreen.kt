@@ -337,7 +337,7 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
     val shape = RoundedCornerShape(16.dp)
     val theme = look.theme
     val waves = theme == ClusterTheme.LAGOON || theme == ClusterTheme.TIDE
-    val waveT = rememberWaveClock(waves)
+    val waveT = rememberWavePhase(waves, speed)
     val soc = state.soc ?: 0
     val rangeText = state.estimatedRangeKm?.let { "~${"%.0f".format(it)} km" } ?: "~— km"
     val (gearText, gearColor) = when (state.gear) {
@@ -364,7 +364,7 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
                 drawRect(Brush.verticalGradient(listOf(Color(0xFF0A2248), Color(0xFF061633))))
                 drawRect(Brush.radialGradient(listOf(Color(0x405AAAFF), Color.Transparent), center = Offset(size.width / 2, size.height * 0.6f), radius = size.width * 0.5f))
                 val level = size.height - 24.dp.toPx() - (size.height * 0.62f) * soc / 100f
-                drawWave(0f, size.width, level, waveT * (1f + speed / 50f), c1, c2, 18.dp.toPx() * size.height / 480.dp.toPx())
+                drawWave(0f, size.width, level, waveT, c1, c2, 18.dp.toPx() * size.height / 480.dp.toPx())
             }
         }
         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -426,7 +426,7 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
                             drawRect(Brush.radialGradient(listOf(Color(0x5978C8FF), Color.Transparent), center = Offset(size.width / 2, size.height * 0.56f), radius = size.width * 0.6f))
                             val top = 64.dp.toPx(); val bot = size.height - 30.dp.toPx()
                             val level = bot - (bot - top) * soc / 100f
-                            drawWave(0f, size.width, level, waveT * (1f + speed / 50f), Color(0xFF35E0FF), Color(0xFF0A5FB4), 14.dp.toPx())
+                            drawWave(0f, size.width, level, waveT, Color(0xFF35E0FF), Color(0xFF0A5FB4), 14.dp.toPx())
                         }
                     }
                     road(Modifier.fillMaxSize().padding(top = 70.dp))
