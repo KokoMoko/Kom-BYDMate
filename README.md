@@ -19,19 +19,33 @@
 The project currently extends upstream BYDMate in several areas, with development and testing focused on **BYD Sealion 06 / DiLink 5**:
 
 - **Redesigned dashboard** with configurable information tiles, contextual vehicle data and a dedicated speedometer-oriented driving view.
-- **Custom instrument-cluster experience** with Classic, Lagoon, Tide and Arch themes, optional 3D gauges, configurable layouts and additional live driving information.
-- **Navigation and speed-limit enhancements**, including Yandex Navigator integration, OpenStreetMap-based speed-limit support, speed-limit visualization and overspeed alerts.
-- **Driver-display integration**, including navigation return behavior and Yandex Music information on the vehicle display.
+- **Custom instrument-cluster experience** with Classic, Lagoon, Tide, Arch and Road themes (Road colours its edges from green to red as the battery drains), optional 3D gauges, configurable layouts and additional live driving information.
+- **Navigation and speed-limit enhancements**, including Yandex Navigator integration, OpenStreetMap-based speed-limit support, speed-limit visualization and overspeed alerts (on the car's voice audio channel, with a test button in settings).
+- **Driver-display integration**, including navigation return behavior and Yandex Music information on the vehicle display. Yandex Navigator moves to and from the cluster with a single restart (no world-map flash), behind a short loading cover.
+- **Driving-only range prediction** that ignores long stops and charging and adapts to temperature and the current drive (see below).
 - **Armenian localization**, alongside Russian and English resources used by the Kom-BYDMate build.
 - **Dashboard widget architecture** that allows information blocks to be selected and positioned more flexibly.
 - **Convenience and startup features**, including application autostart handling and additional split-screen behavior.
-- **Separate application identity** using package `kom.bydmate`, separate signing and Kom-specific versioning such as `3.19.3-kom.8`.
+- **Separate application identity** using package `kom.bydmate`, separate signing and Kom-specific versioning such as `3.19.3-kom.14`.
 
 ## Relationship to BYDMate
 
 Kom-BYDMate preserves the original project's Git history and tracks BYDMate as an upstream repository. This is intentional: it keeps authorship and technical provenance transparent and makes it possible to merge compatible upstream fixes and improvements while maintaining the Kom-specific development line.
 
 The original BYDMate project remains the source of the core codebase and many underlying vehicle-integration capabilities. Kom-BYDMate should therefore be treated as a derivative project, not as an independently reimplemented replacement.
+
+## Range Estimation
+
+A range estimate built from "energy used / distance driven" is easily thrown off when the car sits for hours with climate or electronics on: energy is spent, distance stays at zero, and the learned kWh/100 km balloons. In testing this showed about 113 km at 75% SOC where roughly 275 km was realistic. Kom-BYDMate predicts range from **driving-only consumption**:
+
+- **Prolonged stops are excluded.** Standing still for 15 minutes or more counts as parking, and its energy is removed from the learning history back to the first minute of the stop. Short traffic stops stay in, because they are part of driving.
+- **Charging never counts.** Whatever the energy counter does while a charger is connected, or while energy flows into the pack at standstill, is dropped.
+- **Temperature-aware.** A long-term average is kept for every 5 °C band of exterior temperature, so a cold morning starts from last winter's consumption rather than last summer's.
+- **Follows the current drive.** The last 25 km of driving (heating or A/C load, hills, wind) blends in gradually: under 5 km the temperature history decides, from 20 km on the current drive does.
+- **Real remaining energy.** Remaining kWh comes from the BMS and is cross-checked against SOC × capacity; an implausible reading falls back to SOC. Energy lost while parked still lowers the range; it just no longer distorts the consumption.
+- **Visible on the dashboard.** The range tile shows the consumption in use, the "right now" consumption once enough distance is driven, and which temperature band is leading.
+
+History starts empty on first install, and the estimate is marked provisional until 5 km of driving have been learned. The full model and its validation scenarios: [docs/range-estimation-model.md](docs/range-estimation-model.md).
 
 ## Installation
 

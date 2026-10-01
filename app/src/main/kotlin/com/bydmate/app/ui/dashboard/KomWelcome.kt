@@ -214,6 +214,9 @@ fun KomSpeedAlertBlock() {
             androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Text(stringResource(R.string.kom_speed_alert_title), color = TextPrimary, fontSize = 16.sp,
                     modifier = Modifier.weight(1f))
+                androidx.compose.material3.TextButton(onClick = { KomSpeedAlert.test() }) {
+                    Text(stringResource(R.string.kom_speed_alert_test))
+                }
                 androidx.compose.material3.Switch(checked = on, onCheckedChange = { on = it; KomPrefs.setSpeedAlert(context, it) })
             }
             Text(stringResource(R.string.kom_speed_alert_hint), color = TextMuted, fontSize = 13.sp,

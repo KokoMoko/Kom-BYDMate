@@ -334,6 +334,7 @@ fun main(args: Array<String>) {
                         sleep = { Thread.sleep(it) },
                         // Enables the non-destructive freeform probe before a retype remove.
                         stateOf = { ti -> taskModeState(ti) },
+                        oneStepFullscreen = ::pullBackInOneStep,
                     )
                     reply?.writeInt(0); reply?.writeInt(0)
                     true
@@ -1701,6 +1702,93 @@ private fun setTaskBoundsReflect(taskId: Int, left: Int, top: Int, right: Int, b
     resizeTask.invoke(iAtm, taskId, rect, 1)
 }
 
+/** Logcat does not show this daemon's lines on Sea Lion 06; stdout lands in bydmate_helper.log. */
+private fun helperDiag(msg: String) {
+    android.util.Log.i("bydmate_helper", msg)
+    System.out.println(msg)
+    System.out.flush()
+}
+
+/**
+ * Android 11+ replacement for the removed IActivityTaskManager.setTaskWindowingMode: sets
+ * [windowingMode] and [bounds] (empty = fill the parent) of [taskId] in ONE
+ * WindowContainerTransaction, i.e. one configuration change for the app. Throws when the API or
+ * the task token is unavailable (Android 10 has no WindowContainerTransaction).
+ */
+private fun applyTaskWindowingWct(taskId: Int, windowingMode: Int, bounds: Rect) {
+    val wctClass = Class.forName("android.window.WindowContainerTransaction")
+    val tokenClass = Class.forName("android.window.WindowContainerToken")
+    val iAtm = activityTaskManager()
+    val task = (atmGetTasks(iAtm, 100) ?: emptyList<Any>()).firstOrNull { t ->
+        t != null && (fieldByName(t, "taskId") ?: fieldByName(t, "id"))
+            ?.let { f -> f.isAccessible = true; f.getInt(t) == taskId } == true
+    } ?: throw IllegalStateException("task $taskId not found")
+    val token = fieldByName(task, "token")?.let { f -> f.isAccessible = true; f.get(task) }
+        ?: throw IllegalStateException("no WindowContainerToken for task $taskId")
+    val wct = wctClass.getConstructor().newInstance()
+    wctClass.getMethod("setWindowingMode", tokenClass, Int::class.javaPrimitiveType).invoke(wct, token, windowingMode)
+    wctClass.getMethod("setBounds", tokenClass, Rect::class.java).invoke(wct, token, bounds)
+    val controller = iAtm.javaClass.getMethod("getWindowOrganizerController").invoke(iAtm)
+        ?: throw IllegalStateException("no WindowOrganizerController")
+    controller.javaClass.getMethod("applyTransaction", wctClass).invoke(controller, wct)
+}
+
+/** Combine fullscreen mode and cleared bounds in WCT, then move home. The display move is
+ * a separate operation and may still recreate the activity; it never explicitly removes the task. */
+private fun pullBackInOneStep(taskId: Int) {
+    try {
+        applyTaskWindowingWct(taskId, WINDOWING_MODE_FULLSCREEN, Rect())
+        if (taskModeState(taskId)?.displayId != 0) moveTaskToDisplayReflect(taskId, 0)
+        runCatching { setFocusedTaskReflect(taskId) }
+    } catch (t: Throwable) {
+        helperDiag("pullback one-step failed task=$taskId: ${t.cause?.message ?: t.message}")
+        throw t
+    }
+}
+
+/**
+ * Move first because this ROM can reset windowing mode on reparent. Combine mode and bounds
+ * in one WCT afterwards, avoiding the old separate mode and resize relaunches.
+ * The display move remains a separate binder operation; this is not atomic across displays.
+ * Never retype a task here: mismatched activity types still use the existing compatibility path.
+ */
+internal fun tryCombinedFreeformPlacement(
+    taskId: Int, displayId: Int,
+    left: Int, top: Int, right: Int, bottom: Int,
+    desiredActivityType: Int,
+    getActivityType: (Int) -> Int,
+    move: (Int, Int) -> Unit,
+    applyModeAndBounds: (Int, Int, Int, Int, Int) -> Unit,
+    state: (Int) -> TaskModeState?,
+    focus: (Int) -> Unit,
+    log: (String) -> Unit,
+    sleep: (Long) -> Unit,
+): Boolean {
+    if (taskId <= 0 || left < 0 || top < 0 || right <= left || bottom <= top) return false
+    if (runCatching { getActivityType(taskId) }.getOrNull() != desiredActivityType) {
+        log("freeform combined skipped task=$taskId: activityType mismatch")
+        return false
+    }
+    return try {
+        if (state(taskId)?.displayId != displayId) move(taskId, displayId)
+        applyModeAndBounds(taskId, left, top, right, bottom)
+        runCatching { focus(taskId) }
+        repeat(4) {
+            sleep(200L)
+            val after = state(taskId)
+            if (after?.displayId == displayId && after.windowingMode == WINDOWING_MODE_FREEFORM) {
+                log("freeform combined ok task=$taskId display=$displayId bounds=$left,$top,$right,$bottom")
+                return true
+            }
+        }
+        log("freeform combined unconfirmed task=$taskId")
+        false
+    } catch (t: Throwable) {
+        log("freeform combined failed task=$taskId: ${t.cause?.message ?: t.message}")
+        false
+    }
+}
+
 /** Resolved focus method: setFocusedRootTask(int) (Android 12) or setFocusedTask(int) (Android 10). */
 @Volatile private var atmSetFocusedTaskMethod: java.lang.reflect.Method? = null
 
@@ -2905,8 +2993,10 @@ internal fun handleSetWindowingModeTx(
     getActivityType: (Int) -> Int,
     sleep: (Long) -> Unit,
     stateOf: (Int) -> TaskModeState? = { _ -> null },
+    oneStepFullscreen: ((Int) -> Unit)? = null,
 ) = setWindowingModeCompat(
-    taskId, mode, 0, desiredActivityType, reflectSet, resolveComponent, shell, getActivityType, stateOf, sleep,
+    taskId, mode, 0, desiredActivityType, reflectSet, resolveComponent, shell, getActivityType, stateOf,
+    oneStepFullscreen = oneStepFullscreen, sleep = sleep,
 )
 
 /**
@@ -2947,6 +3037,7 @@ internal fun setWindowingModeCompat(
     shell: (String, List<String>) -> String,
     getActivityType: (Int) -> Int = { _ -> -1 },
     stateOf: (Int) -> TaskModeState? = { _ -> null },
+    oneStepFullscreen: ((Int) -> Unit)? = null,
     sleep: (Long) -> Unit,
 ) {
     // Skip reflectSet when placing into freeform and the task's activityType is not the desired
@@ -2985,6 +3076,26 @@ internal fun setWindowingModeCompat(
             taskId, freeformType, desiredActivityType, freeformDisplayId, component, shell, sleep, stateOf,
         )
     } else {
+        // One-step path (Android 11+, [oneStepFullscreen]): mode and bounds in one
+        // WindowContainerTransaction with the display move right behind it, so the app sees one
+        // configuration change instead of a relaunch per step. On Sea Lion 06 the light path below
+        // moves the task home but leaves it FREEFORM (on-car 2026-10-01: task #56 removed as
+        // mode=freeform), and the unconfirmed state then costs the navigator its task. Confirmed
+        // by the same reads as the light path; anything else falls through to it unchanged.
+        if (oneStepFullscreen != null && runCatching { oneStepFullscreen(taskId) }.isSuccess) {
+            var after: TaskModeState? = null
+            repeat(PULLBACK_READS) {
+                sleep(PULLBACK_POLL_MS)
+                after = stateOf(taskId)
+                if (after != null && after.displayId == 0 &&
+                    after.windowingMode == WINDOWING_MODE_FULLSCREEN
+                ) {
+                    helperDiag("pullback one-step ok task=$taskId")
+                    return
+                }
+            }
+            helperDiag("pullback one-step unconfirmed: task=$taskId state=$after")
+        }
         // Light path first (#134): the same `am start` trick the freeform direction uses —
         // mode+display applied to the EXISTING task, so the navigator keeps its id, its process
         // and its guidance session. Verified by reading the task back; only an unconfirmed
@@ -3259,6 +3370,18 @@ private fun launchFreeform(
     // The budget starts before the launch retry loop: it, not just the core, eats the client's 15s.
     val startMs = monotonicMs()
     val taskId = resolveOrLaunchTask(packageName, WINDOWING_MODE_FREEFORM, displayId, activityType)
+    if (tryCombinedFreeformPlacement(
+        taskId, displayId, left, top, right, bottom, activityType,
+        getActivityType = ::taskActivityType,
+        move = ::moveTaskToDisplayReflect,
+        applyModeAndBounds = { t, l, y, r, b ->
+            applyTaskWindowingWct(t, WINDOWING_MODE_FREEFORM, Rect(l, y, r, b))
+        },
+        state = ::taskModeState,
+        focus = ::setFocusedTaskReflect,
+        log = ::helperDiag,
+        sleep = { Thread.sleep(it) },
+    )) return FreeformResultCodes.OK
     return launchFreeformCore(
         taskId, displayId, left, top, right, bottom, activityType,
         setMode = { t, m ->
@@ -3286,7 +3409,7 @@ private fun launchFreeform(
         getActivityType = { ti -> taskActivityType(ti) },
         // android.util.Log reaches logcat from the app_process daemon; System.err goes nowhere.
         // Passing the throwable prints the full stack trace including the cause chain.
-        log = { msg, t -> android.util.Log.w("bydmate_helper", msg, t) },
+        log = { msg, t -> helperDiag(msg + (t?.let { ": ${it.cause?.message ?: it.message}" } ?: "")) },
         // setMode recreates a STANDARD task (new id) — re-resolve by package, never by the old id.
         resolveCurrentTaskId = { findTaskState(packageName)?.taskId ?: -1 },
         deadlineMs = startMs + GRACE_DEADLINE_MS,

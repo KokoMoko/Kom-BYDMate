@@ -61,7 +61,7 @@ import kotlin.math.sin
  *  - ARCH («Կամար») — լիցքը՝ 160° կամար ճանապարհի վրայով, վերին եզրը՝ արագաչափի վերին եզրի մակարդակին։
  * Ալիքը միակ անընդհատ անիմացիան է (~30 կադր/վ, միայն LAGOON / TIDE ոճերում)։
  */
-enum class ClusterTheme { CLASSIC, LAGOON, TIDE, ARCH }
+enum class ClusterTheme { CLASSIC, LAGOON, TIDE, ARCH, ROAD }
 enum class ArchLabels { ENDS, CYCLE }
 enum class InfoRows { TWO, ONE }
 
@@ -97,6 +97,14 @@ internal fun rememberWavePhase(active: Boolean, speedKmh: Float): Float {
 }
 
 /** Ալիքի գույները՝ ըստ լիցքի (TIDE)․ կապտականաչ → սաթագույն → կարմիր։ */
+/** «Ճանապարհ» ոճ (Լճի դասավորությունը առանց լճի)՝ եզրագծերը 100% կանաչ → 50% դեղին → 0% կարմիր, սահուն։ */
+internal fun roadEdgeColor(soc: Int): Color {
+    val f = soc.coerceIn(0, 100) / 100f
+    val red = Color(0xFFE5322D); val yellow = Color(0xFFF5C518); val green = Color(0xFF4CD964)
+    return if (f >= 0.5f) androidx.compose.ui.graphics.lerp(yellow, green, (f - 0.5f) * 2f)
+           else androidx.compose.ui.graphics.lerp(red, yellow, f * 2f)
+}
+
 internal fun tideColors(soc: Int): Pair<Color, Color> = when {
     soc >= 50 -> Color(0xFF1FD1C1) to Color(0xFF1B7FD6)
     soc >= 20 -> Color(0xFFF5B32A) to Color(0xFFC2641A)
@@ -298,11 +306,12 @@ internal fun ArchCenter(
             BigNumber("$soc%", Modifier.align(Alignment.TopEnd).offset(x = -sideInset, y = cy + endDy - 44.dp), 24)
         } else {
             val idx = rememberCycleIndex(true)
-            // պարզ fade՝ երկու թիվն էլ ճիշտ կենտրոնում (Box-ը ամբողջ լայնքով, պարունակությունը՝ կենտրոնում)
+            // պարզ fade՝ երկու թիվն էլ ճիշտ կենտրոնում (Box-ը ամբողջ լայնքով, պարունակությունը՝ կենտրոնում),
+            // կամարից ~0.25 սմ (9.5dp) ավելի ներքև, փոքր տառով
             Crossfade(targetState = idx, animationSpec = tween(600), label = "arch-cycle",
-                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().offset(y = underTop + 20.dp)) { i ->
+                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().offset(y = underTop + 29.5.dp)) { i ->
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    BigNumber(if (i == 0) rangeText else "$soc%", Modifier, 32)
+                    BigNumber(if (i == 0) rangeText else "$soc%", Modifier, 28)
                 }
             }
         }

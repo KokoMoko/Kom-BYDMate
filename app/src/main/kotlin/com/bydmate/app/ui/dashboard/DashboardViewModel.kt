@@ -83,6 +83,13 @@ data class DashboardUiState(
     val insightPeriodDays: Int = 7,
     val insightExpanded: Boolean = false,
     val estimatedRangeKm: Double? = null,
+    val rangeConsumptionKwhPer100: Double? = null,
+    val rangeProvisional: Boolean = true,
+    val rangeEnergySource: String = "capacity_soc",
+    /** Consumption of the recent driving window; null until enough distance is driven. */
+    val rangeReactiveKwhPer100: Double? = null,
+    /** Exterior-temperature band (°C, inclusive lower bound) whose history leads the estimate. */
+    val rangeTempBandC: Int? = null,
     val vehicleDataConnected: Boolean = true,
     // ADB control-channel verdict for the header; null = nothing to show.
     val adbVerdict: AdbVerdict? = null,
@@ -119,6 +126,7 @@ class DashboardViewModel @Inject constructor(
     private val adbVerdictMonitor: AdbVerdictMonitor,
     private val tripCounterResets: TripCounterResets,
     private val adbOnDeviceClient: com.bydmate.app.data.autoservice.AdbOnDeviceClient,
+    private val drivingRangeSource: com.bydmate.app.domain.calculator.DrivingRangeSource,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -195,6 +203,27 @@ class DashboardViewModel @Inject constructor(
 
     private fun observeLiveData() {
         viewModelScope.launch {
+            drivingRangeSource.status.collect { status ->
+                _uiState.update { it.copy(
+                    rangeProvisional = !status.learned,
+                    rangeReactiveKwhPer100 = status.reactiveKwhPer100
+                        ?.takeIf { status.reactiveKm >= com.bydmate.app.domain.calculator.DrivingRangeModel.BLEND_START_KM },
+                    // Named only while the band still leads; once the drive is reactive it is noise.
+                    rangeTempBandC = status.tempBand
+                        ?.takeIf { status.priorFromTemp && status.blendWeight < 1.0 }
+                        ?.let { (it * com.bydmate.app.domain.calculator.DrivingRangeModel.TEMP_BAND_C).toInt() },
+                ) }
+            }
+        }
+        viewModelScope.launch {
+            TrackingService.lastRangeEstimate.collect { estimate ->
+                _uiState.update { it.copy(
+                    rangeEnergySource = estimate?.energySource ?: "unavailable",
+                    rangeConsumptionKwhPer100 = estimate?.avgKwhPer100,
+                ) }
+            }
+        }
+        viewModelScope.launch {
             combine(adbVerdictMonitor.verdict, adbVerdictMonitor.checking) { v, c -> v to c }
                 .collect { (verdict, checking) ->
                     _uiState.update { it.copy(adbVerdict = verdict, adbChecking = checking) }
@@ -260,7 +289,10 @@ class DashboardViewModel @Inject constructor(
                                 data?.soc ?: current.soc
                             )
                         ),
-                        estimatedRangeKm = rangeKm ?: current.estimatedRangeKm,
+                        // A single poll without SOC must not blank the tile; a lost link or a
+                        // stopped service must not leave a stale number either.
+                        estimatedRangeKm = rangeKm
+                            ?: current.estimatedRangeKm?.takeIf { connected && running },
                         vehicleDataConnected = connected,
                         insideTemp = data?.insideTemp ?: current.insideTemp,
                         tripDistanceKm = snapshot.tripDistanceKm,

@@ -2206,6 +2206,7 @@
     <!-- Kom-BYDMate -->
     <string name="kom_cluster_swap">Поменять местами спидометр и мощность</string>
     <string name="kom_speed_alert_title">Звук при превышении скорости</string>
+    <string name="kom_speed_alert_test">Проверить</string>
     <string name="kom_speed_alert_hint">Сигнал, когда скорость выше ограничения + допуск (как тёмно-красное кольцо). Повтор каждые 10 с.</string>
     <!-- Kom-BYDMate -->
     <string name="kom_cluster_avg_speed">Сред.: %1$s км/ч</string>
@@ -2216,6 +2217,7 @@
     <string name="kom_cluster_theme_lagoon">Лагуна</string>
     <string name="kom_cluster_theme_tide">Прилив</string>
     <string name="kom_cluster_theme_arch">Арка</string>
+    <string name="kom_cluster_theme_road">Дорога</string>
     <string name="kom_cluster_3d">Объёмные приборы (3D)</string>
     <string name="kom_cluster_arch_numbers">Цифры на арке</string>
     <string name="kom_cluster_arch_ends">По краям</string>
@@ -2237,4 +2239,11 @@
     <string name="kom_widget_suggest_music">Сюда подходит любой виджет Android. У автора — Яндекс Музыка; подойдёт виджет любого плеера (Spotify, YouTube Music…).</string>
     <string name="kom_widget_suggest_weather">Сюда подходит любой виджет Android. У автора — AccuWeather (бесплатно).</string>
     <string name="kom_not_installed">не установлено</string>
+    <string name="kom_range_provisional">Предварительная оценка</string>
+    <string name="kom_range_learned">По истории движения</string>
+    <string name="kom_range_consumption">Расчёт: %1$.1f кВт·ч/100 км</string>
+    <string name="kom_range_soc_fallback">Энергия по SOC и ёмкости</string>
+    <string name="kom_range_by_temp">По истории при %1$d…%2$d °C</string>
+    <string name="kom_range_reactive">Сейчас: %1$.1f кВт·ч/100 км</string>
+    <string name="kom_cluster_map_loading">Загрузка карты…</string>
 </resources>

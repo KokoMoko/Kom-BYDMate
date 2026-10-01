@@ -442,12 +442,12 @@ object AppModule {
     @Provides
     @Singleton
     fun provideRangeCalculator(
-        rangeAvgSource: RangeAvgSource,
+        drivingRangeSource: com.bydmate.app.domain.calculator.DrivingRangeSource,
         settingsRepository: SettingsRepository,
         socInterpolator: SocInterpolator,
         manualRangeCalculator: ManualRangeCalculator,
     ): RangeCalculator = RangeCalculator(
-        buffer = rangeAvgSource,
+        buffer = drivingRangeSource,
         capacityProvider = { settingsRepository.getBatteryCapacity() },
         socInterpolator = socInterpolator,
         manualCalculator = manualRangeCalculator,

@@ -223,14 +223,15 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                     Text(stringResource(R.string.kom_cluster_theme), color = TextPrimary, fontSize = 15.sp)
                     LookChips(
                         listOf(ClusterTheme.CLASSIC to R.string.kom_cluster_theme_classic, ClusterTheme.LAGOON to R.string.kom_cluster_theme_lagoon,
-                            ClusterTheme.TIDE to R.string.kom_cluster_theme_tide, ClusterTheme.ARCH to R.string.kom_cluster_theme_arch),
+                            ClusterTheme.TIDE to R.string.kom_cluster_theme_tide, ClusterTheme.ARCH to R.string.kom_cluster_theme_arch,
+                            ClusterTheme.ROAD to R.string.kom_cluster_theme_road),
                         look.theme,
                     ) { upd(look.copy(theme = it)) }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(stringResource(R.string.kom_cluster_3d), color = TextPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         androidx.compose.material3.Switch(checked = look.d3, onCheckedChange = { upd(look.copy(d3 = it)) })
                     }
-                    if (look.theme == ClusterTheme.LAGOON || look.theme == ClusterTheme.TIDE) {
+                    if (look.theme == ClusterTheme.LAGOON || look.theme == ClusterTheme.TIDE || look.theme == ClusterTheme.ROAD) {
                         Text(stringResource(R.string.kom_cluster_numbers), color = TextPrimary, fontSize = 15.sp)
                         LookChips(listOf(ArchLabels.ENDS to R.string.kom_cluster_numbers_sides, ArchLabels.CYCLE to R.string.kom_cluster_numbers_road),
                             look.archLabels) { upd(look.copy(archLabels = it)) }
@@ -438,7 +439,8 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
         val braking = if (pedal != null) pedal > 0 || stoppedInGear
             else decelBraking || (rawSpeed > 2f && rawPower < -5f && !state.isCharging) || stoppedInGear
         val road: @Composable (Modifier) -> Unit = { m ->
-            RoadScene(speedKmh = speed, braking = braking, headlights = state.headlightsOn, modifier = m, translucent = theme != ClusterTheme.CLASSIC)
+            RoadScene(speedKmh = speed, braking = braking, headlights = state.headlightsOn, modifier = m, translucent = theme != ClusterTheme.CLASSIC,
+                edgeColor = if (theme == ClusterTheme.ROAD) roadEdgeColor(soc) else null)
         }
         if (swap) powerGauge(Modifier.weight(0.3f).fillMaxHeight()) else speedGauge(Modifier.weight(0.3f).fillMaxHeight())
         Box(Modifier.weight(0.4f).fillMaxHeight()) {
@@ -448,19 +450,21 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
                     Spacer(Modifier.height(6.dp))
                     road(Modifier.fillMaxWidth().weight(1f))
                 }
-                ClusterTheme.LAGOON, ClusterTheme.TIDE -> Box(Modifier.fillMaxSize()) {
+                // «Ճանապարհ»՝ Լճի դասավորությունը առանց լճի և ուղղահայաց գծերի (լճի Canvas-ը միայն LAGOON-ի համար է)
+                ClusterTheme.LAGOON, ClusterTheme.TIDE, ClusterTheme.ROAD -> Box(Modifier.fillMaxSize()) {
                     road(Modifier.fillMaxSize().padding(top = 70.dp))
                     WaveHeader(gearText, gearColor, inside, outside, altText, Modifier.align(Alignment.TopCenter).padding(top = 6.dp))
                     if (look.archLabels == ArchLabels.ENDS) {
                         BigNumber("$soc%", Modifier.align(Alignment.CenterStart).padding(start = 12.dp))
                         BigNumber(rangeText, Modifier.align(Alignment.CenterEnd).padding(end = 12.dp))
                     } else {
-                        // ճանապարհի վերջում, կենտրոնում՝ 5 վ-ը մեկ պարզ fade (տեքստերը չեն շարժվում)
+                        // ճանապարհի վերջում, կենտրոնում՝ 5 վ-ը մեկ պարզ fade (տեքստերը չեն շարժվում),
+                        // ~0.5 սմ (19dp) ավելի հետ՝ դեպի ճանապարհի ծայրը, փոքր տառով
                         val idx = rememberCycleIndex(true)
                         androidx.compose.animation.Crossfade(targetState = idx, animationSpec = tween(600), label = "wave-cycle",
-                            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(top = 74.dp)) { i ->
+                            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(top = 55.dp)) { i ->
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                BigNumber(if (i == 0) rangeText else "$soc%", Modifier, 30)
+                                BigNumber(if (i == 0) rangeText else "$soc%", Modifier, 26)
                             }
                         }
                     }
@@ -681,12 +685,12 @@ private fun DrawScope.drawDial3DStatic(min: Float, max: Float, step: Float, limi
     if (limit > 0f) {
         val rad = Math.toRadians(ang(limit).toDouble())
         val p = Offset(c.x + cos(rad).toFloat() * radius * 0.66f, c.y + sin(rad).toFloat() * radius * 0.66f)
-        val r = size.minDimension * 0.075f
+        val r = size.minDimension * 0.075f * LIMIT_SIGN_SCALE
         drawCircle(if (overLimit) Color(0xFF991B1B) else Color(0xFFF4F7FB), r, p)
-        drawCircle(Color(0xFFE53935), r, p, style = Stroke(size.minDimension * 0.014f))
+        drawCircle(Color(0xFFE53935), r, p, style = Stroke(size.minDimension * 0.014f * LIMIT_SIGN_SCALE))
         val tp = android.graphics.Paint().apply {
             this.color = if (overLimit) android.graphics.Color.WHITE else android.graphics.Color.rgb(17, 17, 17)
-            textSize = size.minDimension * 0.06f; isFakeBoldText = true
+            textSize = size.minDimension * 0.06f * LIMIT_SIGN_SCALE; isFakeBoldText = true
             textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true
         }
         drawContext.canvas.nativeCanvas.drawText(limit.roundToInt().toString(), p.x, p.y + tp.textSize / 3, tp)
@@ -769,15 +773,15 @@ private fun DrawScope.drawDial(
         if (limit <= 0f) return
         val rad = Math.toRadians(ang(limit).toDouble())
         val p = Offset(c.x + cos(rad).toFloat() * radius * 0.68f, c.y + sin(rad).toFloat() * radius * 0.68f)
-        val r = size.minDimension * 0.075f
+        val r = size.minDimension * 0.075f * LIMIT_SIGN_SCALE
         if (overLimit) {
             drawCircle(Color(0xFF991B1B), r, p)
         } else {
             drawCircle(CardSurface, r, p)
         }
-        drawCircle(Color(0xFFE53935), r, p, style = Stroke(size.minDimension * 0.012f))
+        drawCircle(Color(0xFFE53935), r, p, style = Stroke(size.minDimension * 0.012f * LIMIT_SIGN_SCALE))
         val tp = android.graphics.Paint().apply {
-            this.color = android.graphics.Color.WHITE; textSize = size.minDimension * 0.06f; isFakeBoldText = true
+            this.color = android.graphics.Color.WHITE; textSize = size.minDimension * 0.06f * LIMIT_SIGN_SCALE; isFakeBoldText = true
             textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true
         }
         drawContext.canvas.nativeCanvas.drawText(limit.roundToInt().toString(), p.x, p.y + tp.textSize / 3, tp)
@@ -812,8 +816,12 @@ private fun DrawScope.drawDial(
  * Ճանապարհ հեռանկարով և մեքենա (հետևից)։ Գծերը շարժվում են արագությանը համեմատ․ կանգնած
  * ժամանակ անիմացիա չկա (և frame-եր չենք ծախսում)։ Արգելակելիս/կանգնած՝ կարմիր լույսերը վառ են։
  */
+/** Արագաչափի սանդղակի վրայի սահմանափակման նշանի չափը (օգտատիրոջ խնդրանքով՝ 15%-ով փոքր)։ */
+private const val LIMIT_SIGN_SCALE = 0.85f
+
 @Composable
-private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier, headlights: Boolean = false, translucent: Boolean = false) {
+private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier, headlights: Boolean = false, translucent: Boolean = false,
+                      edgeColor: Color? = null) {
     // Համարանիշը՝ Settings → Application → «License plate» (թարմացվում է 2 վրկ-ը մեկ)
     val ctx = LocalContext.current
     val plate by produceState(initialValue = KomPrefs.plate(ctx)) {
@@ -846,8 +854,32 @@ private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier, hea
         if (translucent) {
             // նոր ոճերում՝ լուսավոր, կիսաթափանցիկ ճանապարհ (ալիքը/կամարը երևում են)
             drawPath(road, Brush.verticalGradient(listOf(Color(0x00C8E1FF), Color(0x38C8E1FF)), startY = hy, endY = by))
-            drawLine(Color(0xC078BEFF), Offset(cx - nw, hy), Offset(cx - hw, by), strokeWidth = 3f)
-            drawLine(Color(0xC078BEFF), Offset(cx + nw, hy), Offset(cx + hw, by), strokeWidth = 3f)
+            if (edgeColor != null) {
+                // «Ճանապարհ» ոճ՝ եզրագծերը լիցքի գույնով։ Soft edge՝ շողը եզրից դեպի դուրս (կողքեր) է տարածվում
+                // և մարում, մոտիկում լայն, հորիզոնում նեղ (հեռանկար) — 3D տպավորության համար։
+                val spreadBottom = size.width * 0.06f
+                val spreadTop = spreadBottom * 0.15f
+                val layers = 12
+                for (side in listOf(-1f, 1f)) {
+                    val xTop = cx + side * nw
+                    val xBottom = cx + side * hw
+                    for (k in layers downTo 1) {
+                        val f = k / layers.toFloat()
+                        val fade = (1f - f) * (1f - f)
+                        drawLine(
+                            Brush.verticalGradient(listOf(edgeColor.copy(alpha = 0.10f * fade), edgeColor.copy(alpha = 0.55f * fade)),
+                                startY = hy, endY = by),
+                            Offset(xTop + side * spreadTop * f, hy), Offset(xBottom + side * spreadBottom * f, by),
+                            strokeWidth = spreadBottom / layers * 1.6f,
+                        )
+                    }
+                    drawLine(Brush.verticalGradient(listOf(edgeColor.copy(alpha = 0.55f), edgeColor), startY = hy, endY = by),
+                        Offset(xTop, hy), Offset(xBottom, by), strokeWidth = 5f)
+                }
+            } else {
+                drawLine(Color(0xC078BEFF), Offset(cx - nw, hy), Offset(cx - hw, by), strokeWidth = 3f)
+                drawLine(Color(0xC078BEFF), Offset(cx + nw, hy), Offset(cx + hw, by), strokeWidth = 3f)
+            }
         } else {
             drawPath(road, Road)
             drawLine(RoadEdge, Offset(cx - nw, hy), Offset(cx - hw, by), strokeWidth = 3f)

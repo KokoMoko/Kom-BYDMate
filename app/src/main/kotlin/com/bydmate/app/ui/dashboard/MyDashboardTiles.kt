@@ -92,6 +92,24 @@ fun MyDashboardTileContent(
                         fontSize = 18.sp, modifier = Modifier.padding(bottom = 4.dp))
                 }
                 Text(stringResource(R.string.kom_tile_range), color = TextSecondary, fontSize = 14.sp)
+                val manual = state.rangeEnergySource == "manual_table"
+                val band = state.rangeTempBandC
+                Text(when {
+                    manual -> stringResource(R.string.settings_range_calc_manual)
+                    state.rangeProvisional -> stringResource(R.string.kom_range_provisional)
+                    band != null -> stringResource(R.string.kom_range_by_temp, band, band + 5)
+                    else -> stringResource(R.string.kom_range_learned)
+                },
+                    color = TextSecondary, fontSize = 11.sp)
+                state.rangeConsumptionKwhPer100?.let { avg ->
+                    Text(stringResource(R.string.kom_range_consumption, avg), color = TextSecondary, fontSize = 11.sp)
+                }
+                if (!manual) state.rangeReactiveKwhPer100?.let { now ->
+                    Text(stringResource(R.string.kom_range_reactive, now), color = TextSecondary, fontSize = 11.sp)
+                }
+                if (state.rangeEnergySource == "capacity_soc") {
+                    Text(stringResource(R.string.kom_range_soc_fallback), color = TextSecondary, fontSize = 11.sp)
+                }
             }
         }
         TileType.TEMPS -> TileCard(modifier) {

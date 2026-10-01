@@ -105,6 +105,15 @@ fun blindSpotClusterDisplay(context: Context): Display? {
 }
 
 /**
+ * Whether a blind-spot preview is visible right now. Other cluster overlays (the projection
+ * loading cover) read it so they never sit above a camera: the preview windows stay attached
+ * and only flip visibility, so a window added later would stack on top of them.
+ */
+object BlindSpotVisibility {
+    @Volatile var shown: Boolean = false
+}
+
+/**
  * Turn signal → blind-spot camera.
  *
  * The main poll (1 s) only arms the pipeline: once the car is near the speed threshold a fast
@@ -735,6 +744,7 @@ class BlindSpotController @Inject constructor(
         }
         val previous = shownSide
         shownSide = side
+        BlindSpotVisibility.shown = side != BlindSpotSide.NONE
         if (side != BlindSpotSide.NONE) shownAt = SystemClock.elapsedRealtime()
         if (side == BlindSpotSide.NONE) {
             Log.i(TAG, "show $previous -> $side")
@@ -881,6 +891,7 @@ class BlindSpotController @Inject constructor(
         } finally {
             // No windows left, so nothing is shown regardless of where the flips left them.
             shownSide = BlindSpotSide.NONE
+            BlindSpotVisibility.shown = false
             // Nothing is shown any more, so the widget comes back even if applyShow above failed.
             syncWidgetSuppression()
             windowsAttachedAt = 0L

@@ -172,6 +172,50 @@ class RangeCalculatorTest {
         assertEquals(18.0, est.avgKwhPer100, 1e-9)
         assertEquals(30.0 / 18.0 * 100.0, est.rangeKm, 1e-9)
     }
+    @Test fun `BMS remaining energy overrides nominal SOC and never subtracts carry twice`() = runTest {
+        val c = newCalc(capacity = 72.9, recentAvg = 18.8, carry = 0.2)
+        val estimate = c.estimateDetailed(68, 1000.0, batteryRemainingKwh = 51.6)!!
+        assertEquals(51.6, estimate.remainingKwh, 1e-9)
+        assertEquals(274.468085, estimate.rangeKm, 0.001)
+        assertEquals("bms", estimate.energySource)
+    }
+
+    @Test fun `invalid BMS energy falls back to capacity and SOC`() = runTest {
+        val c = newCalc(capacity = 72.9, recentAvg = 18.8, carry = 0.2)
+        for (invalid in listOf(Double.NaN, Double.POSITIVE_INFINITY, -1.0, 1001.0)) {
+            val estimate = c.estimateDetailed(68, 1000.0, batteryRemainingKwh = invalid)!!
+            assertEquals(72.9 * 0.68 - 0.2, estimate.remainingKwh, 1e-9)
+            assertEquals("capacity_soc", estimate.energySource)
+        }
+    }
+
+    @Test fun `BMS empty pack returns zero and parked loss reduces range proportionally`() = runTest {
+        val c = newCalc(recentAvg = 20.0, carry = Double.NaN)
+        assertEquals(0.0, c.estimateDetailed(0, null, batteryRemainingKwh = 0.0)!!.rangeKm, 1e-9)
+        val before = c.estimateDetailed(75, null, batteryRemainingKwh = 56.0)!!.rangeKm
+        val after = c.estimateDetailed(68, null, batteryRemainingKwh = 51.6)!!.rangeKm
+        assertEquals(280.0, before, 1e-9)
+        assertEquals(258.0, after, 1e-9)
+    }
+
+    @Test fun `BMS energy far from SOC expectation falls back to capacity and SOC`() = runTest {
+        val c = newCalc(capacity = 72.9, recentAvg = 18.8, carry = 0.2)
+        // 68% of 72.9 = 49.57 kWh expected; accepted band is 34.7..57.0.
+        for (glitch in listOf(20.0, 34.0, 58.0, 72.9)) {
+            val estimate = c.estimateDetailed(68, 1000.0, batteryRemainingKwh = glitch)!!
+            assertEquals("capacity_soc", estimate.energySource)
+            assertEquals(72.9 * 0.68 - 0.2, estimate.remainingKwh, 1e-9)
+        }
+        for (plausible in listOf(35.0, 49.6, 56.9)) {
+            assertEquals("bms", c.estimateDetailed(68, 1000.0, batteryRemainingKwh = plausible)!!.energySource)
+        }
+    }
+
+    @Test fun `valid BMS energy does not require a guessed capacity setting`() = runTest {
+        val c = newCalc(capacity = Double.NaN, recentAvg = 20.0)
+        assertEquals(258.0, c.estimateDetailed(68, null, batteryRemainingKwh = 51.6)!!.rangeKm, 1e-9)
+    }
+
 }
 
 private class StubBuffer(private val avg: Double) : ConsumptionAvgSource {

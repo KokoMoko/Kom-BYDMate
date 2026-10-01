@@ -1925,6 +1925,7 @@
     <string name="kom_off">Անջ.</string>
     <string name="kom_cluster_swap">Տեղերով փոխել արագաչափը և հզորությունը</string>
     <string name="kom_speed_alert_title">Արագության գերազանցման ձայն</string>
+    <string name="kom_speed_alert_test">Փորձել</string>
     <string name="kom_speed_alert_hint">Ազդանշան, երբ արագությունը սահմանափակումից + շեղումից բարձր է (մուգ կարմիր շրջան)։ Կրկնվում է 10 վայրկյանը մեկ։</string>
     <string name="kom_cluster_avg_speed">Միջ.՝ %1$s կմ/ժ</string>
     <string name="kom_cluster_avg_consumption">Միջ.՝ %1$s kWh/100</string>
@@ -1934,6 +1935,7 @@
     <string name="kom_cluster_theme_lagoon">Լիճ</string>
     <string name="kom_cluster_theme_tide">Մակընթացություն</string>
     <string name="kom_cluster_theme_arch">Կամար</string>
+    <string name="kom_cluster_theme_road">Ճանապարհ</string>
     <string name="kom_cluster_3d">3D սարքեր</string>
     <string name="kom_cluster_arch_numbers">Թվեր կամարի վրա</string>
     <string name="kom_cluster_arch_ends">Ծայրերին</string>
@@ -1955,4 +1957,11 @@
     <string name="kom_widget_suggest_music">Այստեղ կարող է լինել ցանկացած Android վիջեթ։ Հեղինակի տարբերակում՝ Yandex Music, կհամապատասխանի ցանկացած նվագարկչի վիջեթ (Spotify, YouTube Music…)։</string>
     <string name="kom_widget_suggest_weather">Այստեղ կարող է լինել ցանկացած Android վիջեթ։ Հեղինակի տարբերակում՝ AccuWeather (անվճար)։</string>
     <string name="kom_not_installed">տեղադրված չէ</string>
+    <string name="kom_range_provisional">Նախնական գնահատական</string>
+    <string name="kom_range_learned">Երթևեկության պատմությունից</string>
+    <string name="kom_range_consumption">Հաշվարկ՝ %1$.1f կՎտժ/100 կմ</string>
+    <string name="kom_range_soc_fallback">Էներգիան՝ SOC-ից և տարողությունից</string>
+    <string name="kom_range_by_temp">Պատմությունից՝ %1$d…%2$d °C-ում</string>
+    <string name="kom_range_reactive">Հիմա՝ %1$.1f կՎտժ/100 կմ</string>
+    <string name="kom_cluster_map_loading">Քարտեզը բեռնվում է…</string>
 </resources>

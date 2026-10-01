@@ -81,6 +81,24 @@ object KomSpeedAlert {
     private const val TAG = "KomSpeedAlert"
     private const val REPEAT_MS = 10_000L
 
+    /**
+     * Same route as the voice assistant's earcons: the BYD "Voice" stream (navigation stream on
+     * Android 10 units), music as the fallback. STREAM_NOTIFICATION was silent in the car even
+     * at a non-zero volume (user report 2026-10-02).
+     */
+    private fun newTone(): ToneGenerator? = runCatching {
+        ToneGenerator(com.bydmate.app.voice.SherpaTtsEngine.primaryStreamType(
+            com.bydmate.app.platform.LegacyHeadUnit.isAndroid10), 100)
+    }.recoverCatching { ToneGenerator(AudioManager.STREAM_MUSIC, 100) }
+        .onFailure { Log.w(TAG, "tone: ${it.message}") }.getOrNull()
+
+    /** Settings «Test» button: the exact alert sound, once. */
+    fun test() {
+        val tone = newTone() ?: return
+        tone.startTone(ToneGenerator.TONE_PROP_BEEP2, 400)
+        Thread { Thread.sleep(600L); tone.release() }.start()
+    }
+
     fun start(ctx: Context, scope: CoroutineScope) {
         val app = ctx.applicationContext
         scope.launch(Dispatchers.Default) {
@@ -96,8 +114,7 @@ object KomSpeedAlert {
                 val nowOver = limit > 0 && speed > limit + SpeedoPrefs.tolerance(app)
                 val now = System.currentTimeMillis()
                 if (nowOver && (!over || now - lastBeepMs >= REPEAT_MS)) {
-                    if (tone == null) tone = runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100) }
-                        .onFailure { Log.w(TAG, "tone: ${it.message}") }.getOrNull()
+                    if (tone == null) tone = newTone()
                     tone?.startTone(ToneGenerator.TONE_PROP_BEEP2, 400)
                     if (!over) Log.i(TAG, "overspeed $speed > $limit")
                     lastBeepMs = now

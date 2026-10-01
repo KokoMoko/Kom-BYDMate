@@ -96,6 +96,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var liveTripBuffer: LiveTripBuffer
     @Inject lateinit var socInterpolator: SocInterpolator
     @Inject lateinit var rangeCalculator: RangeCalculator
+    @Inject lateinit var drivingRangeSource: com.bydmate.app.domain.calculator.DrivingRangeSource
     @Inject lateinit var autoserviceDetector: com.bydmate.app.data.charging.AutoserviceChargingDetector
     @Inject lateinit var catchUpJournal: com.bydmate.app.data.charging.CatchUpJournal
     @Inject lateinit var autoserviceClient: com.bydmate.app.data.autoservice.AutoserviceClient
@@ -407,6 +408,8 @@ class TrackingService : Service(), LocationListener {
 
         private val _lastRangeKm = MutableStateFlow<Double?>(null)
         val lastRangeKm: StateFlow<Double?> = _lastRangeKm
+        private val _lastRangeEstimate = MutableStateFlow<RangeEstimate?>(null)
+        val lastRangeEstimate: StateFlow<RangeEstimate?> = _lastRangeEstimate
 
         /** Live trip distance (current odometer - session-start odometer). Null when idle or data unready. */
         private val _tripDistanceKm = MutableStateFlow<Double?>(null)
@@ -1134,9 +1137,10 @@ class TrackingService : Service(), LocationListener {
             return
         }
         val carry = socInterpolator.carryOver(totalElecKwh, soc)
-        Log.d(TAG, "range: avg=${"%.1f".format(estimate.avgKwhPer100)} " +
+        Log.i(TAG, "range: avg=${"%.1f".format(estimate.avgKwhPer100)} " +
             "carry=${"%.3f".format(carry)} remainingKwh=${"%.2f".format(estimate.remainingKwh)} " +
-            "rangeKm=${"%.1f".format(estimate.rangeKm)} soc=$soc")
+            "rangeKm=${"%.1f".format(estimate.rangeKm)} soc=$soc source=${estimate.energySource} " +
+            "model=${drivingRangeSource.status.value}")
     }
 
     /**
@@ -1618,6 +1622,7 @@ class TrackingService : Service(), LocationListener {
 
                     val nowMs = System.currentTimeMillis()
                     val sessionId = updateSessionState(nowMs, data)
+                    drivingRangeSource.onSample(nowMs, data, sessionId)
 
                     odometerBuffer.onSample(
                         mileage = data.mileage,
@@ -1677,9 +1682,11 @@ class TrackingService : Service(), LocationListener {
                         soc = data.soc,
                         totalElecKwh = data.totalElecConsumption,
                         batteryTempC = data.avgBatTemp,
+                        batteryRemainingKwh = data.batteryRemainKwh,
                     )
                     val rangeKm = rangeEstimate?.rangeKm
                     _lastRangeKm.value = rangeKm
+                    _lastRangeEstimate.value = rangeEstimate
                     logRangeIfChanged(rangeEstimate, data.soc, data.totalElecConsumption)
 
                     _tripDistanceKm.value = tripDistance

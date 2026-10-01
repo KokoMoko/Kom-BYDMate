@@ -189,3 +189,30 @@ fun pickProjectionDisplayName(names: List<String>, preferFull: Boolean): String?
         ?: names.firstOrNull { it.endsWith(other) }
         ?: names.firstOrNull()
 }
+
+/** dp per inch at density 1.0, and the lowest smallest-width qualifier apps ship (sw320dp). */
+private const val DP_BASE_DPI = 160
+private const val SW_LOWEST_BUCKET_DP = 320
+
+/**
+ * Direct-mode density that leaves one activity recreation per transfer instead of two.
+ *
+ * The send moves the task onto the cluster full-size and only then shrinks it to the window; the
+ * pull-back widens it to the full display before the move home. An app that does not handle
+ * smallestScreenSize (Yandex Navigator) is recreated whenever such a step crosses one of its
+ * smallest-width buckets: at the native 320 dpi the 720-px cluster is sw360dp and the 532-px
+ * window sw266dp, so every transfer recreated it twice and the second restart threw its map back
+ * to the world view (on-car 2026-10-02). Apps rarely ship a qualifier below sw320dp, so a density
+ * that puts the full display under it keeps both steps in one bucket. The display change itself
+ * still recreates the app once — the cluster has no touchscreen and no HDR — and nothing removes
+ * that one.
+ *
+ * Returns the override to send: [requested] (0 = native) raised to that floor, 0 when the result
+ * is the native density. A non-positive [displayHeightPx] (unknown display) leaves [requested].
+ */
+internal fun singleRecreateDensity(requested: Int, nativeDpi: Int, displayHeightPx: Int): Int {
+    if (displayHeightPx <= 0) return requested
+    val floor = displayHeightPx * DP_BASE_DPI / SW_LOWEST_BUCKET_DP + 1
+    val effective = maxOf(if (requested == 0) nativeDpi else requested, floor)
+    return if (effective == nativeDpi) 0 else effective
+}

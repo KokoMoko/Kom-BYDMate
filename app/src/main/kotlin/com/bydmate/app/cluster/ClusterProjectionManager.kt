@@ -846,14 +846,18 @@ object ClusterProjectionManager {
         directDeathWatchJob = null
         when (mode) {
             ClusterMode.OFF -> {
+                // Cluster first: the task reaches the main screen within half a second, but the
+                // pull-back's confirmation reads and the density reset take seconds more, and
+                // until the compositor goes down the cluster keeps showing the navigator's last
+                // frame (on-car 2026-10-02). Neither step depends on where the task is.
+                frame?.restore(helper, ClusterFrameUi7.Owner.PROJECTION)
+                if (autoContainerEnabled(context)) powerDownCompositor(context, helper)
                 pullBackToMain(context, helper, focus = true)
                 hideOverlay(helper)
                 projectedPackage = null
                 sessionPreferFull = null
                 currentMode = ClusterMode.OFF
                 lastFailure = null
-                frame?.restore(helper, ClusterFrameUi7.Owner.PROJECTION)
-                if (autoContainerEnabled(context)) powerDownCompositor(context, helper)
             }
             ClusterMode.FULLSCREEN -> {
                 // Marks the window where the compositor is already powered up but overlayView /
@@ -885,6 +889,33 @@ object ClusterProjectionManager {
                     if (autoContainerEnabled(context)) powerDownCompositor(context, helper)
                 }
             }
+        }
+    }
+
+    /**
+     * Leading power-up (VD transport, and a direct attempt that fell back to it): the overlay/VD
+     * pipeline still covers a failed placement, so the compositor goes up first.
+     */
+    private suspend fun powerUpCompositorBeforePlacement(context: Context, helper: HelperClient) {
+        // Wave P: power the cluster compositor up before projecting; replaces the manual
+        // "star key -> Navi mode" step. Fail-soft: projection proceeds even if this call
+        // fails (the compositor may already be on). The marker is persisted even on failure —
+        // compositor state is then unknown, and an extra recovery power-down against an
+        // already-off compositor is harmless. Write-ahead mirrors KEY_DIRECT_DISPLAY_ID:
+        // commit() on Dispatchers.IO, not apply() — a hard power-cut between the power-up
+        // call and an async flush would lose the marker, and the marker-gated boot recovery
+        // would never send the healing power-down. A failed commit voids that guarantee —
+        // skip the power-up (the compositor may already be on, same fail-soft contract).
+        @Suppress("ApplySharedPref")
+        val markerWritten = withContext(Dispatchers.IO) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_COMPOSITOR_POWERED, true).commit()
+        }
+        if (markerWritten) {
+            val up = runCatching { helper.setClusterContainerMode(true) }.getOrDefault(false)
+            log("compositor power-up ok=$up")
+        } else {
+            log("compositor marker not persisted; power-up skipped")
         }
     }
 
@@ -1199,28 +1230,11 @@ object ClusterProjectionManager {
         // The compositor power-up moves BELOW the placement in the daemon-only case (see the
         // direct block): with no overlay to fall back on, a 16 sent before a placement that then
         // fails would leave the cluster in projection mode with nobody drawing on it.
-        if (autoContainerEnabled(context) && !daemonOnly) {
-            // Wave P: power the cluster compositor up before projecting; replaces the manual
-            // "star key -> Navi mode" step. Fail-soft: projection proceeds even if this call
-            // fails (the compositor may already be on). The marker is persisted even on failure —
-            // compositor state is then unknown, and an extra recovery power-down against an
-            // already-off compositor is harmless. Write-ahead mirrors KEY_DIRECT_DISPLAY_ID:
-            // commit() on Dispatchers.IO, not apply() — a hard power-cut between the power-up
-            // call and an async flush would lose the marker, and the marker-gated boot recovery
-            // would never send the healing power-down. A failed commit voids that guarantee —
-            // skip the power-up (the compositor may already be on, same fail-soft contract).
-            @Suppress("ApplySharedPref")
-            val markerWritten = withContext(Dispatchers.IO) {
-                context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    .edit().putBoolean(KEY_COMPOSITOR_POWERED, true).commit()
-            }
-            if (markerWritten) {
-                val up = runCatching { helper.setClusterContainerMode(true) }.getOrDefault(false)
-                log("compositor power-up ok=$up")
-            } else {
-                log("compositor marker not persisted; power-up skipped")
-            }
-        }
+        // Direct transport powers up after the placement instead (see the direct block): powered
+        // early, the cluster shows the still-empty display black for the 1-2 s the move and the
+        // navigator's one recreation take (on-car 2026-10-02). A direct attempt that falls back to
+        // the VD pipeline gets the leading power-up below, before the overlay.
+        if (autoContainerEnabled(context) && !daemonOnly && !direct) powerUpCompositorBeforePlacement(context, helper)
         if (overlayView != null) hideOverlay(helper)  // defensive: never stack overlays
         if (daemonOnly) {
             // No overlay is ever built on this path, so a missing SYSTEM_ALERT_WINDOW must not
@@ -1262,7 +1276,14 @@ object ClusterProjectionManager {
                 // #194: the compositor is powered up only now, with the task already placed —
                 // the opposite order of the rest of the fleet, where the overlay/VD fallback
                 // still covers a failed placement (see the auto-container block above).
-                if (daemonOnly && autoContainerEnabled(context)) powerUpCompositorAfterPlacement(context, helper)
+                // Powered only now, with the navigator (and its loading cover) on the display (#194
+                // everywhere; see the leading power-up above), so the driver goes from the stock
+                // cluster straight to the cover instead of a black display.
+                // Off Main: the navigator leaving the main screen brings our own MainActivity to the
+                // front, and its first frames kept this continuation waiting ~3 s (on-car 2026-10-02).
+                if (autoContainerEnabled(context)) withContext(Dispatchers.IO) {
+                    powerUpCompositorAfterPlacement(context, helper)
+                }
                 // Platformized firmware only: open the cluster's Map frame now that something of
                 // ours is actually on it. Fail-soft — a projection is never failed by the frame.
                 frame?.apply(helper, ClusterFrameUi7.Owner.PROJECTION)
@@ -1277,6 +1298,8 @@ object ClusterProjectionManager {
             return "projection"
         }
 
+        // A direct attempt skipped the leading power-up; the VD pipeline needs it.
+        if (direct && autoContainerEnabled(context)) powerUpCompositorBeforePlacement(context, helper)
         // F-1 fix (Round 8): hoist pkg so all VD terminal failure paths can call onClusterSendFailed.
         // Grace was armed by onBeforeClusterSend in tryDirectProjection (direct=true path) and must
         // be released on every path where the task is confirmed NOT on the cluster. On success (null)
@@ -1444,7 +1467,9 @@ object ClusterProjectionManager {
             log("direct: density skipped for $pkg (died after non-native dpi earlier)")
         } else {
             val scalePct = readScalePct(context)
-            val density = directDensityFor(scalePct)
+            val requested = directDensityFor(scalePct)
+            val density = if (handlesSmallestWidth(context, pkg)) requested
+                          else singleRecreateDensity(requested, clusterDensityDpi, clusterHeight)
             val result = runCatching { helper.setDisplayDensity(target.displayId, density) }
                 .getOrNull()
             val ok = result?.ok == true
@@ -1485,6 +1510,12 @@ object ClusterProjectionManager {
             HelperBinderProtocol.PANE_TYPE_STANDARD,
         )) {
             FreeformLaunchResult.OK -> {
+                // The task is on the display now: cover its one restart before the compositor
+                // switches the cluster over (project() powers it up right after this returns).
+                target.appDisplay?.let {
+                    ClusterLoadingCover.show(context, it, bounds)
+                    ClusterLoadingCover.releaseAfter(ClusterLoadingCover.HOLD_AFTER_PLACEMENT_MS)
+                }
                 directDisplayId = target.displayId
                 prefs.edit().putBoolean(KEY_FREEFORM_REBOOT_PENDING, false).apply()
                 verdict.clearOnSuccess()
@@ -1624,6 +1655,18 @@ object ClusterProjectionManager {
             }
         }
     }
+
+    /**
+     * Whether [pkg]'s launcher activity handles smallest-width changes itself. Only an app that
+     * does not (Yandex Navigator) needs the [singleRecreateDensity] floor; an unreadable answer
+     * keeps the user's scale untouched.
+     */
+    private fun handlesSmallestWidth(context: Context, pkg: String): Boolean = runCatching {
+        val pm = context.packageManager
+        val component = pm.getLaunchIntentForPackage(pkg)?.component ?: return true
+        pm.getActivityInfo(component, 0).configChanges and
+            android.content.pm.ActivityInfo.CONFIG_SMALLEST_SCREEN_SIZE != 0
+    }.getOrDefault(true)
 
     /** Settle after a density change before the launch, as BYD DashCast does it. */
     private const val DIRECT_DENSITY_SETTLE_MS = 150L
@@ -1886,6 +1929,7 @@ object ClusterProjectionManager {
      * (or the task is gone).
      */
     private suspend fun pullBackToMain(context: Context, helper: HelperClient, focus: Boolean) {
+        ClusterLoadingCover.hide()
         val pkg = projectedPackage ?: targetPackage(context)
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         // Member first, persisted marker second: the marker survives an app-process restart, so

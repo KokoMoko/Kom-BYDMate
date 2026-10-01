@@ -2039,6 +2039,7 @@
     <!-- Kom-BYDMate -->
     <string name="kom_cluster_swap">Swap speedometer and power</string>
     <string name="kom_speed_alert_title">Overspeed alert sound</string>
+    <string name="kom_speed_alert_test">Test</string>
     <string name="kom_speed_alert_hint">Beeps when speed is above the limit + tolerance (the dark red ring). Repeats every 10 s.</string>
     <!-- Kom-BYDMate -->
     <string name="kom_cluster_avg_speed">Avg: %1$s km/h</string>
@@ -2049,6 +2050,7 @@
     <string name="kom_cluster_theme_lagoon">Lagoon</string>
     <string name="kom_cluster_theme_tide">Tide</string>
     <string name="kom_cluster_theme_arch">Arch</string>
+    <string name="kom_cluster_theme_road">Road</string>
     <string name="kom_cluster_3d">3D gauges</string>
     <string name="kom_cluster_arch_numbers">Arch numbers</string>
     <string name="kom_cluster_arch_ends">At the ends</string>
@@ -2070,4 +2072,11 @@
     <string name="kom_widget_suggest_music">Any Android widget fits here. The author uses Yandex Music; any player\'s widget works too (Spotify, YouTube Music…).</string>
     <string name="kom_widget_suggest_weather">Any Android widget fits here. The author uses AccuWeather (free).</string>
     <string name="kom_not_installed">not installed</string>
+    <string name="kom_range_provisional">Provisional estimate</string>
+    <string name="kom_range_learned">Learned from driving</string>
+    <string name="kom_range_consumption">Estimate: %1$.1f kWh/100 km</string>
+    <string name="kom_range_soc_fallback">Energy from SOC and capacity</string>
+    <string name="kom_range_by_temp">From history at %1$d…%2$d °C</string>
+    <string name="kom_range_reactive">Right now: %1$.1f kWh/100 km</string>
+    <string name="kom_cluster_map_loading">Loading map…</string>
 </resources>
