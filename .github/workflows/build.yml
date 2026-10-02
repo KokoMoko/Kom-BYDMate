@@ -54,11 +54,30 @@ jobs:
           name: Kom-BYDMate-apk
           path: app/build/outputs/apk/release/*.apk
 
+      # Release notes: the tag's section of CHANGELOG-KOM.md ("## <version>" up to the next "## ").
+      - name: Release notes (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v v="$VERSION" '
+            /^## / { if (found) exit; if ($2 == v) { found = 1; next } }
+            found { print }
+          ' CHANGELOG-KOM.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "Kom-BYDMate $VERSION" > release-notes.md
+          fi
+          {
+            echo
+            echo "---"
+            echo "Full history: [CHANGELOG-KOM.md](https://github.com/$GITHUB_REPOSITORY/blob/main/CHANGELOG-KOM.md)"
+          } >> release-notes.md
+
       - name: Publish release (tags only)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/release/*.apk
+          body_path: release-notes.md
           body_path: .github/RELEASE_NOTICE.md
 
       - name: Upload reports on failure

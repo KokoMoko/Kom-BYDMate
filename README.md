@@ -84,7 +84,7 @@ History starts empty on first install, and the estimate is marked provisional un
 
 ## Installation
 
-Download a Kom-BYDMate APK from this repository's [Releases](../../releases). The application package is `kom.bydmate` and releases are signed independently from upstream BYDMate.
+Download a Kom-BYDMate APK from this repository's [Releases](../../releases). What changed in each release: [CHANGELOG-KOM.md](CHANGELOG-KOM.md). The application package is `kom.bydmate` and releases are signed independently from upstream BYDMate.
 
 **Important:** uninstall the official BYDMate application before installing Kom-BYDMate because the two variants currently rely on the same helper-service architecture.
 
