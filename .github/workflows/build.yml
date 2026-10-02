@@ -1,8 +1,9 @@
 name: Build Kom-BYDMate APK
 
 on:
+  # Release tags only: every release is a tag, and a second build of the same commit on main
+  # just spent Actions minutes. workflow_dispatch keeps a manual build from the Actions tab.
   push:
-    branches: [main]
     tags: ['v*-kom.*']
   workflow_dispatch:
 
