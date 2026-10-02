@@ -14,19 +14,51 @@
 >
 > Kom-BYDMate-specific changes © 2026 KomS ([KokoMoko](https://github.com/KokoMoko)), distributed under the same license.
 
-## What Kom-BYDMate Adds
+## The Story Behind Kom-BYDMate
 
-The project currently extends upstream BYDMate in several areas, with development and testing focused on **BYD Sealion 06 / DiLink 5**:
+This is my first app. I'm not a professional Android developer, so please
+don't judge it too harshly. It started as a few small fixes for my own car
+and kept growing.
 
-- **Redesigned dashboard** with configurable information tiles, contextual vehicle data and a dedicated speedometer-oriented driving view.
-- **Custom instrument-cluster experience** with Classic, Lagoon, Tide, Arch and Road themes (Road colours its edges from green to red as the battery drains), optional 3D gauges, configurable layouts and additional live driving information.
-- **Navigation and speed-limit enhancements**, including Yandex Navigator integration, OpenStreetMap-based speed-limit support, speed-limit visualization and overspeed alerts (on the car's voice audio channel, with a test button in settings).
-- **Driver-display integration**, including navigation return behavior and Yandex Music information on the vehicle display. Yandex Navigator moves to and from the cluster with a single restart (no world-map flash), behind a short loading cover.
-- **Driving-only range prediction** that ignores long stops and charging and adapts to temperature and the current drive (see below).
-- **Armenian localization**, alongside Russian and English resources used by the Kom-BYDMate build.
-- **Dashboard widget architecture** that allows information blocks to be selected and positioned more flexibly.
-- **Convenience and startup features**, including application autostart handling and additional split-screen behavior.
-- **Separate application identity** using package `kom.bydmate`, separate signing and Kom-specific versioning such as `3.19.3-kom.14`.
+I drive a **BYD Sealion 06** in **Armenia**. I loved the car from day one,
+but a few everyday things kept bothering me. There was no Armenian in the
+interface. The instrument cluster couldn't show what I wanted to see. It was
+so inflexible that it honestly made me angry... One morning the range
+estimate said **413 km at 75% charge** when the real figure was closer to
+**250 km**. The embedded map didn't work. My old Song Plus had an altimeter
+on the dashboard, this car had none, and there were many other annoying
+little things...
+
+Then I found **[BYDMate](https://github.com/AndyShaman/BYDMate) by AndyShaman**.
+It already did what I thought would take years: it reads the car's data, logs
+trips and charges, projects apps onto the cluster, and much more. Kom-BYDMate
+is built entirely on that foundation. **Thank you, Andy, for wonderful,
+generous work.** Without BYDMate this project wouldn't exist.
+
+### What I added and improved
+
+- **Armenian interface**, with nearly two thousand strings translated.
+- **Cluster themes**: Classic, Lagoon, Tide, Arch and Road. In Road the road
+  edges glow from green to red as the battery drains. Optional 3D gauges and
+  several layouts.
+- **Altimeter and temperatures on the cluster**, right next to the gear.
+- **Honest range**: the estimate learns only from real driving. Long stops and
+  charging are ignored, it remembers consumption for each outside temperature,
+  and it adapts to the current trip.
+- **Yandex Navigator on the cluster** moves with a single restart, behind a
+  short "Loading map" screen instead of a world map.
+- **A redesigned dashboard** with configurable tiles and widgets, a
+  speedometer view, speed-limit signs and an audible overspeed alert.
+- Plenty of smaller fixes found while driving every day.
+
+### Help me make it better
+
+Everything here was tested on two cars: my Sealion 06 on DiLink 5 and a
+Song Plus on DiLink 4. If you drive another BYD model, your feedback is gold.
+Ideas, bug reports, screenshots and "it works on my Han / Seal / Yuan"
+messages are all very welcome. Please open an [issue](../../issues).
+
+Life is too short, enjoy every second with peace and love, and drive safe! 🚗⚡
 
 ## Relationship to BYDMate
 
@@ -36,7 +68,7 @@ The original BYDMate project remains the source of the core codebase and many un
 
 ## Range Estimation
 
-A range estimate built from "energy used / distance driven" is easily thrown off when the car sits for hours with climate or electronics on: energy is spent, distance stays at zero, and the learned kWh/100 km balloons. In testing this showed about 113 km at 75% SOC where roughly 275 km was realistic. Kom-BYDMate predicts range from **driving-only consumption**:
+A range estimate built from "energy used / distance driven" is easily thrown off when the car sits for hours with climate or electronics on: energy is spent, distance stays at zero, and the learned kWh/100 km balloons. An earlier consumption-based estimate showed about 113 km at 75% SOC this way, where roughly 275 km was realistic. Kom-BYDMate predicts range from **driving-only consumption**:
 
 - **Prolonged stops are excluded.** Standing still for 15 minutes or more counts as parking, and its energy is removed from the learning history back to the first minute of the stop. Short traffic stops stay in, because they are part of driving.
 - **Charging never counts.** Whatever the energy counter does while a charger is connected, or while energy flows into the pack at standstill, is dropped.
