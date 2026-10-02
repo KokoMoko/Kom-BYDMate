@@ -1696,7 +1696,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         private const val BIND_CODE_SPAN = 900_000
         /** Same tag as TelegramReporter: the report's settings changes sit next to its sends. */
         private const val TAG_TG_REPORT = "TgReport"
-        /** Shared budget for the daemon-backed dump sections (liveness + seat and steering heat reads).
+        /** Shared budget for the daemon-backed dump sections (liveness + seat, steering heat and window reads).
          *  The dump must not hang on a wedged daemon. */
         private const val HELPER_DIAG_BUDGET_MS = 3_000L
 
@@ -1724,6 +1724,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 collected.set(collected.get().copy(seats = seats))
                 val steeringHeat = runCatching { helper.readBatch(SteeringHeatDiagnostics.batchItems()) }.getOrNull()
                 collected.set(collected.get().copy(steeringHeat = steeringHeat))
+                val windows = runCatching { helper.readBatch(WindowDiagnostics.batchItems()) }.getOrNull()
+                collected.set(collected.get().copy(windows = windows))
             }
             withTimeoutOrNull(budgetMs) { probe.join() }
             return collected.get()
@@ -1735,9 +1737,10 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         val alive: Boolean?,
         val seats: List<Pair<Int, Int>>?,
         val steeringHeat: List<Pair<Int, Int>>? = null,
+        val windows: List<Pair<Int, Int>>? = null,
     )
 
-    /** Liveness, the seat fid snapshot and the steering heat snapshot under ONE shared budget. */
+    /** Liveness and the seat, steering heat and window fid snapshots under ONE shared budget. */
     private suspend fun gatherHelperDiagnostics(): HelperDiagnostics =
         collectHelperDiagnostics(viewModelScope, helperClient, HELPER_DIAG_BUDGET_MS)
 
@@ -2031,11 +2034,24 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     com.bydmate.app.hud.HudSomeIpBridge.isServicePresent(appContext.packageManager)
                 appendLine("someip_gateway: " + if (gatewayPresent) "present" else "absent")
                 appendLine("speed_sign: ${hudPrefs.getBoolean(com.bydmate.app.hud.HudController.KEY_SPEED_SIGN, true)}")
+                // The way to the glass (1..3, «Способ вывода на стекло»).
                 appendLine("mode: ${hudController.mode()}")
                 // Frame/RC counters from HudPushLoop via HudController.diag().
                 val diag = hudController.diag()
+                // Ways 2 and 3: CAN guidance writes the car accepted and refused (clears not
+                // counted), and what a process death may have left on the instrument or the gateway.
+                appendLine(
+                    "can_accepted=${diag?.canAccepted ?: 0} can_refused=${diag?.canRefused ?: 0} " +
+                        "can_left=${hudPrefs.contains(com.bydmate.app.hud.HudWayChannels.KEY_CAN_LEFT)} " +
+                        "lmcn_left=${hudPrefs.contains(com.bydmate.app.hud.HudWayChannels.KEY_LMCN_LEFT)}"
+                )
                 appendLine("frames_sent=${diag?.framesSent ?: 0} last_frame_ts=${diag?.lastFrameTs ?: 0}")
                 appendLine("last_fire_rc=${diag?.lastRc ?: "n/a"} nonzero_rc_count=${diag?.nonZeroRcCount ?: 0}")
+                // Every gateway service the product's binding holds open (the HUD check's step 4 adds
+                // its own while it runs on that binding), and each topic's fireEvent rcs.
+                val someIp = hudController.boundBridge
+                appendLine("someip_services=${someIp?.startedServices()?.let { com.bydmate.app.hud.HudSomeIpBridge.describeServices(it) } ?: "n/a"}")
+                appendLine("someip_fire_rc=${someIp?.fireCounts()?.let { com.bydmate.app.hud.HudSomeIpBridge.describeFires(it) } ?: "n/a"}")
                 appendLine("amap_capable=${diag?.amapCapable ?: false} amap_frames=${diag?.amapFramesSent ?: 0} amap_stops=${diag?.amapStopsSent ?: 0}")
                 appendLine("hub_snapshot=${com.bydmate.app.navdata.NavGuidanceHub.snapshot()}")
                 // What each channel actually carried at every maneuver change (#94): the
@@ -2361,6 +2377,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             appendLine("--- windows ---")
             // Which write channel this firmware ended up on (#79): percent fids or CTRL.
             appendLine("window channel: ${windowChannelStore.winner()}")
+            WindowDiagnostics.format(helperDiag.windows).forEach { appendLine(it) }
 
             appendLine("--- seats ---")
             SeatsDiagnostics.format(helperDiag.seats).forEach { appendLine(it) }

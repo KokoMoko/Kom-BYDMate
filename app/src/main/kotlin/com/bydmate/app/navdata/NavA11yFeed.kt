@@ -11,6 +11,7 @@ import com.bydmate.app.cluster.SteeringWheelKeyService
  *  Gated by [enabled] (set by HudController) so that users without the HUD feature
  *  pay a single volatile read per event. Debounced: guidance widgets update ~1/s,
  *  a11y events fire far more often. */
+@Suppress("TooManyFunctions") // the event, timer and source reads plus their diagnostic probes
 object NavA11yFeed {
     private const val TAG = "NavA11yFeed"
     private const val DEBOUNCE_MS = 500L
@@ -24,6 +25,8 @@ object NavA11yFeed {
      *  alternate codes faster than the driver passes intersections. */
     private const val TREE_DUMP_MIN_INTERVAL_MS = 30_000L
     private const val NO_MANEUVER = Int.MIN_VALUE
+    /** Navigator windows described per no-guidance streak, so a stray window list stays short. */
+    private const val TRACE_MAX_WINDOWS = 6
     /** A standing car changes nothing on screen, so no events come and the hub would expire
      *  the maneuver (MANEUVER_TIMEOUT_MS) while the navigator still shows it: the window is
      *  re-read when no read happened for this long, looked at on the same period. */
@@ -38,6 +41,8 @@ object NavA11yFeed {
                 sourceFallbackWorking = false
                 lastDumpedGaode = NO_MANEUVER
                 lastDumpMs = 0L
+                unknownManeuvers.reset()
+                noGuidanceTrace.reset()
                 timerKeptAlive = false
                 resetTimer(start = true)
             }
@@ -47,6 +52,8 @@ object NavA11yFeed {
 
     /** Where the tree dump goes; logcat in production, a collector in tests. */
     internal var treeDumpSink: (String) -> Unit = { Log.i(TAG, it) }
+    /** Where the no-guidance trace goes; logcat in production, a collector in tests. */
+    internal var traceSink: (String) -> Unit = { Log.i(TAG, it) }
 
     @Volatile internal var lastProcessMs = 0L
     // Transition-only log guard: "events flowing but window unreachable" is exactly the
@@ -58,6 +65,10 @@ object NavA11yFeed {
     // Maneuver the tree was last dumped for; NO_MANEUVER means "nothing dumped yet".
     @Volatile private var lastDumpedGaode = NO_MANEUVER
     @Volatile internal var lastDumpMs = 0L
+    // Raw maneuver values logged as unrecognised and when; its floor is the walk's lastDumpMs.
+    private val unknownManeuvers = UnknownManeuverGate(minIntervalMs = 0L)
+    // Streak, walk floor and missing-window edge of the no-guidance trace (issue #199).
+    private val noGuidanceTrace = NoGuidanceTrace()
     // Edge guard for the timer's keep-alive line: set by the first timer refresh of a quiet
     // episode, cleared by the next event read.
     @Volatile private var timerKeptAlive = false
@@ -70,6 +81,9 @@ object NavA11yFeed {
     /** Kom-BYDMate: Navigator-ը կարդում ենք միշտ (արագության սահմանափակման համար), ոչ միայն HUD-ի ժամանակ։ */
     @Volatile var komAlwaysOn: Boolean = true
 
+    /** Kom-BYDMate: the speed-limit sign scan; tests of upstream's walk budget switch it off. */
+    internal var komLimitScan: (android.view.accessibility.AccessibilityNodeInfo) -> Unit = { KomNavLimit.scan(it) }
+
     fun onEvent(service: SteeringWheelKeyService, event: AccessibilityEvent?) {
         if (!enabled && !komAlwaysOn) return
         val nowMs = System.currentTimeMillis()
@@ -78,12 +92,10 @@ object NavA11yFeed {
         timerKeptAlive = false
         // An unreachable window says NOTHING about the route: the navigator may be
         // minimized, covered by another pane, or projected onto a private VirtualDisplay
-        // while guidance keeps running (field-confirmed, issue #144). Only a REACHABLE
-        // window without guidance widgets means "route ended", so this branch must
-        // neither arm nor cancel the no-guidance streak. A navigator that really closed
-        // is still caught reader-side: an armed streak expires in snapshot(),
-        // ACTIVE_TIMEOUT_MS drops active when no source refreshes, MANEUVER_TIMEOUT_MS
-        // expires the arrow, and the notification lane's removal grace deactivates too.
+        // while guidance keeps running (field-confirmed, issue #144). A navigator that
+        // really closed is caught reader-side: ACTIVE_TIMEOUT_MS drops active when no
+        // source refreshes, MANEUVER_TIMEOUT_MS expires the arrow, and the notification
+        // lane's removal grace deactivates too.
         val root = runCatching { service.findNavigatorRoot() }.getOrNull()
             ?: run {
                 val readViaSource = readViaEventSource(event, nowMs)
@@ -104,7 +116,7 @@ object NavA11yFeed {
             sourceFallbackWorking = false
             Log.i(TAG, "Navigator window reachable again")
         }
-        readWindow(root, nowMs)
+        readWindow(root, nowMs, "event", service)
     }
 
     /** Timer tick (main looper, like the events): the same window read as [onEvent] when a
@@ -115,27 +127,43 @@ object NavA11yFeed {
         if (!shouldTimerRead(enabled, NavGuidanceHub.snapshot(nowMs).active, nowMs, lastProcessMs)) return
         service ?: return
         lastProcessMs = nowMs
-        val root = runCatching { service.findNavigatorRoot() }.getOrNull() ?: return
-        if (readWindow(root, nowMs) && !timerKeptAlive) {
+        val root = runCatching { service.findNavigatorRoot() }.getOrNull() ?: run {
+            if (noGuidanceTrace.navigatorMissing()) traceSink("timer read: navigator window not found")
+            return
+        }
+        if (readWindow(root, nowMs, "timer", service) && !timerKeptAlive) {
             timerKeptAlive = true
             Log.i(TAG, "timer re-read keeps maneuver alive")
         }
     }
 
-    /** Reads a reachable navigator [root] into the hub and recycles it: widgets present =
-     *  guidance, a navigator without them = route ended. True when guidance was read. */
-    private fun readWindow(root: AccessibilityNodeInfo, nowMs: Long): Boolean {
+    /** Reads a reachable navigator [root] into the hub and recycles it: widgets with text =
+     *  guidance; widgets without text only keep the route alive, as in the donor; a navigator
+     *  without them changes nothing (issue #199). Both of the latter are traced. True when
+     *  guidance was read.
+     *  [src] and [service] only feed the no-guidance trace. */
+    private fun readWindow(
+        root: AccessibilityNodeInfo,
+        nowMs: Long,
+        src: String,
+        service: SteeringWheelKeyService,
+    ): Boolean {
+        noGuidanceTrace.navigatorFound()
         try {
             // Kom-BYDMate: սահմանափակումը՝ նաև առանց երթուղու
-            runCatching { KomNavLimit.scan(root) }
+            runCatching { komLimitScan(root) }
             return when (val result = NavA11yExtractor.read(root)) {
                 is NavA11yExtractor.ReadResult.Guidance -> {
                     NavGuidanceHub.update(result.data, NavGuidanceHub.Source.A11Y, nowMs)
                     dumpTreeOnManeuverChange(root, result.data.maneuverGaode, nowMs)
+                    logUnknownManeuver(root, result.data, nowMs)
+                    traceGuidanceAgain(src, nowMs)
                     true
                 }
                 is NavA11yExtractor.ReadResult.NoGuidance -> {
-                    NavGuidanceHub.markNoGuidance(nowMs)
+                    val kept = NavA11yExtractor.hasGuidanceNodes(root)
+                    if (kept) NavGuidanceHub.keepAlive(nowMs)
+                    traceNoGuidance(root, nowMs, src, service, kept)
                     false
                 }
                 is NavA11yExtractor.ReadResult.NotNavigator -> false
@@ -166,21 +194,26 @@ object NavA11yFeed {
      *  PRIVATE VirtualDisplay on DiLink 5.1, field-confirmed issue #134): the event still
      *  carries a live source node whose parent chain reaches the window root.
      *  ONLY a positive guidance read is accepted — that root may be a sub-window (balloon,
-     *  dialog) where missing widgets say nothing about the route, so this path may add
-     *  data but must never end guidance (no markNoGuidance here). Returns true when the
-     *  hub was fed. */
+     *  dialog) where missing widgets say nothing about the route, so this path only adds
+     *  data; widgets without text keep an active route alive, as in [readWindow]. Returns
+     *  true when the hub was fed. */
     private fun readViaEventSource(event: AccessibilityEvent?, nowMs: Long): Boolean {
         val root = climbToWindowRoot(runCatching { event?.source }.getOrNull()) ?: return false
         try {
             // Kom-BYDMate: սահմանափակումը՝ նաև երբ Navigator-ը վարորդի էկրանին է (պատուհանը
             // հասանելի է միայն իրադարձության աղբյուրից) և առանց երթուղու
-            if (root.packageName?.toString() in NavPackages.GUIDANCE_SOURCES) runCatching { KomNavLimit.scan(root) }
+            if (root.packageName?.toString() in NavPackages.GUIDANCE_SOURCES) runCatching { komLimitScan(root) }
             // read() re-checks the package: the climb can land in a host window that merely
             // embeds the Navigator, and a foreign root reads as NotNavigator.
             val result = NavA11yExtractor.read(root)
+            if (result is NavA11yExtractor.ReadResult.NoGuidance && NavA11yExtractor.hasGuidanceNodes(root)) {
+                NavGuidanceHub.keepAlive(nowMs)
+            }
             if (result !is NavA11yExtractor.ReadResult.Guidance) return false
             NavGuidanceHub.update(result.data, NavGuidanceHub.Source.A11Y, nowMs)
             dumpTreeOnManeuverChange(root, result.data.maneuverGaode, nowMs)
+            logUnknownManeuver(root, result.data, nowMs)
+            traceGuidanceAgain("event", nowMs)
             return true
         } finally {
             @Suppress("DEPRECATION")
@@ -221,6 +254,77 @@ object NavA11yFeed {
             appendIds(root, ids, intArrayOf(TREE_DUMP_MAX_NODES))
             treeDumpSink("nav tree [gaode=$maneuverGaode]:${ids.take(TREE_DUMP_MAX_CHARS)}")
         }
+    }
+
+    /** A guided route with a distance but no recognised maneuver: one line with the raw
+     *  maneuver node and one id walk per distinct value per 5 min, so a recorded log shows what the
+     *  parse could not map. Waits for the same floor as [dumpTreeOnManeuverChange], checked
+     *  before the probe so a read inside it costs no extra lookup. [root] is the caller's. */
+    private fun logUnknownManeuver(root: AccessibilityNodeInfo, data: NavGuidance, nowMs: Long) {
+        if (!UnknownManeuverGate.applies(data.distanceMeters, data.maneuverGaode) { NavGuidanceHub.snapshot(nowMs).active }) return
+        if (nowMs - lastDumpMs < TREE_DUMP_MIN_INTERVAL_MS) return
+        val node = NavA11yExtractor.probeManeuver(root)
+        if (!unknownManeuvers.take(node, nowMs)) return
+        lastDumpMs = nowMs
+        runCatching {
+            treeDumpSink("nav maneuver unknown [a11y]: $node")
+            val ids = StringBuilder()
+            appendIds(root, ids, intArrayOf(TREE_DUMP_MAX_NODES))
+            treeDumpSink("nav tree [gaode=0]:${ids.take(TREE_DUMP_MAX_CHARS)}")
+        }
+    }
+
+    /** Issue #199: a window read without guidance that starts a streak while a route is guided
+     *  logs what the read saw (window, navigator windows, widget counts, no text), at most once
+     *  per 5 s, then the id walk with its node count behind its own 60 s floor. The route state
+     *  is read without expiries, so the trace writes nothing into the hub. [kept]: the read kept
+     *  the route alive (widgets without text). [root] is the caller's. */
+    private fun traceNoGuidance(
+        root: AccessibilityNodeInfo,
+        nowMs: Long,
+        src: String,
+        service: SteeringWheelKeyService,
+        kept: Boolean,
+    ) {
+        val skipped = noGuidanceTrace.startStreak(nowMs) { NavGuidanceHub.isActiveNow() } ?: return
+        val windows = runCatching { service.navigatorWindowRoots() }.getOrNull()
+        try {
+            runCatching {
+                traceSink("no-guidance read: src=$src ${NavA11yExtractor.windowFacts(root)} " +
+                    "navWindows=${windows?.size ?: "?"} skipped=$skipped kept=$kept ${NavA11yExtractor.countIds(root)}")
+                traceWindows(root, windows.orEmpty())
+                if (!noGuidanceTrace.takeDump(nowMs)) return@runCatching
+                val ids = StringBuilder()
+                val budget = intArrayOf(TREE_DUMP_MAX_NODES)
+                appendIds(root, ids, budget)
+                val walked = TREE_DUMP_MAX_NODES - budget[0]
+                val nodes = if (budget[0] <= 0) "$walked+" else "$walked"
+                traceSink("nav tree [no-guidance nodes=$nodes]:${ids.take(TREE_DUMP_MAX_CHARS)}")
+            }
+        } finally {
+            @Suppress("DEPRECATION")
+            windows?.forEach { runCatching { it.recycle() } }
+        }
+    }
+
+    /** One line per Navigator window (at most [TRACE_MAX_WINDOWS]): the guidance widgets may
+     *  live in another window than the one [SteeringWheelKeyService.findNavigatorRoot] handed
+     *  to the read (issue #199). [read] and [windows] stay the caller's. */
+    private fun traceWindows(read: AccessibilityNodeInfo, windows: List<AccessibilityNodeInfo>) {
+        val readId = runCatching { read.windowId }.getOrNull()
+        for (window in windows.take(TRACE_MAX_WINDOWS)) {
+            runCatching {
+                val isRead = readId != null && runCatching { window.windowId }.getOrNull() == readId
+                traceSink("no-guidance window: ${NavA11yExtractor.windowFacts(window)} read=$isRead " +
+                    NavA11yExtractor.countIds(window))
+            }
+        }
+    }
+
+    /** The guidance read that ends a no-guidance streak says how long the streak lasted. */
+    private fun traceGuidanceAgain(src: String, nowMs: Long) {
+        val lasted = noGuidanceTrace.endStreak(nowMs) ?: return
+        traceSink("guidance read again after $lasted ms (src=$src)")
     }
 
     /** Depth-first, [budget] nodes at most; only ids are collected, text is reduced to its

@@ -249,6 +249,22 @@ class RuleTextTest {
     private fun legacy(a: ActionDef, success: Boolean = true) =
         JSONObject().put("command", a.command).put("displayName", a.displayName).put("kind", a.kind).put("success", success)
 
+    @Test fun `a close step names the app it closes`() {
+        val lc = ctx.appLocalizedContext()
+        val close = ActionDef("", "x", "app_close", """{"packageName":"com.example.radio","appLabel":"Радио"}""")
+        assertEquals("Закрыть приложение «Радио»", actionText(close, lc))
+        assertEquals("Закрыть приложение «Радио»", journalLine(run(recorded(close)), ctx, now, zone).what)
+    }
+
+    @Test fun `a media key step reads as its picker entry, also in the journal`() {
+        val lc = ctx.appLocalizedContext()
+        val play = ActionDef("", "x", "media_key", "play")
+        val pause = ActionDef("", "x", "media_key", "pause")
+        assertEquals("Медиа: играть", actionText(play, lc))
+        assertEquals("Медиа: пауза", actionText(pause, lc))
+        assertEquals("Медиа: пауза не выполнено", journalLine(run(recorded(pause, success = false), success = false), ctx, now, zone).what)
+    }
+
     @Test fun `a run shows the parameters it recorded`() {
         val pause = ActionDef("", "Пауза", "delay", "30000")
         val note = ActionDef("", "Уведомление", "notification", """{"title":"Заряд","text":"t"}""")

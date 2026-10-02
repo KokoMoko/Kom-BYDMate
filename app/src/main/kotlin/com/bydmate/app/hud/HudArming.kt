@@ -120,6 +120,20 @@ class HudArming(
     /** Where the product lines go; tests collect them. */
     internal var log: (String) -> Unit = { Log.i(TAG, it) }
 
+    /** The loop's hook right before a disarm (a kept layout's retry included), while the status is
+     *  still up: ways 2 and 3 blank their CAN fields and stop their family there
+     *  ([HudWayChannels.close]). */
+    internal var beforeDisarm: suspend () -> Unit = {}
+
+    /** The hook right after every [arm], the status just raised: ways 2 and 3 may write again
+     *  ([HudWayChannels.reopen]). */
+    internal var afterArm: () -> Unit = {}
+
+    /** From the cleanup before a disarm ([beforeDisarm]) until the next arm: channels a way change
+     *  starts meanwhile wait for that arm too. */
+    @Volatile var closing: Boolean = false
+        private set
+
     @Volatile private var outdatedLogged = false
     private var job: Job? = null
     private var rearms = 0
@@ -133,15 +147,29 @@ class HudArming(
         return Status(r[0], r[1], r[2])
     }
 
-    /** Raises the status. The first call of a session reads and keeps the layout it will restore. */
-    suspend fun arm(status: Status? = null): ArmReport {
+    /** Raises the status. The first call of a session reads and keeps the layout it will restore.
+     *  [afterArm] runs whenever it ends with the session armed, a throw midway included: a status
+     *  already up is only rechecked, never armed again, so the hook would otherwise never come. */
+    suspend fun arm(status: Status? = null): ArmReport = try {
+        raise(status)
+    } finally {
+        if (armed) {
+            closing = false
+            afterArm()
+        }
+    }
+
+    private suspend fun raise(status: Status?): ArmReport {
         val s = status ?: readStatus()
         if (!armed) {
             // A layout kept by a session that never reached its disarm (process killed at ignition
             // off) is the real original: the car still holds our 3.
             asFound = prefs?.takeIf { it.contains(KEY_AS_FOUND) }?.getInt(KEY_AS_FOUND, 0)
                 ?: s.screen.value?.takeIf { it in 0..MAX_LAYOUT }
-            asFound?.let { prefs?.edit()?.putInt(KEY_AS_FOUND, it)?.apply() }
+            // The marker goes in before any write: a session killed over an unreadable layout keeps
+            // no as-found, and its status would otherwise stay up.
+            prefs?.edit()?.putBoolean(KEY_ARMED, true)?.also { e -> asFound?.let { e.putInt(KEY_AS_FOUND, it) } }
+                ?.apply()
             armed = true
         }
         // On some firmwares the SDK call moves the layout itself (#198, Han L), so it stays out
@@ -193,10 +221,12 @@ class HudArming(
         val rb = read(NAVI, SCREEN, CAN_NAVI, ISA)
         val screenBack = target == null || rb[1].value == target
         if (screenBack) prefs?.edit()?.remove(KEY_AS_FOUND)?.apply()
+        val statusBack = listOf(naviRc, canNaviRc, isaRc).all { it != null && it >= 0 }
+        if (statusBack) prefs?.edit()?.remove(KEY_ARMED)?.apply()
         armed = false
         asFound = null
         val deferred = needed && fullscreen
-        val ok = listOf(naviRc, canNaviRc, isaRc).all { it != null && it >= 0 } && (screenBack || deferred)
+        val ok = statusBack && (screenBack || deferred)
         return DisarmReport(
             via, naviRc, target, !restore, screenRc, deferred, canNaviRc, isaRc, rb[0], rb[1], rb[2], rb[3], ok,
         )
@@ -204,18 +234,19 @@ class HudArming(
 
     /**
      * What a session killed before its disarm left behind (process death at ignition off
-     * mid-route): the kept layout in [prefs] says our values are still up. Undone once, the same
-     * way as [disarm], when the HUD starts and no route is [guided]; a guided route arms and
-     * disarms it itself. Null when there was nothing to undo or it was left to the route.
+     * mid-route): the kept layout or the armed marker in [prefs] says our values are still up.
+     * Undone once, the same way as [disarm], when the HUD starts and no route is [guided]; a guided
+     * route arms and disarms it itself. Without a kept layout the layout is not written. Null when
+     * there was nothing to undo or it was left to the route.
      */
     suspend fun disarmLeftover(guided: Boolean): DisarmReport? {
-        if (prefs?.contains(KEY_AS_FOUND) != true || guided) return null
+        if (!leftover(prefs) || guided) return null
         return disarmKept(REASON_LEFTOVER)
     }
 
     /** The kept layout's disarm, logged with the [reason] that brought it. */
     private suspend fun disarmKept(reason: String): DisarmReport {
-        asFound = prefs?.getInt(KEY_AS_FOUND, 0)
+        asFound = prefs?.takeIf { it.contains(KEY_AS_FOUND) }?.getInt(KEY_AS_FOUND, 0)
         val r = disarm()
         log("hud disarm: reason=$reason ${r.describe()}")
         traceDisarm("disarm-$reason", r)
@@ -292,8 +323,8 @@ class HudArming(
     private suspend fun tick(guided: Boolean, checkDue: Boolean, owned: Boolean): Boolean = when {
         guided && !armed -> { onArm(arm()); true }
         guided && checkDue -> { onRecheck(recheck()); true }
-        !guided && armed -> { onDisarm(disarm()); false }
-        !guided && checkDue && owned && layoutWaits() -> { retryDeferred(); true }
+        !guided && armed -> { runBeforeDisarm(); onDisarm(disarm()); false }
+        !guided && checkDue && owned && layoutWaits() -> { runBeforeDisarm(); retryDeferred(); true }
         else -> false
     }
 
@@ -303,9 +334,19 @@ class HudArming(
         job = null
         if (armed) {
             withContext(NonCancellable) {
+                runBeforeDisarm()
                 runCatching { onDisarm(disarm()) }
                     .onFailure { Log.w(TAG, "hud disarm: failed: ${it.javaClass.simpleName}") }
             }
+        }
+    }
+
+    /** A failing hook never keeps the status up. */
+    private suspend fun runBeforeDisarm() {
+        closing = true
+        runCatching { beforeDisarm() }.onFailure {
+            if (it is CancellationException) throw it
+            Log.w(TAG, "hud disarm: cleanup before it failed: ${it.javaClass.simpleName}")
         }
     }
 
@@ -386,6 +427,14 @@ class HudArming(
 
         /** HUD prefs key of the layout found before an unfinished session. */
         const val KEY_AS_FOUND = "hud_layout_as_found"
+
+        /** HUD prefs key set from an arm's first write until a disarm whose writes went through:
+         *  our status may still be up even when no layout was kept. */
+        const val KEY_ARMED = "hud_status_armed"
+
+        /** A session that never reached its disarm left our values up. */
+        fun leftover(prefs: SharedPreferences?): Boolean =
+            prefs?.contains(KEY_AS_FOUND) == true || prefs?.contains(KEY_ARMED) == true
 
         internal fun rc(value: Int?): String = value?.toString() ?: "na"
     }

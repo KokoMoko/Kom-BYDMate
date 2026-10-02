@@ -352,6 +352,8 @@ class LogRecorder internal constructor(
             "HudController:*", "HudSomeIpBridge:*", "HudPushLoop:*",
             // HUD navigation status (app and daemon share the tag) and the HUD check's hudprobe lines.
             "HudArming:*", "HudCheck:*",
+            // HUD ways 2 and 3: per-route channels, CAN counts, the family's services.
+            "HudWayChannels:*",
             "ClusterProjection:*",
             // Direct projection wave: helper daemon (freeform switch diagnostics; visible
             // only once READ_LOGS is granted AND the app process restarted - the daemon
@@ -360,6 +362,8 @@ class LogRecorder internal constructor(
             "NavA11yFeed:*", "NavGuidanceHub:*", "GrantSelfHeal:*",
             // Amap-channel wave: notification lane + parser tags.
             "MediaSessionListener:*", "NaviNotifLane:*", "NaviNotifParser:*",
+            // Cluster music card: what the bridge decided and wrote.
+            "ClusterMusicBridge:*",
             // Blindspot wave: AVM camera probe. FidPush carries the daemon's push
             // subscription (register results, events) and the app's apply lines.
             "FidPush:*", "TechPanel:*", "CameraProbe:*", "BlindSpot:*", "CameraMonitor:*",

@@ -78,6 +78,8 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Steering wheel volume knob</string>
     <string name="settings_knob_play_pause_desc">Pressing the knob pauses and resumes playback instead of switching the audio source. Needed after the firmware update that made the press change the source.</string>
+    <string name="settings_cluster_music_card_title">Yandex track on the cluster</string>
+    <string name="settings_cluster_music_card_desc">Shows the title and artist from Yandex Navigator (Alice) and Yandex Music on the instrument cluster music card. The stock firmware fills it only for its own players and Bluetooth.</string>
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Restore ADB after a reboot</string>
@@ -457,6 +459,11 @@
     <string name="automation_action_dplus_command">Vehicle command</string>
     <string name="automation_action_notification">Notification</string>
     <string name="automation_action_app_launch">Launch app</string>
+    <string name="automation_action_app_close">Close app</string>
+    <string name="automation_action_app_close_hint">The app closes completely. A route or music in it that is not saved will be lost.</string>
+    <string name="automation_action_media_play">Media: play</string>
+    <string name="automation_action_media_pause">Media: pause</string>
+    <string name="automation_action_media_key_hint">Works when a player is already running: to start one, put “Launch app” before this step.</string>
     <string name="automation_action_yandex_music">Yandex Music</string>
     <string name="automation_action_call">Call</string>
     <string name="automation_action_navigate">Route in Y.Navigator</string>
@@ -884,7 +891,7 @@
     <string name="settings_fid_dump_button">Save fid catalog</string>
     <string name="settings_fid_dump_desc">SDK constant names and values. Technical identifiers only: no VIN, no location, no personal data</string>
     <string name="settings_hud_check_title">HUD check</string>
-    <string name="settings_hud_check_desc">A minute and a half of test hints on the glass. Start log recording first and film the glass. The car stands still, no route needed. The glass shows test labels “BYDMATE 1”, “BYDMATE 2” and “BYDMATE 3”, which go away when the check ends</string>
+    <string name="settings_hud_check_desc">A minute and a half of test hints on the glass. The car stands still, no route running in the navigator. Start log recording first. The glass shows the numbers 111, 222, 333 and 444 one after another. At the end the app asks what you saw and picks the method itself. All of it goes away when the check ends</string>
     <string name="settings_hud_check_button">Start</string>
     <string name="settings_hud_check_preparing">Preparing the check</string>
     <string name="settings_hud_check_step">Step %1$d of %2$d, watch the glass</string>
@@ -894,6 +901,12 @@
     <string name="settings_hud_check_refused_guidance">Finish the route in the navigator first</string>
     <string name="settings_hud_check_refused_moving">Stop the car, the check runs only when standing</string>
     <string name="settings_hud_check_refused_no_link">No connection to the car, the check did not start</string>
+    <string name="settings_hud_check_notice_refused_title">Check not started</string>
+    <string name="settings_hud_check_notice_interrupted_title">Check interrupted</string>
+    <string name="settings_hud_check_notice_guidance">A route is running in the navigator. End it and start the check again.</string>
+    <string name="settings_hud_check_notice_moving">The car is moving. Stop and start the check again.</string>
+    <string name="settings_hud_check_notice_route_started">A route started during the check. End it and start the check again.</string>
+    <string name="settings_hud_check_notice_ok">Got it</string>
     <string name="settings_fid_dump_saved">Saved: %1$s</string>
     <string name="settings_fid_dump_in_progress">Reading fids...</string>
     <string name="settings_fid_dump_empty">Fid catalog is empty on this firmware</string>
@@ -1131,6 +1144,7 @@
     <string name="auto_msg_url_no_scheme">Action #%1$d: URL must contain a scheme (http://, yandexmusic://, tel:, ...)</string>
     <string name="auto_msg_ymusic_mode_missing">Action #%1$d: Yandex Music mode not selected</string>
     <string name="auto_msg_sentry_invalid">Action #%1$d: invalid sentry mode state</string>
+    <string name="auto_msg_media_key_invalid">Action #%1$d: choose play or pause</string>
     <string name="auto_msg_hotspot_invalid">Action #%1$d: invalid hotspot state</string>
     <string name="auto_msg_speak_text_empty">Action #%1$d: speak text is not set</string>
     <string name="auto_msg_agent_query_prompt_empty">Action #%1$d: agent query prompt is not set</string>
@@ -1405,11 +1419,23 @@
     <string name="settings_hud_status_on">Streaming to the HUD</string>
     <string name="settings_hud_status_bind_failed">Could not connect to the SOME/IP bus</string>
     <string name="settings_hud_hint">Requires a trim with the head-up display. Data comes from the Yandex Navigator window</string>
-    <string name="settings_hud_mode_title">HUD mode</string>
-    <string name="settings_hud_mode_1">Mode 1</string>
-    <string name="settings_hud_mode_2">Mode 2</string>
-    <string name="settings_hud_mode_1_desc">Mode 1. Hints go to the glass, the app leaves the instrument cluster alone.</string>
-    <string name="settings_hud_mode_2_desc">Mode 2. During a route the car switches to navigation mode. Try it if the glass stays blank in mode 1. The instrument cluster shows an arrow, apps and cameras on the cluster may not be shown.</string>
+    <string name="settings_hud_mode_title">Glass output method</string>
+    <string name="settings_hud_mode_1">Method 1</string>
+    <string name="settings_hud_mode_2">Method 2</string>
+    <string name="settings_hud_mode_1_desc">Method 1. Hints go to the glass, the app leaves the instrument cluster alone.</string>
+    <string name="settings_hud_mode_2_desc">Method 2. Hints go to the glass and to the instrument cluster: a navigation card with the arrow, metres and street appears there.</string>
+    <string name="settings_hud_mode_3">Method 3</string>
+    <string name="settings_hud_mode_3_desc">Method 3. Like method 2, plus one more path. Try it if the first two showed nothing.</string>
+    <string name="settings_hud_mode_trial">trial</string>
+    <string name="settings_hud_mode_pick_hint">Not sure which one? Run the “HUD check”.</string>
+    <string name="settings_hud_answer_title">Which number did you see on the glass?</string>
+    <string name="settings_hud_answer_text">The app picks the method itself. If you saw several numbers, tap the smallest one.</string>
+    <string name="settings_hud_answer_none">Nothing</string>
+    <string name="settings_hud_answer_chosen_title">Method %1$d selected</string>
+    <string name="settings_hud_answer_chosen_text">Hints will go to the glass this way. You can change it in the HUD settings.</string>
+    <string name="settings_hud_answer_nothing_title">The glass showed nothing</string>
+    <string name="settings_hud_answer_nothing_text">None of the methods worked on this car\'s glass. Record a log and send it to us, we will look into it.</string>
+    <string name="settings_hud_answer_done">Done</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Blind spots</string>
     <string name="settings_blindspot_title">Camera on turn signal</string>
@@ -1732,6 +1758,11 @@
     <string name="dispatch_volume_invalid">Invalid volume level: %1$s</string>
     <string name="dispatch_package_missing">packageName not set</string>
     <string name="dispatch_app_not_installed">App not installed: %1$s</string>
+    <string name="dispatch_app_close_self">BYDMate does not close itself</string>
+    <string name="dispatch_app_close_failed">Could not close the app: %1$s</string>
+    <string name="dispatch_media_no_session">No player is running</string>
+    <string name="dispatch_media_key_invalid">Unknown player command</string>
+    <string name="dispatch_media_key_failed">The player did not accept the command: %1$s</string>
     <string name="dispatch_phone_missing">phone not set</string>
     <string name="dispatch_dgis_fallback">2GIS is not installed, Yandex Navigator opened</string>
     <string name="dispatch_maps_fallback">Yandex Maps is not installed, Yandex Navigator opened</string>
@@ -1817,6 +1848,7 @@
     <string name="tg_report_trip_now">Trip</string>
     <string name="tg_report_trip_last">Last trip</string>
     <string name="tg_report_trip_when">%1$s at %2$s</string>
+    <string name="tg_report_counter_since">since %1$s</string>
     <string name="tg_report_trip_distance_time">%1$s in %2$s</string>
     <string name="tg_report_trip_km">%1$.1f km</string>
     <string name="tg_report_trip_km_whole">%1$d km</string>
@@ -1850,6 +1882,8 @@
     <string name="tg_report_field_range_desc">Kilometers, as on Home</string>
     <string name="tg_report_field_odometer_desc">Total distance of the car</string>
     <string name="tg_report_field_trip_desc">Kilometers, consumption and driving time</string>
+    <string name="tg_report_field_trip1_desc">TRIP 1 counter from the Dashboard: kilometers, driving time and consumption</string>
+    <string name="tg_report_field_trip2_desc">TRIP 2 counter from the Dashboard: kilometers, driving time and consumption</string>
     <string name="tg_report_field_temps_desc">Outside and in the cabin</string>
     <string name="tg_report_field_openings_desc">Doors, windows, sunroof, trunk, hood</string>
     <string name="tg_report_field_tires_desc">All four wheels</string>

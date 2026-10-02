@@ -16,6 +16,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -50,6 +52,8 @@ class HudController @Inject constructor(
         val amapCapable: Boolean = false,
         val amapFramesSent: Long = 0,
         val amapStopsSent: Long = 0,
+        val canAccepted: Long = 0,
+        val canRefused: Long = 0,
     )
 
     companion object {
@@ -60,10 +64,13 @@ class HudController @Inject constructor(
         const val KEY_SPEED_SIGN = "hud_speed_sign"
         const val KEY_MODE = "hud_mode"
 
-        /** Mode 1 (default, 3.19.0): hints go to the glass, the car's navigation status is never
-         *  raised. Mode 2 (3.19.1): [HudArming] raises it while a route is guided (#266). */
+        /** The way hints go to the glass («Способ вывода на стекло»). Way 1 (default, 3.19.0): the
+         *  frames alone, the car's navigation status is never raised. Way 2 (3.19.1 + CAN): [HudArming]
+         *  raises it while a route is guided (#266) and [HudWayChannels] writes the CAN guidance
+         *  fields. Way 3: way 2 plus OpenBYD's LAUNCHER_MAP_CN family. */
         const val MODE_GLASS_ONLY = 1
         const val MODE_NAVI_STATUS = 2
+        const val MODE_LMCN = 3
     }
 
     /** Single lane: stop()/startIfEnabled() launched across a service restart must
@@ -81,9 +88,14 @@ class HudController @Inject constructor(
     private val ownerLock = Mutex()
     private var startJob: Job? = null
     private var leftoverJob: Job? = null
+    /** The put-back while the output is off ([putBackLeftover]), the family's one-off binding
+     *  included: the output going on or stopping cancels all of it. */
+    private var putBackJob: Job? = null
     @Volatile private var bridge: HudSomeIpBridge? = null
     @Volatile private var loop: HudPushLoop? = null
     @Volatile private var arming: HudArming? = null
+    /** Ways 2 and 3: the CAN fields and the family, next to [arming]; never in way 1. */
+    @Volatile private var channels: HudWayChannels? = null
 
     /** HUD check: while set, the product arming treats guidance as absent (disarming if it was
      *  armed), so the check's own arming session is the only one writing. */
@@ -111,10 +123,11 @@ class HudController @Inject constructor(
 
     fun mode(): Int = prefs().getInt(KEY_MODE, MODE_GLASS_ONLY)
 
-    private fun armsNaviStatus(): Boolean = mode() == MODE_NAVI_STATUS
+    private fun armsNaviStatus(): Boolean = mode() >= MODE_NAVI_STATUS
 
-    /** A running output follows the new mode at once: mode 1 disarms a raised status the same
-     *  way [stop] does, mode 2 starts arming. Not running, the next start reads the mode. */
+    /** A running output follows the new way at once: way 1 cleans up and disarms a raised status
+     *  the same way [stop] does, ways 2 and 3 start arming and their channels. Not running, the
+     *  next start reads the way. */
     fun setMode(mode: Int) {
         prefs().edit().putInt(KEY_MODE, mode).apply()
         scope.launch { applyMode() }
@@ -124,11 +137,18 @@ class HudController @Inject constructor(
         if (bridge == null && startJob?.isActive != true) return
         if (armsNaviStatus()) {
             // Still binding: the start job reads the mode once the gateway is up.
-            if (bridge != null && arming == null) {
-                ownerLock.withLock { arming = HudArming(helperClient, prefs()).also { startArming(it) } }
+            val b = bridge ?: return
+            ownerLock.withLock {
+                if (arming == null) arming = HudArming(helperClient, prefs()).also { startArming(it) }
+                if (channels?.way != mode()) {
+                    channels?.stop()
+                    channels = startChannels(b)
+                }
             }
         } else {
             ownerLock.withLock {
+                channels?.stop()
+                channels = null
                 arming?.stop()
                 arming = null
             }
@@ -144,11 +164,11 @@ class HudController @Inject constructor(
      * (the next start tries again), or the output stops. Nothing kept = nothing read or written.
      */
     private fun restoreLeftover() {
-        if (leftoverJob?.isActive == true || !prefs().contains(HudArming.KEY_AS_FOUND)) return
+        if (leftoverJob?.isActive == true || !leftoverKept()) return
         leftoverJob = scope.launch {
             val arm = HudArming(helperClient, prefs())
             var tried = false
-            while (prefs().contains(HudArming.KEY_AS_FOUND)) {
+            while (leftoverKept()) {
                 val done = ownerLock.withLock {
                     when {
                         arming != null -> true
@@ -165,16 +185,42 @@ class HudController @Inject constructor(
         }
     }
 
-    /** One put-back; true when it is over, false while the fullscreen cluster still defers it. */
+    /** Our status and layout kept up, CAN values of way 2 or 3 (way 3's rest of route too) left on
+     *  the instrument, or way 3's family left up on the gateway. */
+    private fun leftoverKept(): Boolean =
+        HudArming.leftover(prefs()) || prefs().contains(HudWayChannels.KEY_CAN_LEFT) ||
+            prefs().contains(HudWayChannels.KEY_REST_LEFT) || prefs().contains(HudWayChannels.KEY_LMCN_LEFT)
+
+    /** One put-back; true when it is over, false while the fullscreen cluster still defers it. The
+     *  CAN values go first, while the status is still up; a refused clear waits for the next start. */
     private suspend fun putBackStep(arm: HudArming, retry: Boolean): Boolean = runCatching {
-        if (retry) arm.retryDeferred() else arm.disarmLeftover(guided = false)?.screenDeferred != true
+        if (!retry) HudWayChannels.clearCanLeftover(HudCanChannel(helperClient), prefs())
+        when {
+            !HudArming.leftover(prefs()) -> true
+            retry -> arm.retryDeferred()
+            else -> arm.disarmLeftover(guided = false)?.screenDeferred != true
+        }
     }.getOrElse {
         Log.w(TAG, "hud disarm: reason=leftover failed: ${it.javaClass.simpleName}")
         true
     }
 
-    private fun startArming(arm: HudArming) =
+    private fun startArming(arm: HudArming) {
+        arm.beforeDisarm = { channels?.close() }
+        arm.afterArm = { channels?.reopen() }
         arm.start(scope, layoutOwned = { !armingPaused }) { !armingPaused && NavGuidanceHub.snapshot().active }
+    }
+
+    /** Ways 2 and 3 only: they write while the arming holds a guided route's status up. */
+    private fun startChannels(b: HudSomeIpBridge): HudWayChannels? {
+        if (!armsNaviStatus()) return null
+        return HudWayChannels(mode(), HudCanChannel(helperClient), b, prefs()) { HudPosition.lastKnown(context) }
+            .also { ch ->
+                ch.start(scope, held = { armingPaused }, closed = arming?.closing == true) {
+                    NavGuidanceHub.snapshot().active && arming?.armed == true
+                }
+            }
+    }
 
     fun diag(): HudDiag? = loop?.let { l ->
         HudDiag(
@@ -185,6 +231,8 @@ class HudController @Inject constructor(
             amapCapable = l.amap?.capable ?: false,
             amapFramesSent = l.amap?.framesSent ?: 0,
             amapStopsSent = l.amap?.stopsSent ?: 0,
+            canAccepted = channels?.canAccepted ?: 0,
+            canRefused = channels?.canRefused ?: 0,
         )
     }
 
@@ -205,7 +253,11 @@ class HudController @Inject constructor(
 
     /** TrackingService.onCreate hook. */
     fun startIfEnabled() {
-        if (isEnabled()) scope.launch { startSequence() } else scope.launch { putBackLeftover() }
+        if (isEnabled()) {
+            scope.launch { startSequence() }
+        } else if (putBackJob?.isActive != true) {
+            putBackJob = scope.launch { putBackLeftover() }
+        }
     }
 
     /** TrackingService.onDestroy hook. */
@@ -217,6 +269,9 @@ class HudController @Inject constructor(
     private suspend fun startSequence() = mutex.withLock {
         if (!isEnabled()) return
         if (startJob?.isActive == true || bridge != null) return
+        // The output's own leftover handling takes over; the HUD-off put-back must not race it.
+        putBackJob?.cancelAndJoin()
+        putBackJob = null
         // Probe BEFORE any helper-daemon work: unsupported cars must see zero side effects.
         if (!HudSomeIpBridge.isServicePresent(context.packageManager)) {
             prefs().edit().putBoolean(KEY_SUPPORTED, false).apply()
@@ -250,6 +305,8 @@ class HudController @Inject constructor(
                 // Taken before the bridge is set: cancelled while waiting, nothing is up yet.
                 ownerLock.withLock {
                     bridge = b
+                    // A family a process death left up is stopped before a new route can start one.
+                    HudWayChannels.stopLmcnLeftover(b, prefs())
                     NavA11yFeed.enabled = true
                     loop = HudPushLoop(b, speedSignEnabled = { isSpeedSignEnabled() },
                         amap = HudAmapBroadcaster(context),
@@ -257,7 +314,10 @@ class HudController @Inject constructor(
                         .also { it.start(scope) }
                     // Mode 2: the car's navigation status, only while a route is guided; own
                     // coroutine, so a slow or refused write never delays a frame.
-                    if (armsNaviStatus()) arming = HudArming(helperClient, prefs()).also { startArming(it) }
+                    if (armsNaviStatus()) {
+                        arming = HudArming(helperClient, prefs()).also { startArming(it) }
+                        channels = startChannels(b)
+                    }
                 }
                 if (arming == null) restoreLeftover()
                 _status.value = Status.ON
@@ -271,12 +331,39 @@ class HudController @Inject constructor(
 
     /** A layout the HUD check kept (process killed mid-check, or its put-back deferred at a
      *  fullscreen cluster) on a car where the HUD output does not start: nothing else would put it
-     *  back. Without the key nothing starts, reads or writes. */
+     *  back. Without the key nothing starts, reads or writes. A family left up gets its stops
+     *  last, on a binding of its own. */
     private suspend fun putBackLeftover() {
-        if (!prefs().contains(HudArming.KEY_AS_FOUND) || armingPaused || NavGuidanceHub.snapshot().active) return
+        // Taken before anything suspends: a key a route writes meanwhile is not this put-back's.
+        val lmcnRoute = prefs().takeIf { it.contains(HudWayChannels.KEY_LMCN_LEFT) }?.getLong(HudWayChannels.KEY_LMCN_LEFT, 0L)
+        if (!leftoverKept() || armingPaused || NavGuidanceHub.snapshot().active) return
         if (!helperBootstrap.ensureRunning()) return
-        runCatching { HudArming(helperClient, prefs()).disarmLeftover(guided = false) }
-            .onFailure { Log.w(TAG, "hud disarm: reason=leftover failed: ${it.javaClass.simpleName}") }
+        runCatching {
+            HudWayChannels.clearCanLeftover(HudCanChannel(helperClient), prefs())
+            HudArming(helperClient, prefs()).disarmLeftover(guided = false)
+        }.onFailure {
+            if (it is CancellationException) throw it
+            Log.w(TAG, "hud disarm: reason=leftover failed: ${it.javaClass.simpleName}")
+        }
+        lmcnRoute?.let { stopLmcnLeftover(it) }
+    }
+
+    /** Way 3's family a process death left up while the output does not run: a one-off binding
+     *  for its off events and stops, then let go. Unbound, the key waits for the next start. A key
+     *  that no longer holds [routeId] when the binding is up (a new route's) is not its to stop. */
+    private suspend fun stopLmcnLeftover(routeId: Long) {
+        currentCoroutineContext().ensureActive()
+        if (!HudSomeIpBridge.isServicePresent(context.packageManager)) return
+        val b = bridgeFactory(context) {}
+        try {
+            if (!b.bind()) return
+            val same = prefs().contains(HudWayChannels.KEY_LMCN_LEFT) &&
+                prefs().getLong(HudWayChannels.KEY_LMCN_LEFT, 0L) == routeId
+            if (same) HudWayChannels.stopLmcnLeftover(b, prefs())
+            else Log.i(TAG, "hud way: leftover lmcn changed while binding, left to its owner")
+        } finally {
+            b.unbind()
+        }
     }
 
     /** Gateway binding died (crash/update). Clean up so the next startIfEnabled()
@@ -289,6 +376,8 @@ class HudController @Inject constructor(
             mutex.withLock {
                 loop?.stop()
                 loop = null
+                channels?.stop()
+                channels = null
                 arming?.stop()
                 arming = null
                 // A layout the stop deferred has no loop left to finish it. bridge null = a stop
@@ -307,12 +396,17 @@ class HudController @Inject constructor(
             startJob = null
             leftoverJob?.cancelAndJoin()
             leftoverJob = null
+            putBackJob?.cancelAndJoin()
+            putBackJob = null
             // startJob may have flipped the feed back on between our first write and its
             // completion (no suspension points after bind()) - re-clear (final-review fix 3).
             NavA11yFeed.enabled = false
             loop?.stop()
             loop = null
-            // Close the car's navigation status and put the layout back before the channel goes.
+            // Blank the CAN fields and stop the family, then close the car's navigation status and put
+            // the layout back, all before the channel goes.
+            channels?.stop()
+            channels = null
             arming?.stop()
             arming = null
             bridge?.let {

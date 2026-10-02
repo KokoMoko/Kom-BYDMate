@@ -46,6 +46,7 @@ private val TEXT_KEYS_OUTSIDE_RANGES = setOf(81, 216, 217)
  * no Accessibility UI on DiLink) AND the settings switch is on, so it does nothing for users who
  * never opt in.
  */
+@Suppress("TooManyFunctions") // the service callbacks, key handling and the Navigator window lookups
 class SteeringWheelKeyService : AccessibilityService() {
 
     private var cachedEntryPoint: ClusterEntryPoint? = null
@@ -219,12 +220,7 @@ class SteeringWheelKeyService : AccessibilityService() {
             if (active.packageName?.toString() in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES) return active
             @Suppress("DEPRECATION") runCatching { active.recycle() }
         }
-        val windowList = runCatching {
-            if (android.os.Build.VERSION.SDK_INT >= 30) {
-                val byDisplay = windowsOnAllDisplays
-                (0 until byDisplay.size()).flatMap { byDisplay.valueAt(it) }
-            } else windows
-        }.getOrNull() ?: return null
+        val windowList = allWindows() ?: return null
         for (window in windowList) {
             val root = runCatching { window.root }.getOrNull() ?: continue
             if (root.packageName?.toString() in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES) return root
@@ -232,6 +228,26 @@ class SteeringWheelKeyService : AccessibilityService() {
         }
         return null
     }
+
+    /** Roots of every window on all displays that belongs to the Navigator, for the no-guidance
+     *  log; null when the window list cannot be read. Caller must recycle every returned node. */
+    fun navigatorWindowRoots(): List<android.view.accessibility.AccessibilityNodeInfo>? {
+        val windowList = allWindows() ?: return null
+        return windowList.mapNotNull { window ->
+            val root = runCatching { window.root }.getOrNull() ?: return@mapNotNull null
+            val pkg = runCatching { root.packageName?.toString() }.getOrNull()
+            if (pkg in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES) return@mapNotNull root
+            @Suppress("DEPRECATION") runCatching { root.recycle() }
+            null
+        }
+    }
+
+    private fun allWindows(): List<android.view.accessibility.AccessibilityWindowInfo>? = runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            val byDisplay = windowsOnAllDisplays
+            (0 until byDisplay.size()).flatMap { byDisplay.valueAt(it) }
+        } else windows
+    }.getOrNull()
 
     // Single volatile read when the HUD feature is off - see NavA11yFeed.enabled.
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

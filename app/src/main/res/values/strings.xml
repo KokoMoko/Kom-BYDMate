@@ -82,6 +82,8 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Колёсико громкости на руле</string>
     <string name="settings_knob_play_pause_desc">Нажатие ставит на паузу и продолжает воспроизведение, а не переключает источник звука. Нужно после обновления прошивки, где нажатие стало менять источник.</string>
+    <string name="settings_cluster_music_card_title">Трек Яндекса на приборке</string>
+    <string name="settings_cluster_music_card_desc">Показывает название и исполнителя из Яндекс Навигатора (Алиса) и Яндекс Музыки в карточке музыки на приборке. Штатная прошивка заполняет её только для своих плееров и Bluetooth.</string>
 
     <!-- ADB restore after reboot (firmwares 2606+) -->
     <string name="settings_adb_restore_title">Восстанавливать ADB после перезагрузки</string>
@@ -514,6 +516,11 @@
     <string name="automation_action_dplus_command">Команда автомобилю</string>
     <string name="automation_action_notification">Уведомление</string>
     <string name="automation_action_app_launch">Запуск приложения</string>
+    <string name="automation_action_app_close">Закрыть приложение</string>
+    <string name="automation_action_app_close_hint">Приложение закроется полностью. Маршрут или музыка, которые в нём не сохранены, пропадут.</string>
+    <string name="automation_action_media_play">Медиа: играть</string>
+    <string name="automation_action_media_pause">Медиа: пауза</string>
+    <string name="automation_action_media_key_hint">Сработает, если плеер уже запущен: чтобы его запустить, поставьте перед этим шагом «Запуск приложения».</string>
     <string name="automation_action_yandex_music">Яндекс.Музыка</string>
     <string name="automation_action_call">Звонок</string>
     <string name="automation_action_navigate">Маршрут в Я.Навигаторе</string>
@@ -1039,7 +1046,7 @@
     <string name="settings_fid_dump_button">Сохранить каталог fid\'ов</string>
     <string name="settings_fid_dump_desc">Имена и значения констант SDK. Только технические идентификаторы: без VIN, без геолокации, без личных данных</string>
     <string name="settings_hud_check_title">Проверка HUD</string>
-    <string name="settings_hud_check_desc">Полторы минуты тестовых подсказок на стекле. Сначала включите запись логов и снимайте стекло на видео. Машина стоит, маршрут не нужен. На стекле будут тестовые надписи «BYDMATE 1», «BYDMATE 2» и «BYDMATE 3», после проверки они пропадут</string>
+    <string name="settings_hud_check_desc">Полторы минуты тестовых подсказок на стекле. Машина стоит, маршрут в навигаторе завершён. Сначала включите запись логов. На стекле по очереди появятся числа 111, 222, 333 и 444. В конце приложение спросит, что вы видели, и само выберет способ. После проверки всё пропадёт</string>
     <string name="settings_hud_check_button">Запустить</string>
     <string name="settings_hud_check_preparing">Готовим проверку</string>
     <string name="settings_hud_check_step">Шаг %1$d из %2$d, смотрите на стекло</string>
@@ -1049,6 +1056,12 @@
     <string name="settings_hud_check_refused_guidance">Сначала завершите маршрут в навигаторе</string>
     <string name="settings_hud_check_refused_moving">Остановите машину, проверка идёт только на месте</string>
     <string name="settings_hud_check_refused_no_link">Нет связи с машиной, проверка не запущена</string>
+    <string name="settings_hud_check_notice_refused_title">Проверка не запущена</string>
+    <string name="settings_hud_check_notice_interrupted_title">Проверка прервана</string>
+    <string name="settings_hud_check_notice_guidance">В навигаторе идёт маршрут. Завершите его и запустите проверку ещё раз.</string>
+    <string name="settings_hud_check_notice_moving">Машина едет. Остановитесь и запустите проверку ещё раз.</string>
+    <string name="settings_hud_check_notice_route_started">Во время проверки начался маршрут. Завершите его и запустите проверку ещё раз.</string>
+    <string name="settings_hud_check_notice_ok">Понятно</string>
     <!-- %1$s = file name -->
     <string name="settings_fid_dump_saved">Сохранено: %1$s</string>
     <string name="settings_fid_dump_in_progress">Чтение fid\'ов...</string>
@@ -1287,6 +1300,7 @@
     <string name="auto_msg_url_no_scheme">Действие #%1$d: URL должен содержать схему (http://, yandexmusic://, tel:, ...)</string>
     <string name="auto_msg_ymusic_mode_missing">Действие #%1$d: режим Я.Музыки не выбран</string>
     <string name="auto_msg_sentry_invalid">Действие #%1$d: некорректное состояние охранного режима</string>
+    <string name="auto_msg_media_key_invalid">Действие #%1$d: выберите «играть» или «пауза»</string>
     <string name="auto_msg_hotspot_invalid">Действие #%1$d: некорректное состояние точки доступа</string>
     <string name="auto_msg_speak_text_empty">Действие #%1$d: не задан текст для озвучки</string>
     <string name="auto_msg_agent_query_prompt_empty">Действие #%1$d: не задан запрос агенту</string>
@@ -1562,11 +1576,23 @@
     <string name="settings_hud_status_on">Передача на HUD активна</string>
     <string name="settings_hud_status_bind_failed">Не удалось подключиться к шине SOME/IP</string>
     <string name="settings_hud_hint">Нужна комплектация с проекционным дисплеем. Данные берутся из окна Яндекс Навигатора</string>
-    <string name="settings_hud_mode_title">Режим HUD</string>
-    <string name="settings_hud_mode_1">Режим 1</string>
-    <string name="settings_hud_mode_2">Режим 2</string>
-    <string name="settings_hud_mode_1_desc">Режим 1. Подсказки идут на стекло, приборку приложение не трогает.</string>
-    <string name="settings_hud_mode_2_desc">Режим 2. На время маршрута машина переходит в режим навигации. Попробуйте, если в режиме 1 стекло пустое. На приборке появится стрелка, приложения и камеры на приборке могут не показываться.</string>
+    <string name="settings_hud_mode_title">Способ вывода на стекло</string>
+    <string name="settings_hud_mode_1">Способ 1</string>
+    <string name="settings_hud_mode_2">Способ 2</string>
+    <string name="settings_hud_mode_1_desc">Способ 1. Подсказки идут на стекло, приборку приложение не трогает.</string>
+    <string name="settings_hud_mode_2_desc">Способ 2. Подсказки идут и на стекло, и на приборку: там появится карточка навигации со стрелкой, метрами и улицей.</string>
+    <string name="settings_hud_mode_3">Способ 3</string>
+    <string name="settings_hud_mode_3_desc">Способ 3. Как способ 2, и ещё одним путём. Попробуйте, если первые два ничего не показали.</string>
+    <string name="settings_hud_mode_trial">пробный</string>
+    <string name="settings_hud_mode_pick_hint">Не знаете, какой выбрать? Запустите «Проверку HUD».</string>
+    <string name="settings_hud_answer_title">Какое число вы увидели на стекле?</string>
+    <string name="settings_hud_answer_text">Приложение само выберет способ. Если видели несколько чисел, нажмите меньшее.</string>
+    <string name="settings_hud_answer_none">Ничего</string>
+    <string name="settings_hud_answer_chosen_title">Выбран способ %1$d</string>
+    <string name="settings_hud_answer_chosen_text">Подсказки пойдут на стекло этим способом. Поменять его можно в настройках HUD.</string>
+    <string name="settings_hud_answer_nothing_title">Стекло ничего не показало</string>
+    <string name="settings_hud_answer_nothing_text">Ни один из способов не сработал на стекле этой машины. Запишите лог и пришлите его нам, мы разберёмся.</string>
+    <string name="settings_hud_answer_done">Готово</string>
     <!-- Blind-spot cameras -->
     <string name="settings_blindspot_header">Слепые зоны</string>
     <string name="settings_blindspot_title">Камера по поворотнику</string>
@@ -1899,6 +1925,11 @@
     <string name="dispatch_volume_invalid">Некорректный уровень громкости: %1$s</string>
     <string name="dispatch_package_missing">packageName не задан</string>
     <string name="dispatch_app_not_installed">Приложение не установлено: %1$s</string>
+    <string name="dispatch_app_close_self">BYDMate не закрывает сам себя</string>
+    <string name="dispatch_app_close_failed">Не удалось закрыть приложение: %1$s</string>
+    <string name="dispatch_media_no_session">Нет запущенного плеера</string>
+    <string name="dispatch_media_key_invalid">Неизвестная команда плеера</string>
+    <string name="dispatch_media_key_failed">Плеер не принял команду: %1$s</string>
     <string name="dispatch_phone_missing">phone не задан</string>
     <string name="dispatch_dgis_fallback">2ГИС не установлен, открыт Яндекс Навигатор</string>
     <string name="dispatch_maps_fallback">Яндекс Карты не установлены, открыт Яндекс Навигатор</string>
@@ -1984,6 +2015,7 @@
     <string name="tg_report_trip_now">Поездка</string>
     <string name="tg_report_trip_last">Последняя поездка</string>
     <string name="tg_report_trip_when">%1$s в %2$s</string>
+    <string name="tg_report_counter_since">с %1$s</string>
     <string name="tg_report_trip_distance_time">%1$s за %2$s</string>
     <string name="tg_report_trip_km">%1$.1f км</string>
     <string name="tg_report_trip_km_whole">%1$d км</string>
@@ -2017,6 +2049,8 @@
     <string name="tg_report_field_range_desc">Километры, как на Главной</string>
     <string name="tg_report_field_odometer_desc">Общий пробег машины</string>
     <string name="tg_report_field_trip_desc">Километры, расход и время в пути</string>
+    <string name="tg_report_field_trip1_desc">Счётчик TRIP 1 с Главной: километры, время в пути и расход</string>
+    <string name="tg_report_field_trip2_desc">Счётчик TRIP 2 с Главной: километры, время в пути и расход</string>
     <string name="tg_report_field_temps_desc">Снаружи и в салоне</string>
     <string name="tg_report_field_openings_desc">Двери, окна, люк, багажник, капот</string>
     <string name="tg_report_field_tires_desc">Все четыре колеса</string>
