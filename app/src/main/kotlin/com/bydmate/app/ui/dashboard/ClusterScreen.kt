@@ -179,6 +179,8 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
         Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(rememberDashboardTitle(), color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
+            AltitudeGpsStatus()
+            Spacer(Modifier.width(12.dp))
             Box(
                 Modifier.size(32.dp).clip(CircleShape).background(CardSurface).clickable { showSettings = true },
                 contentAlignment = Alignment.Center,
@@ -439,8 +441,11 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
         val braking = if (pedal != null) pedal > 0 || stoppedInGear
             else decelBraking || (rawSpeed > 2f && rawPower < -5f && !state.isCharging) || stoppedInGear
         val road: @Composable (Modifier) -> Unit = { m ->
-            RoadScene(speedKmh = speed, braking = braking, headlights = state.headlightsOn, modifier = m, translucent = theme != ClusterTheme.CLASSIC,
-                edgeColor = if (theme == ClusterTheme.ROAD) roadEdgeColor(soc) else null)
+            Box(m) {
+                RoadScene(speedKmh = speed, braking = braking, headlights = state.headlightsOn, modifier = Modifier.matchParentSize(),
+                    translucent = theme != ClusterTheme.CLASSIC, edgeColor = if (theme == ClusterTheme.ROAD) roadEdgeColor(soc) else null)
+                PoliceOverlay(rawSpeed, Modifier.matchParentSize())
+            }
         }
         if (swap) powerGauge(Modifier.weight(0.3f).fillMaxHeight()) else speedGauge(Modifier.weight(0.3f).fillMaxHeight())
         Box(Modifier.weight(0.4f).fillMaxHeight()) {
@@ -506,7 +511,7 @@ private fun ClusterHeader(state: DashboardUiState, extras: KomClusterExtras.Extr
         BatteryBar(state.soc ?: 0, state.isCharging,
             state.estimatedRangeKm?.let { "~ ${"%.0f".format(it)} km" } ?: "~ — km")
         // Առաջին տողում բարձրությունը, երկրորդում ջերմաստիճանները՝ «մեքենա | դրսում» (ձախից հավասարեցված)
-        CornerInfo(InfoRows.TWO, withAlt = true, state.insideTemp?.let { "$it°" } ?: "—", state.exteriorTemp?.let { "$it°" } ?: "—",
+        CornerInfo(InfoRows.TWO, withAlt = false, state.insideTemp?.let { "$it°" } ?: "—", state.exteriorTemp?.let { "$it°" } ?: "—",
             extras.altitudeM?.let { "$it m" } ?: "— m", Modifier.align(Alignment.CenterEnd))
     }
 }

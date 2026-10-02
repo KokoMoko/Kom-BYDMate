@@ -21,6 +21,34 @@ class RangeCalculatorTest {
         socInterpolator = StubInterpolator(carry),
     )
 
+    @Test fun `estimate never exceeds the rated range at the current charge`() = runBlocking {
+        val c = RangeCalculator(
+            buffer = StubBuffer(8.0),
+            capacityProvider = { 72.9 },
+            socInterpolator = StubInterpolator(0.0),
+            ratedRangeProvider = { 605.0 },
+        )
+        // Uncapped: 90% x 72.9 / 8 x 100 = 820 km; the car itself rates 90% at 544.5 km.
+        assertEquals(544.5, c.estimate(soc = 90, totalElecKwh = 1500.0)!!, 0.01)
+    }
+
+    @Test fun `estimate below the rated cap is left alone`() = runBlocking {
+        val c = RangeCalculator(
+            buffer = StubBuffer(18.0),
+            capacityProvider = { 72.9 },
+            socInterpolator = StubInterpolator(0.0),
+            ratedRangeProvider = { 605.0 },
+        )
+        assertEquals(202.5, c.estimate(soc = 50, totalElecKwh = 1500.0)!!, 0.5)
+    }
+
+    @Test fun `implausible rated range is no cap`() {
+        assertNull(RangeCalculator.ratedCapKm(0.0, 90))
+        assertNull(RangeCalculator.ratedCapKm(null, 90))
+        assertNull(RangeCalculator.ratedCapKm(605.0, null))
+        assertEquals(302.5, RangeCalculator.ratedCapKm(605.0, 50)!!, 0.001)
+    }
+
     @Test fun `null SOC returns null`() = runBlocking {
         val c = newCalc()
         assertNull(c.estimate(soc = null, totalElecKwh = 1500.0))

@@ -449,6 +449,13 @@ private fun BatterySection(
                 keyboardType = KeyboardType.Decimal
             )
             SettingHint(stringResource(R.string.settings_battery_capacity_desc))
+            SettingsTextField(
+                label = stringResource(R.string.kom_rated_range_label),
+                value = state.ratedRangeKm,
+                onValueChange = { viewModel.saveRatedRangeKm(it) },
+                keyboardType = KeyboardType.Number
+            )
+            SettingHint(stringResource(R.string.kom_rated_range_desc))
             SettingDivider()
             SettingChipRow(
                 title = stringResource(R.string.settings_app_currency_label),
@@ -2994,6 +3001,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
     com.bydmate.app.ui.dashboard.KomAutostartBlock()
     com.bydmate.app.ui.dashboard.KomClusterReturnBlock()
     com.bydmate.app.ui.dashboard.KomSpeedAlertBlock()
+    com.bydmate.app.ui.dashboard.KomPoliceBlock()
 
     var showDonate by remember { mutableStateOf(false) }
     if (showDonate) {

@@ -31,6 +31,8 @@ open class SettingsRepository @Inject constructor(
 ) {
     companion object {
         const val KEY_BATTERY_CAPACITY = "battery_capacity_kwh"
+        /** Kom: the car's rated range on a full battery; caps the estimate (0/blank = no cap). */
+        const val KEY_RATED_RANGE_KM = "rated_range_km"
         const val KEY_HOME_TARIFF = "home_tariff"
         const val KEY_DC_TARIFF = "dc_tariff"
         const val KEY_UNITS = "units" // "km" or "miles"
@@ -175,6 +177,7 @@ open class SettingsRepository @Inject constructor(
         const val KEY_AGENT_MODEL = "agent_model"
 
         const val DEFAULT_BATTERY_CAPACITY = "72.9"
+        const val DEFAULT_RATED_RANGE_KM = "605"
         const val DEFAULT_HOME_TARIFF = "0.20"
         const val DEFAULT_DC_TARIFF = "0.73"
         const val DEFAULT_UNITS = "km"
@@ -243,6 +246,10 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun getBatteryCapacity(): Double =
         getString(KEY_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY).parseNumericSetting() ?: 72.9
+
+    /** Rated full-battery range in km, or null when the user cleared it (no cap). */
+    suspend fun getRatedRangeKm(): Double? =
+        getString(KEY_RATED_RANGE_KM, DEFAULT_RATED_RANGE_KM).parseNumericSetting()?.takeIf { it > 0.0 }
 
     suspend fun getHomeTariff(): Double =
         getString(KEY_HOME_TARIFF, DEFAULT_HOME_TARIFF).parseNumericSetting() ?: 0.20

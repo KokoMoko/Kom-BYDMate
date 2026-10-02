@@ -2116,4 +2116,8 @@
     <string name="kom_car_use">Use</string>
     <string name="kom_car_later">Later</string>
     <string name="kom_car_keep_floor">Keep the ground shadow under the bumper</string>
+    <string name="kom_rated_range_label">Rated range (km)</string>
+    <string name="kom_rated_range_desc">Range of the car on a full battery. The range estimate never exceeds it at the current charge. Leave empty for no limit.</string>
+    <string name="kom_police_title">Officer on the road</string>
+    <string name="kom_police_hint">When the speed stays over the road limit for more than 30 seconds, a traffic officer with a whistle steps onto the road edge (a short overspeed only beeps). Tapping him on three separate appearances turns him off; turn him back on here.</string>
 </resources>

@@ -510,6 +510,8 @@ private fun TopBar(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
+            AltitudeGpsStatus()
+            Spacer(modifier = Modifier.width(8.dp))
             Box(
                 modifier = Modifier
                     .size(12.dp)

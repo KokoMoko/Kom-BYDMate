@@ -31,6 +31,7 @@ class RangeCalculator(
     private val manualCalculator: ManualRangeCalculator = ManualRangeCalculator(),
     private val methodProvider: suspend () -> String = { SettingsRepository.RANGE_CALC_AUTO },
     private val manualTableProvider: suspend () -> List<SettingsRepository.ManualRangePoint> = { emptyList() },
+    private val ratedRangeProvider: suspend () -> Double? = { null },
 ) {
     /**
      * Returns full estimation breakdown, or null when inputs are insufficient.
@@ -48,6 +49,13 @@ class RangeCalculator(
     suspend fun estimateDetailed(
         soc: Int?, totalElecKwh: Double?, batteryTempC: Int? = null,
         batteryRemainingKwh: Double? = null,
+    ): RangeEstimate? = uncapped(soc, totalElecKwh, batteryTempC, batteryRemainingKwh)?.let { e ->
+        val cap = ratedCapKm(ratedRangeProvider(), soc) ?: return@let e
+        if (e.rangeKm > cap) e.copy(rangeKm = cap) else e
+    }
+
+    private suspend fun uncapped(
+        soc: Int?, totalElecKwh: Double?, batteryTempC: Int?, batteryRemainingKwh: Double?,
     ): RangeEstimate? {
         if (methodProvider() == SettingsRepository.RANGE_CALC_MANUAL && batteryTempC != null) {
             manualCalculator.estimateDetailed(
@@ -107,6 +115,20 @@ class RangeCalculator(
 
     companion object {
         private const val TAG = "RangeCalculator"
+
+        /**
+         * The car's rated range scaled to [soc]: no estimate may promise more than the car itself
+         * could on paper (on-car 2026-10-02: 90% showed 783 km on a 605-km car after a descent).
+         * Null when either input is missing or implausible.
+         */
+        fun ratedCapKm(ratedKm: Double?, soc: Int?): Double? {
+            if (ratedKm == null || !ratedKm.isFinite() || ratedKm !in RATED_SANE_KM) return null
+            if (soc == null || soc !in 0..100) return null
+            return ratedKm * soc / 100.0
+        }
+
+        /** Plausible rated full-battery range for the user-entered setting, km. */
+        val RATED_SANE_KM = 50.0..2000.0
 
         /** Plausible EV battery capacity bounds for the user-entered setting, kWh. */
         val CAPACITY_SANE_KWH = 1.0..1000.0

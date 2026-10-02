@@ -225,6 +225,31 @@ fun KomSpeedAlertBlock() {
     }
 }
 
+/** Settings → Application՝ ոստիկանը ճանապարհին (սահմանափակումը 30+ վրկ գերազանցելիս)։ */
+@Composable
+fun KomPoliceBlock() {
+    val context = LocalContext.current
+    var on by remember { mutableStateOf(KomPolice.enabled(context)) }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(stringResource(R.string.kom_police_title), color = TextPrimary, fontSize = 16.sp,
+                    modifier = Modifier.weight(1f))
+                androidx.compose.material3.TextButton(onClick = { KomPolice.whistle() }) {
+                    Text(stringResource(R.string.kom_speed_alert_test))
+                }
+                androidx.compose.material3.Switch(checked = on, onCheckedChange = { on = it; KomPolice.setEnabled(context, it) })
+            }
+            Text(stringResource(R.string.kom_police_hint), color = TextMuted, fontSize = 13.sp,
+                modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
 /** Settings → Application՝ «License plate» դաշտը (Cluster-ի մեքենայի համարանիշը)։ */
 @Composable
 fun KomPlateBlock() {

@@ -225,13 +225,11 @@ internal fun CornerInfo(rows: InfoRows, withAlt: Boolean, inside: String, outsid
     }
 }
 
-/** Ալիքային ոճերի վերին տողը՝ մեկ տողով․ փոխանցում | բարձրություն | մեքենա | դրսում (նուրբ ուղղահայաց գծերով)։ */
+/** Ալիքային ոճերի վերին տողը՝ մեկ տողով․ փոխանցում | մեքենա | դրսում (բարձրությունը՝ վերնագրի անկյունում) (նուրբ ուղղահայաց գծերով)։ */
 @Composable
 internal fun WaveHeader(gear: String, gearColor: Color, inside: String, outside: String, alt: String, modifier: Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(gear, color = gearColor, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-        InfoSep()
-        InfoItem(Icons.Outlined.Terrain, alt, 18)
         InfoSep()
         InfoItem(Icons.Outlined.DirectionsCar, inside, 18)
         InfoSep()
@@ -290,7 +288,8 @@ internal fun ArchCenter(
         val dy = (cy - lowestY).value.coerceIn(0f, outer.value)
         val archHalf = kotlin.math.sqrt((outer.value * outer.value - dy * dy).coerceAtLeast(0f)).dp
         val infoX = w / 2 + archHalf + 19.dp
-        CornerInfo(look.infoRows, withAlt = look.archLabels == ArchLabels.CYCLE, inside, outside, alt,
+        // Բարձրությունը վերնագրի աջ անկյունում է (GPS-ի հետ)
+        CornerInfo(look.infoRows, withAlt = false, inside, outside, alt,
             Modifier.align(Alignment.TopStart).offset(x = infoX, y = 2.dp))
         val a0 = Math.toRadians((270.0 - sweep / 2))
         val endDx = (cos(a0).toFloat() * r.value).dp          // < 0

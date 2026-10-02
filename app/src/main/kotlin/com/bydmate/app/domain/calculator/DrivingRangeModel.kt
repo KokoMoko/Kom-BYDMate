@@ -42,11 +42,13 @@ class DrivingRangeModel(initial: State = State()) {
 
     /**
      * Prior: the long-term average for the current exterior-temperature band, else the
-     * 100-km [average]. Reactive: the recent window, floored so regen-heavy stretches cannot
-     * extrapolate an absurd range. Below [BLEND_START_KM] the prior alone is used, above
-     * [BLEND_FULL_KM] the reactive window alone, linear in between. Climate load is not
-     * modelled separately: it is already in measured energy, and the band captures its
-     * typical seasonal share.
+     * 100-km [average]. Reactive: the recent window, kept within [REACTIVE_MIN_RATIO]..
+     * [REACTIVE_MAX_RATIO] of the prior (and above [C_FLOOR]) so a long descent or climb
+     * cannot extrapolate itself over the whole battery. Below [BLEND_START_KM] the prior alone
+     * is used; from there the reactive share grows linearly to [MAX_REACTIVE_WEIGHT] at
+     * [BLEND_FULL_KM] — the prior always keeps the rest. On-car 2026-10-02: a 100% reactive
+     * share swung 90% between 448 and 783 km on a hilly start. Climate load is not modelled
+     * separately: it is already in measured energy, and the band captures its typical share.
      */
     @Synchronized fun rangeEstimate(nowMs: Long): Estimate {
         val band = state.tempC?.let(::bandOf)
@@ -57,9 +59,12 @@ class DrivingRangeModel(initial: State = State()) {
         val fresh = state.lastCommitMs?.let { nowMs - it in 0..REACTIVE_RESET_MS } == true
         val reactiveKm = if (fresh) state.reactive.sumOf { it.km } else 0.0
         val reactive = if (reactiveKm > 0.0) {
-            (state.reactive.sumOf { it.kwh } / reactiveKm * 100.0).coerceIn(SANE_AVG)
+            (state.reactive.sumOf { it.kwh } / reactiveKm * 100.0)
+                .coerceIn(prior * REACTIVE_MIN_RATIO, prior * REACTIVE_MAX_RATIO)
+                .coerceIn(SANE_AVG)
         } else null
-        val weight = ((reactiveKm - BLEND_START_KM) / (BLEND_FULL_KM - BLEND_START_KM)).coerceIn(0.0, 1.0)
+        val weight = MAX_REACTIVE_WEIGHT *
+            ((reactiveKm - BLEND_START_KM) / (BLEND_FULL_KM - BLEND_START_KM)).coerceIn(0.0, 1.0)
         val avg = if (reactive == null) prior else prior * (1.0 - weight) + reactive * weight
         return Estimate(avg, prior, priorFromTemp, reactive, reactiveKm, weight, band)
     }
@@ -209,6 +214,15 @@ class DrivingRangeModel(initial: State = State()) {
         const val REACTIVE_KM = 25.0
         const val BLEND_START_KM = 5.0
         const val BLEND_FULL_KM = 20.0
+        /** Share of the reactive window at and beyond [BLEND_FULL_KM]; the prior keeps the rest. */
+        const val MAX_REACTIVE_WEIGHT = 0.6
+        /**
+         * The reactive window stays within these multiples of the prior. The lower one is tight:
+         * a descent recovers energy but in practice adds only 2-3% of range (on-car), so with
+         * [MAX_REACTIVE_WEIGHT] it may lower the average by 3% at most (0.4 + 0.6 x 0.95).
+         */
+        const val REACTIVE_MIN_RATIO = 0.95
+        const val REACTIVE_MAX_RATIO = 1.6
         const val REACTIVE_RESET_MS = 60 * 60_000L
         const val TEMP_BAND_C = 5.0
         const val MIN_BUCKET_KM = 10.0

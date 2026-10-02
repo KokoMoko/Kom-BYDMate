@@ -453,6 +453,7 @@ object AppModule {
         manualCalculator = manualRangeCalculator,
         methodProvider = { settingsRepository.getRangeCalcMethod() },
         manualTableProvider = { settingsRepository.getManualRangeTable() },
+        ratedRangeProvider = { settingsRepository.getRatedRangeKm() },
     )
 
     @Provides

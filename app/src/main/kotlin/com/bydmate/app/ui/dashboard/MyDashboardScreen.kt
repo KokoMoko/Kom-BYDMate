@@ -123,6 +123,7 @@ fun MyDashboardScreen(
         Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(rememberDashboardTitle(), color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
+            if (!editing) { AltitudeGpsStatus(); Spacer(Modifier.width(12.dp)) }
             if (editing) {
                 TextButton(onClick = { MyDashboardStore.reset(context); tiles = MyDashboardStore.load(context) }) {
                     Text(stringResource(R.string.kom_mydash_reset), color = TextSecondary)

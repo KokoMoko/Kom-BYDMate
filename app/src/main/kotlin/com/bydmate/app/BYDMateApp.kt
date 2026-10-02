@@ -146,6 +146,7 @@ class BYDMateApp : Application(), Configuration.Provider {
         // Kom-BYDMate: միջին արագություն, բարձրություն և արագության գերազանցման ձայն
         com.bydmate.app.ui.dashboard.KomClusterExtras.start(this, appScope)
         com.bydmate.app.ui.dashboard.KomSpeedAlert.start(this, appScope)
+        com.bydmate.app.ui.dashboard.KomGpsSignal.start(this)
     }
 
     /**

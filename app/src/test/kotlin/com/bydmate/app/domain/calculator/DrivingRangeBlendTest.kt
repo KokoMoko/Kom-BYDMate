@@ -62,20 +62,22 @@ class DrivingRangeBlendTest {
         val e = d.estimate()
         assertEquals(12.0, e.reactiveKm, 0.001)
         assertEquals(30.0, e.reactive!!, 0.001)
-        assertEquals(7.0 / 15.0, e.weight, 0.001)
+        val w = DrivingRangeModel.MAX_REACTIVE_WEIGHT * 7.0 / 15.0
+        assertEquals(w, e.weight, 0.001)
         // The band keeps learning during the drive: 20 km at 20 plus 12 km at 30.
         assertEquals(23.75, e.prior, 0.001)
-        assertEquals(23.75 * 8.0 / 15.0 + 30.0 * 7.0 / 15.0, e.avg, 0.001)
+        assertEquals(23.75 * (1 - w) + 30.0 * w, e.avg, 0.001)
     }
 
-    @Test fun beyondTwentyKmTheReactiveWindowAloneDecidesAndIsBoundedToTwentyFiveKm() {
+    @Test fun beyondTwentyKmTheReactiveShareIsCappedAndTheWindowIsBoundedToTwentyFiveKm() {
         val d = Drive()
         d.drive(30.0, avg = 18.0)
         d.drive(25.0, avg = 26.0)
         val e = d.estimate()
-        assertEquals(1.0, e.weight, 0.001)
+        assertEquals(DrivingRangeModel.MAX_REACTIVE_WEIGHT, e.weight, 0.001)
         assertEquals(25.0, e.reactiveKm, 0.001)
-        assertEquals(26.0, e.avg, 0.001)
+        assertEquals(26.0, e.reactive!!, 0.001)
+        assertEquals(e.prior * 0.4 + 26.0 * 0.6, e.avg, 0.001)
         // The long-term 100-km average is unaffected by the reactive split.
         assertEquals((30 * 18.0 + 25 * 26.0) / 55.0, d.model.average(), 0.001)
     }
@@ -83,7 +85,7 @@ class DrivingRangeBlendTest {
     @Test fun reactiveWindowRestartsAfterAnHourWithoutDriving() {
         val d = Drive()
         d.drive(25.0, avg = 25.0)
-        assertEquals(1.0, d.estimate().weight, 0.001)
+        assertEquals(DrivingRangeModel.MAX_REACTIVE_WEIGHT, d.estimate().weight, 0.001)
         d.pause(61)
         assertEquals(0.0, d.estimate().reactiveKm, 0.001)
         d.drive(2.0, avg = 25.0)
@@ -130,8 +132,30 @@ class DrivingRangeBlendTest {
     @Test fun regenHeavyReactiveWindowIsFloored() {
         val d = Drive()
         d.drive(22.0, avg = 2.0)
-        assertEquals(DrivingRangeModel.C_FLOOR, d.estimate().reactive!!, 0.001)
+        val e = d.estimate()
+        assertEquals(maxOf(e.prior * DrivingRangeModel.REACTIVE_MIN_RATIO, DrivingRangeModel.C_FLOOR), e.reactive!!, 0.001)
         assertTrue(d.estimate().avg >= DrivingRangeModel.C_FLOOR)
+    }
+
+    @Test fun longDescentCannotPullTheEstimateFarBelowThePrior() {
+        val d = Drive()
+        d.drive(100.0, avg = 17.0)
+        d.pause(120)
+        // 25 km downhill at 4 kWh/100 km, as on a regen-heavy start.
+        d.drive(25.0, avg = 4.0)
+        val e = d.estimate()
+        assertEquals(e.prior * DrivingRangeModel.REACTIVE_MIN_RATIO, e.reactive!!, 0.001)
+        // At worst 0.4 × prior + 0.6 × 0.95 × prior = 0.97 × prior: range +3% at most.
+        assertTrue(e.avg >= e.prior * 0.97 - 0.001)
+    }
+
+    @Test fun longClimbCannotPushTheEstimateFarAboveThePrior() {
+        val d = Drive()
+        d.drive(100.0, avg = 17.0)
+        d.pause(120)
+        d.drive(25.0, avg = 45.0)
+        val e = d.estimate()
+        assertEquals(e.prior * DrivingRangeModel.REACTIVE_MAX_RATIO, e.reactive!!, 0.001)
     }
 
     @Test fun bandHistoryIsCappedButKeepsItsAverage() {

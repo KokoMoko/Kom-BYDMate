@@ -139,6 +139,7 @@ data class SpaceShortfall(val requiredMb: Long, val availableMb: Long) {
 
 data class SettingsUiState(
     val batteryCapacity: String = SettingsRepository.DEFAULT_BATTERY_CAPACITY,
+    val ratedRangeKm: String = SettingsRepository.DEFAULT_RATED_RANGE_KM,
     val homeTariff: String = SettingsRepository.DEFAULT_HOME_TARIFF,
     val dcTariff: String = SettingsRepository.DEFAULT_DC_TARIFF,
     val units: String = SettingsRepository.DEFAULT_UNITS,
@@ -480,6 +481,9 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     /** Load all settings from the repository on init. */
     private fun loadSettings() {
         viewModelScope.launch {
+            val ratedRange = settingsRepository.getString(
+                SettingsRepository.KEY_RATED_RANGE_KM, SettingsRepository.DEFAULT_RATED_RANGE_KM
+            )
             val capacity = settingsRepository.getString(
                 SettingsRepository.KEY_BATTERY_CAPACITY,
                 SettingsRepository.DEFAULT_BATTERY_CAPACITY
@@ -603,6 +607,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             _uiState.update {
                 it.copy(
                     batteryCapacity = capacity,
+                    ratedRangeKm = ratedRange,
                     homeTariff = homeTariff,
                     dcTariff = dcTariff,
                     units = units,
@@ -699,6 +704,14 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         _uiState.update { it.copy(batteryCapacity = value) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_BATTERY_CAPACITY, value)
+        }
+    }
+
+    /** Save the car's rated full-battery range, the ceiling of the range estimate. */
+    fun saveRatedRangeKm(value: String) {
+        _uiState.update { it.copy(ratedRangeKm = value) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_RATED_RANGE_KM, value)
         }
     }
 
