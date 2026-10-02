@@ -2990,6 +2990,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
     // Kom-BYDMate: անունը Главная-ի վերնագրի համար («Welcome Kom»)
     com.bydmate.app.ui.dashboard.KomWelcomeNameBlock()
     com.bydmate.app.ui.dashboard.KomPlateBlock()
+    com.bydmate.app.ui.car.CarSettingsBlock()
     com.bydmate.app.ui.dashboard.KomAutostartBlock()
     com.bydmate.app.ui.dashboard.KomClusterReturnBlock()
     com.bydmate.app.ui.dashboard.KomSpeedAlertBlock()

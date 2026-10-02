@@ -3,4 +3,6 @@
     <external-path name="downloads" path="Download/" />
     <!-- dumpFids() fallback target when the public Download is unavailable (W6-F4) -->
     <external-files-path name="fid_dumps_external" path="." />
+    <!-- Kom-BYDMate: car pack archives handed to the share sheet -->
+    <cache-path name="car_share" path="share/" />
 </paths>

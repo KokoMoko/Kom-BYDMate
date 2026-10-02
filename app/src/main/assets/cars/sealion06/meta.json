@@ -1,0 +1,28 @@
+{
+  "format": 1,
+  "id": "sealion06",
+  "name": {
+    "en": "BYD Sealion 06 EV",
+    "ru": "BYD Sealion 06 EV",
+    "hy": "BYD Sealion 06 EV",
+    "zh": "海狮06 EV"
+  },
+  "author": "KomS",
+  "dilink": "5.0",
+  "plate": [185, 378, 146, 40],
+  "refLum": 0.402,
+  "colors": [
+    { "id": "liuguang_silver", "rgb": "#BCBFC2",
+      "name": { "en": "Glaze Silver", "ru": "Глазурный серебристый", "hy": "Փայլուն արծաթագույն", "zh": "琉光银" } },
+    { "id": "cangyan", "rgb": "#929288",
+      "name": { "en": "Misty Smoke", "ru": "Дымчатый", "hy": "Ծխագույն", "zh": "苍烟色" } },
+    { "id": "nuanyang_white", "rgb": "#EAE4D4",
+      "name": { "en": "Warm Sun White", "ru": "Тёплый белый", "hy": "Տաք սպիտակ", "zh": "暖阳白" } },
+    { "id": "xueyu_white", "rgb": "#F2F4F6",
+      "name": { "en": "Snow White", "ru": "Снежно-белый", "hy": "Ձյունաճերմակ", "zh": "雪域白" } },
+    { "id": "yunhai_grey", "rgb": "#70757A",
+      "name": { "en": "Cloud Sea Grey", "ru": "Облачно-серый", "hy": "Ամպամած մոխրագույն", "zh": "云海灰" } },
+    { "id": "haiyu_cyan", "rgb": "#3E7076",
+      "name": { "en": "Sea Cyan", "ru": "Морской бирюзовый", "hy": "Ծովային փիրուզագույն", "zh": "海域青" } }
+  ]
+}

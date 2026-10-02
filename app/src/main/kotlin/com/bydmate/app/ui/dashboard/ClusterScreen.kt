@@ -39,6 +39,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -60,9 +61,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -828,9 +827,10 @@ private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier, hea
     val plate by produceState(initialValue = KomPrefs.plate(ctx)) {
         while (true) { value = KomPrefs.plate(ctx); delay(2_000L) }
     }
-    // Իսկական Sealion 06-ը (DiLink-ի 3D մոդելի screenshot-ից) և արգելակման լույսերի շերտը
-    val carImg = ImageBitmap.imageResource(R.drawable.kom_car_rear)
-    val brakeImg = ImageBitmap.imageResource(R.drawable.kom_car_brake)
+    // Ընտրված մեքենան ընտրված գույնով (Settings → «Իմ մեքենան»)՝ նկարը, արգելակման լույսերի շերտը
+    // և համարանիշի տեղը։ Հաշվարկվում է ֆոնում, մինչ այդ մեքենան պարզապես չի նկարվում։
+    val car by com.bydmate.app.ui.car.CarPacks.appearance.collectAsState()
+    LaunchedEffect(Unit) { com.bydmate.app.ui.car.CarPacks.ensure(ctx) }
     val brakeAlpha by animateFloatAsState(if (braking) 1f else 0f, tween(250), label = "brake")
     val headAlpha by animateFloatAsState(if (headlights) 1f else 0f, tween(500), label = "headlights")
     var offset by remember { mutableFloatStateOf(0f) }
@@ -903,6 +903,8 @@ private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier, hea
             }
         }
         // Մեքենան՝ ճանապարհի ներքևի մասում, կենտրոնում
+        val look = car ?: return@Canvas
+        val carImg = look.car
         val cw = hw * 0.62f
         val ch = cw * carImg.height / carImg.width
         // Լուսարձակներ՝ մեքենայից առաջ ճանապարհին ընկնող լույսի շող (ինչպես վարորդի վահանակում)
@@ -925,8 +927,9 @@ private fun RoadScene(speedKmh: Float, braking: Boolean, modifier: Modifier, hea
         val dstSize = androidx.compose.ui.unit.IntSize(cw.toInt(), ch.toInt())
         drawOval(Color.Black.copy(alpha = 0.45f), Offset(cx - cw * 0.52f, by - ch * 0.07f), Size(cw * 1.04f, ch * 0.12f))
         drawImage(carImg, dstOffset = dst, dstSize = dstSize, filterQuality = androidx.compose.ui.graphics.FilterQuality.High)
-        drawPlate(plate, dst.x.toFloat(), dst.y.toFloat(), cw / carImg.width)
-        if (brakeAlpha > 0.01f) {
+        look.plate?.let { drawPlate(plate, dst.x.toFloat(), dst.y.toFloat(), cw / carImg.width, it) }
+        val brakeImg = look.brake
+        if (brakeImg != null && brakeAlpha > 0.01f) {
             drawImage(brakeImg, dstOffset = dst, dstSize = dstSize, alpha = brakeAlpha,
                 filterQuality = androidx.compose.ui.graphics.FilterQuality.High)
         }
@@ -1021,14 +1024,15 @@ private fun DrawScope.drawCar(cx: Float, bottom: Float, cw: Float, braking: Bool
 }
 
 /**
- * Հայկական համարանիշ մեքենայի պատկերի վրա (պատկերի px-երում՝ 185,378 – 331,418)․ սպիտակ ֆոն,
- * սև եզր, ձախում դրոշ և «AM», մեջտեղում՝ տեքստը։ [text]-ը դատարկ է՝ մաքուր սպիտակ համարանիշ։
+ * Հայկական համարանիշ մեքենայի պատկերի վրա [box]-ում (պատկերի px-երով՝ left, top, width, height,
+ * մեքենայի փաթեթից)․ սպիտակ ֆոն, սև եզր, ձախում դրոշ և «AM», մեջտեղում՝ տեքստը։ [text]-ը
+ * դատարկ է՝ մաքուր սպիտակ համարանիշ։
  */
-private fun DrawScope.drawPlate(text: String, ox: Float, oy: Float, s: Float) {
-    val l = ox + 185f * s
-    val t = oy + 378f * s
-    val w = 146f * s
-    val h = 40f * s
+internal fun DrawScope.drawPlate(text: String, ox: Float, oy: Float, s: Float, box: IntArray) {
+    val l = ox + box[0] * s
+    val t = oy + box[1] * s
+    val w = box[2] * s
+    val h = box[3] * s
     val r = CornerRadius(h * 0.14f)
     drawRoundRect(Color(0xFFF4F4F4), Offset(l, t), Size(w, h), r)
     drawRoundRect(Color(0xFF151515), Offset(l, t), Size(w, h), r, style = Stroke(h * 0.05f))

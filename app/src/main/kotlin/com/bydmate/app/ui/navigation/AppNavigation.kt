@@ -110,6 +110,9 @@ fun AppNavigation(
 
     if (startDestination == null) return // Loading
 
+    // Kom-BYDMate: «Capture my car» returns here from DiLink's vehicle app, on any screen.
+    com.bydmate.app.ui.car.CarCaptureHost()
+
     // Автоматическая проверка обновлений при запуске приложения.
     // UpdateChecker сам throttle-ит запросы (10 мин между реальными походами в GitHub).
     val autoCheckContext = LocalContext.current
