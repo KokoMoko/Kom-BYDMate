@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -148,7 +149,8 @@ internal fun GpsSignalItem(fs: Int = 18) {
 @Composable
 internal fun AltitudeGpsStatus(fs: Int = 16) {
     val extras by KomClusterExtras.extras.collectAsStateWithLifecycle()
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    // ~0.5 cm off the right edge of the row (on-car 2026-10-03: it sat too close to the edge)
+    Row(Modifier.padding(end = 40.dp), verticalAlignment = Alignment.CenterVertically) {
         GpsSignalItem(fs)
         Spacer(Modifier.width(8.dp))
         Box(Modifier.width(1.5.dp).height(fs.dp).background(TextSecondary.copy(alpha = 0.5f)))
