@@ -57,6 +57,15 @@ interface AdbOnDeviceClient {
     suspend fun grantWidgetBind(packageName: String): Boolean = false
 
     /**
+     * Kom-BYDMate «Capture my car»: a screenshot of the head unit into [CAR_SHOT_PATH]. Hardcoded
+     * command and path — no caller input reaches the shell. Returns true when the file was written.
+     */
+    suspend fun captureCarScreenshot(): Boolean = false
+
+    /** Removes the screenshot [captureCarScreenshot] wrote (shell-owned, so the app may not). */
+    suspend fun deleteCarScreenshot(): Boolean = false
+
+    /**
      * Spawns the helper daemon under shell uid via app_process, using the app's
      * own signed base.apk as CLASSPATH (no dex push — integrity comes from the
      * APK signature). The daemon registers itself as the `bydmate_helper` binder
@@ -215,6 +224,32 @@ class AdbOnDeviceClientImpl @Inject constructor(
         }
     }
 
+    override suspend fun captureCarScreenshot(): Boolean = withContext(Dispatchers.IO) {
+        val p = protocol ?: run {
+            if (connect().isFailure) return@withContext false
+            protocol ?: return@withContext false
+        }
+        try {
+            // Raw protocol exec, like the grants: not an autoservice GET, hardcoded, no caller input.
+            // screencap prints nothing on success; the ls confirms the file landed.
+            p.exec("screencap -p $CAR_SHOT_PATH") ?: return@withContext false
+            p.exec("ls $CAR_SHOT_PATH")?.contains(CAR_SHOT_PATH) == true
+        } catch (e: Exception) {
+            Log.w(TAG, "captureCarScreenshot failed: ${e.message}")
+            false
+        }
+    }
+
+    override suspend fun deleteCarScreenshot(): Boolean = withContext(Dispatchers.IO) {
+        val p = protocol ?: return@withContext false
+        try {
+            p.exec("rm -f $CAR_SHOT_PATH") != null
+        } catch (e: Exception) {
+            Log.w(TAG, "deleteCarScreenshot failed: ${e.message}")
+            false
+        }
+    }
+
     override suspend fun spawnHelper(token: String): Boolean = withContext(Dispatchers.IO) {
         // The token is interpolated into a shell command line — nothing but [A-Za-z0-9] may
         // reach it. Callers build it themselves (HelperBootstrap), so this is a programming
@@ -320,6 +355,9 @@ class AdbOnDeviceClientImpl @Inject constructor(
         // Block ANY write attempt at the boundary.
         // Allow only: service call autoservice <5|7|9> i32 <dev> i32 <fid>
         // Rejects tx=6 (setInt), tx=8 (setBuffer), and arbitrary shell.
+        /** Fixed target of [captureCarScreenshot]: public Download, readable with the legacy storage grant. */
+        const val CAR_SHOT_PATH = "/sdcard/Download/kom_car_capture.png"
+
         private val WRITE_BARRIER_REGEX = Regex("""^service call autoservice [579] i32 \d+ i32 -?\d+$""")
 
         // Narrow whitelist for the self-grants — only our own package.

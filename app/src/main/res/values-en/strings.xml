@@ -2085,7 +2085,7 @@
     <string name="kom_car_color">Colour</string>
     <string name="kom_car_original">Original</string>
     <string name="kom_car_capture">Capture my car</string>
-    <string name="kom_car_capture_hint">The Vehicle app with the 3D car opens. Turn the car so you see it straight from behind, then tap «📷 Capture» at the top of the screen. Then frame the picture, mark the plate and save.</string>
+    <string name="kom_car_capture_hint">The Vehicle app with the 3D car opens. Turn the car so you see it straight from behind and wait 5–6 seconds until the white hotspots on the model disappear. Then tap «📷 Capture» at the top of the screen. Capture while the car is not charging, with doors and boot closed. Then frame the picture, mark the plate and save.</string>
     <string name="kom_car_capture_button">📷 Capture</string>
     <string name="kom_car_capture_no_overlay">No permission to show the button over other apps. Check the ADB connection and try again.</string>
     <string name="kom_car_capture_failed">The screenshot failed: ADB is not connected.</string>
@@ -2111,4 +2111,9 @@
     <string name="kom_car_share_failed">Could not save the file to Download.</string>
     <string name="kom_car_import_other">Other file…</string>
     <string name="kom_car_import_no_picker">This head unit has no file picker. Copy the *.kcar.zip file into the Download folder.</string>
+    <string name="kom_car_saved_title">Car saved</string>
+    <string name="kom_car_use_now">Show «%1$s» on the cluster and dashboard now? You can also pick it later in My car.</string>
+    <string name="kom_car_use">Use</string>
+    <string name="kom_car_later">Later</string>
+    <string name="kom_car_keep_floor">Keep the ground shadow under the bumper</string>
 </resources>

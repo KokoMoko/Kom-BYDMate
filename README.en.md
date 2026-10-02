@@ -42,6 +42,9 @@ generous work.** Without BYDMate this project wouldn't exist.
   edges glow from green to red as the battery drains. Optional 3D gauges and
   several layouts.
 - **Altimeter and temperatures on the cluster**, right next to the gear.
+- **Your own car on the road**: pick the model and its official paint, or capture
+  your car from DiLink's 3D model in a few taps and share it with others
+  ([car packs](docs/car-packs.md)).
 - **Honest range**: the estimate learns only from real driving. Long stops and
   charging are ignored, it remembers consumption for each outside temperature,
   and it adapts to the current trip.

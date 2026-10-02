@@ -98,6 +98,62 @@ object CarImageOps {
         return BooleanArray(w * h) { !removed[it] }
     }
 
+    /**
+     * Drops kept specks not attached to the car: bits of the 3D scene (snowy peaks, glints) that
+     * survive the cut as small islands. 8-connected components smaller than [minFraction] of the
+     * largest one (and at least [minPixels]) are removed; the car and its attached mirrors stay.
+     */
+    fun removeSpecks(kept: BooleanArray, w: Int, h: Int, minFraction: Float = 0.005f, minPixels: Int = 50): BooleanArray {
+        val label = IntArray(w * h) { -1 }
+        val sizes = ArrayList<Int>()
+        val stack = IntArray(w * h)
+        for (start in 0 until w * h) {
+            if (!kept[start] || label[start] >= 0) continue
+            val id = sizes.size
+            var sp = 0; var n = 0
+            label[start] = id; stack[sp++] = start
+            while (sp > 0) {
+                val i = stack[--sp]; n++
+                val x = i % w; val y = i / w
+                for (dy in -1..1) for (dx in -1..1) {
+                    val nx = x + dx; val ny = y + dy
+                    if (nx !in 0 until w || ny !in 0 until h) continue
+                    val j = ny * w + nx
+                    if (kept[j] && label[j] < 0) { label[j] = id; stack[sp++] = j }
+                }
+            }
+            sizes += n
+        }
+        val largest = sizes.maxOrNull() ?: return kept
+        val min = max(minPixels, (largest * minFraction).toInt())
+        return BooleanArray(w * h) { kept[it] && sizes[label[it]] >= min }
+    }
+
+    /**
+     * Drops the 3D scene's floor under the car: a bluish band (shadow / ground plane) that differs
+     * from the crop edges' background, so the flood fill keeps it, and that touches the car, so
+     * [removeSpecks] keeps it too (on-car 2026-10-02, both DiLink themes). Each column is cleared
+     * from the bottom up while its pixels are bluish; the first neutral pixel (the black bumper or
+     * tyres every car has at the bottom) stops it, so even a blue car keeps its paint.
+     */
+    fun trimFloor(pixels: IntArray, w: Int, h: Int, kept: BooleanArray): BooleanArray {
+        val out = kept.copyOf()
+        for (x in 0 until w) {
+            var y = h - 1
+            while (y >= 0) {
+                val i = y * w + x
+                if (out[i]) {
+                    val c = pixels[i]
+                    val floor = blue(c) > red(c) + 15 && blue(c) >= green(c) - 5 && sat(c) > 0.12f
+                    if (!floor) break
+                    out[i] = false
+                }
+                y--
+            }
+        }
+        return out
+    }
+
     private inline fun median(buf: IntArray, f: (Int) -> Int): Int {
         val v = IntArray(buf.size) { f(buf[it]) }
         v.sort()

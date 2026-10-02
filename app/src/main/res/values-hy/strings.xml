@@ -1970,7 +1970,7 @@
     <string name="kom_car_color">Գույն</string>
     <string name="kom_car_original">Օրիգինալ</string>
     <string name="kom_car_capture">Վերցնել իմ մեքենայի նկարը</string>
-    <string name="kom_car_capture_hint">Կբացվի «Մեքենա» app-ը 3D մոդելով։ Պտտեք մեքենան այնպես, որ այն երևա ուղիղ հետևից, և սեղմեք «📷 Նկարել» կոճակը էկրանի վերևում։ Հետո կտրեք նկարը, նշեք համարանիշը և պահպանեք։</string>
+    <string name="kom_car_capture_hint">Կբացվի «Մեքենա» app-ը 3D մոդելով։ Պտտեք մեքենան այնպես, որ այն երևա ուղիղ հետևից, և սպասեք 5–6 վայրկյան, մինչև մոդելի վրայի սպիտակ ակտիվ կետերը անհետանան։ Հետո սեղմեք «📷 Նկարել» կոճակը էկրանի վերևում։ Ավելի լավ է նկարել, երբ մեքենան չի լիցքավորվում, իսկ դռներն ու բեռնախցիկը փակ են։ Հետո կտրեք նկարը, նշեք համարանիշը և պահպանեք։</string>
     <string name="kom_car_capture_button">📷 Նկարել</string>
     <string name="kom_car_capture_no_overlay">Չկա թույլտվություն կոճակը այլ app-ների վրա ցույց տալու համար։ Ստուգեք ADB կապը և նորից փորձեք։</string>
     <string name="kom_car_capture_failed">Screenshot-ը չստացվեց․ ADB կապ չկա։</string>
@@ -1996,4 +1996,9 @@
     <string name="kom_car_share_failed">Չհաջողվեց ֆայլը պահպանել Download-ում։</string>
     <string name="kom_car_import_other">Այլ ֆայլ…</string>
     <string name="kom_car_import_no_picker">Այս մագնիտոլայում ֆայլի ընտրիչ չկա։ Պատճենեք *.kcar.zip ֆայլը Download թղթապանակ։</string>
+    <string name="kom_car_saved_title">Մեքենան պահպանված է</string>
+    <string name="kom_car_use_now">Ցույց տա՞լ «%1$s»-ը cluster-ի և dashboard-ի վրա հիմա։ Այն կարող եք ընտրել նաև ավելի ուշ՝ «Իմ մեքենան»-ում։</string>
+    <string name="kom_car_use">Օգտագործել</string>
+    <string name="kom_car_later">Ավելի ուշ</string>
+    <string name="kom_car_keep_floor">Պահել ստվերը բամպերի տակ</string>
 </resources>

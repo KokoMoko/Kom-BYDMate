@@ -7,13 +7,17 @@ built-in ones ship with the app, and anyone can capture their own car and share 
 ## Capturing your car
 
 1. Settings → Application → My car → **Capture my car** → Next.
-2. DiLink's vehicle app with the 3D car opens. Turn the car so it is seen **straight from behind**
-   and tap **📷 Capture** at the top of the screen.
+2. DiLink's vehicle app with the 3D car opens. Turn the car so it is seen **straight from behind**,
+   wait 5–6 seconds until the white hotspots on the model fade out, and tap **📷 Capture** at the
+   top of the screen. Capture while the car is not charging, with doors and boot closed: the 3D
+   model mirrors the real car.
 3. Back in Kom-BYDMate, frame the car tightly (leave the shadow under the bumper outside), tune
    the background removal, drag the white box onto the licence plate and name the model.
+4. Choose whether to show the new car right away; it can be picked later in My car too.
 
 The background is removed automatically: the DiLink 3D scene behind the car is a vertical gradient,
 so every pixel connected to the frame's edge that matches its row's background colour is dropped.
+Small islands left over from the scene (peaks, glints, hotspots beside the car) are dropped too.
 The paint mask (for recolouring) and the brake-light layer are derived from the result.
 
 ## Sharing a car

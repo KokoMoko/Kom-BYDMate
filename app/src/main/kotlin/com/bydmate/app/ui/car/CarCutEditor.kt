@@ -64,13 +64,18 @@ object CarCutProcess {
     /** Widest stored car image; DiLink screenshots give ~550 px, the built-in pack is 520. */
     private const val MAX_WIDTH = 560
 
-    /** Cuts the car out of [crop] (l, t, r, b in [shot] px), trims it and caps its width. */
-    fun cut(shot: Bitmap, crop: IntArray, tolerance: Float): Bitmap? {
+    /**
+     * Cuts the car out of [crop] (l, t, r, b in [shot] px), trims it and caps its width.
+     * [keepFloor] keeps the 3D scene's ground band under the bumper (a matter of taste).
+     */
+    fun cut(shot: Bitmap, crop: IntArray, tolerance: Float, keepFloor: Boolean = false): Bitmap? {
         val l = crop[0].coerceIn(0, shot.width - 2); val t = crop[1].coerceIn(0, shot.height - 2)
         val r = crop[2].coerceIn(l + 2, shot.width); val b = crop[3].coerceIn(t + 2, shot.height)
         val w = r - l; val h = b - t
         val px = IntArray(w * h).also { shot.getPixels(it, 0, w, l, t, w, h) }
-        val cut = CarImageOps.applyCut(px, w, h, CarImageOps.cutBackground(px, w, h, tolerance))
+        val cleaned = CarImageOps.removeSpecks(CarImageOps.cutBackground(px, w, h, tolerance), w, h)
+        val kept = if (keepFloor) cleaned else CarImageOps.trimFloor(px, w, h, cleaned)
+        val cut = CarImageOps.applyCut(px, w, h, kept)
         val box = CarImageOps.contentBounds(cut, w, h) ?: return null
         val cw = box[2] - box[0]; val ch = box[3] - box[1]
         if (cw < 20 || ch < 20) return null
@@ -106,17 +111,18 @@ fun CarCutEditor(shot: Bitmap, onDone: (CarPack?) -> Unit) {
         mutableStateOf(floatArrayOf(shot.width * 0.55f, shot.height * 0.28f, shot.width * 0.83f, shot.height * 0.74f))
     }
     var tolerance by remember { mutableFloatStateOf(28f) }
+    var keepFloor by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<Bitmap?>(null) }
     var plate by remember { mutableStateOf<FloatArray?>(null) }
     var name by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
 
     // Step 2 preview follows the slider with a short debounce (a cut takes ~100 ms).
-    LaunchedEffect(step, tolerance) {
+    LaunchedEffect(step, tolerance, keepFloor) {
         if (step < 1) return@LaunchedEffect
         delay(200)
         val c = crop.map { it.toInt() }.toIntArray()
-        val r = withContext(Dispatchers.Default) { CarCutProcess.cut(shot, c, tolerance) }
+        val r = withContext(Dispatchers.Default) { CarCutProcess.cut(shot, c, tolerance, keepFloor) }
         result = r
         if (r != null && plate == null) plate = CarImageOps.defaultPlate(r.width, r.height).let {
             floatArrayOf(it[0].toFloat(), it[1].toFloat(), (it[0] + it[2]).toFloat(), (it[1] + it[3]).toFloat())
@@ -145,6 +151,12 @@ fun CarCutEditor(shot: Bitmap, onDone: (CarPack?) -> Unit) {
                         Text(stringResource(R.string.kom_car_step_cut), color = TextPrimary, fontSize = 15.sp)
                         Text(stringResource(R.string.kom_car_sensitivity, tolerance.toInt()), color = TextMuted, fontSize = 14.sp)
                         Slider(value = tolerance, onValueChange = { tolerance = it }, valueRange = 8f..80f)
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Text(stringResource(R.string.kom_car_keep_floor), color = TextPrimary, fontSize = 15.sp,
+                                modifier = Modifier.weight(1f))
+                            // The image height changes with the ground band: the plate box is placed again.
+                            androidx.compose.material3.Switch(checked = keepFloor, onCheckedChange = { keepFloor = it; plate = null })
+                        }
                         if (result == null) Text(stringResource(R.string.kom_car_cut_empty), color = TextMuted, fontSize = 13.sp)
                     }
                     else -> {
@@ -263,11 +275,28 @@ fun CarCaptureHost() {
     val context = LocalContext.current
     val shot by CarCapture.screenshot.collectAsState()
     val error by CarCapture.error.collectAsState()
+    // A fresh capture is offered, not forced: the car on the road changes only on «Use».
+    var saved by remember { mutableStateOf<CarPack?>(null) }
     shot?.let { bmp ->
-        CarCutEditor(bmp) { saved ->
+        CarCutEditor(bmp) { pack ->
             CarCapture.clearScreenshot()
-            if (saved != null) CarPacks.select(context, saved.id, CarPacks.ORIGINAL)
+            saved = pack
         }
+    }
+    saved?.let { pack ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { saved = null },
+            title = { Text(stringResource(R.string.kom_car_saved_title)) },
+            text = { Text(stringResource(R.string.kom_car_use_now, CarPacks.name(pack.names, CarPacks.language(context)))) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    CarPacks.select(context, pack.id, CarPacks.ORIGINAL); saved = null
+                }) { Text(stringResource(R.string.kom_car_use)) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { saved = null }) { Text(stringResource(R.string.kom_car_later)) }
+            },
+        )
     }
     error?.let { res ->
         androidx.compose.material3.AlertDialog(

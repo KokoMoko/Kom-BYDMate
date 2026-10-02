@@ -2252,7 +2252,7 @@
     <string name="kom_car_color">Цвет</string>
     <string name="kom_car_original">Оригинал</string>
     <string name="kom_car_capture">Снять свой автомобиль</string>
-    <string name="kom_car_capture_hint">Откроется приложение «Автомобиль» с 3D-моделью. Поверните машину так, чтобы она была видна ровно сзади, и нажмите «📷 Снять» вверху экрана. Затем обрежьте картинку, отметьте номер и сохраните.</string>
+    <string name="kom_car_capture_hint">Откроется приложение «Автомобиль» с 3D-моделью. Поверните машину так, чтобы она была видна ровно сзади, и подождите 5–6 секунд, пока исчезнут белые активные точки на модели. Затем нажмите «📷 Снять» вверху экрана. Лучше снимать, когда машина не заряжается, а двери и багажник закрыты. Потом обрежьте картинку, отметьте номер и сохраните.</string>
     <string name="kom_car_capture_button">📷 Снять</string>
     <string name="kom_car_capture_no_overlay">Нет разрешения показывать кнопку поверх других приложений. Проверьте ADB-подключение и попробуйте ещё раз.</string>
     <string name="kom_car_capture_failed">Снимок экрана не получился: нет ADB-подключения.</string>
@@ -2278,4 +2278,9 @@
     <string name="kom_car_share_failed">Не удалось сохранить файл в Download.</string>
     <string name="kom_car_import_other">Другой файл…</string>
     <string name="kom_car_import_no_picker">На этой магнитоле нет выбора файлов. Скопируйте файл *.kcar.zip в папку Download.</string>
+    <string name="kom_car_saved_title">Автомобиль сохранён</string>
+    <string name="kom_car_use_now">Показывать «%1$s» на приборке и главном экране сейчас? Его можно выбрать и позже в «Мой автомобиль».</string>
+    <string name="kom_car_use">Использовать</string>
+    <string name="kom_car_later">Позже</string>
+    <string name="kom_car_keep_floor">Оставить тень под бампером</string>
 </resources>

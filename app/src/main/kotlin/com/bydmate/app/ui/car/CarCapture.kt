@@ -38,7 +38,6 @@ import kotlinx.coroutines.withContext
  */
 object CarCapture {
     private const val TAG = "CarCapture"
-    private const val SHOT = "/sdcard/Download/kom_car_capture.png"
 
     /** Vehicle apps with a rotatable 3D car, tried in order (DiLink 5 first). */
     private val VEHICLE_APPS = listOf("com.byd.mycar", "com.byd.carinfo", "com.byd.vehiclesetting")
@@ -130,11 +129,12 @@ object CarCapture {
 
     private suspend fun screencap(app: Context): Bitmap? {
         val adb = EntryPointAccessors.fromApplication(app, KomEntryPoint::class.java).adbOnDeviceClient()
+        // The public exec() only runs autoservice reads (write barrier); screencap has its own
+        // hardcoded method on the client.
         return runCatching {
-            if (!adb.isConnected()) adb.connect()
-            adb.exec("screencap -p $SHOT")
-            val bmp = BitmapFactory.decodeFile(SHOT)
-            adb.exec("rm -f $SHOT")
+            if (!adb.captureCarScreenshot()) return null
+            val bmp = BitmapFactory.decodeFile(com.bydmate.app.data.autoservice.AdbOnDeviceClientImpl.CAR_SHOT_PATH)
+            adb.deleteCarScreenshot()
             bmp
         }.onFailure { Log.w(TAG, "screencap: ${it.message}") }.getOrNull()
     }

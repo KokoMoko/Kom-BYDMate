@@ -45,6 +45,31 @@ class CarImageOpsTest {
         assertEquals(255, alpha(cut[20 * w + 30]))
     }
 
+    @Test fun `small islands are removed and the car stays`() {
+        val w = 40; val h = 30
+        val kept = BooleanArray(w * h) { i -> val x = i % w; val y = i / w
+            (x in 5..34 && y in 5..24) || (x == 1 && y == 1) || (x in 37..38 && y in 27..28) }
+        val out = CarImageOps.removeSpecks(kept, w, h)
+        assertTrue(out[15 * w + 20])
+        assertFalse(out[1 * w + 1])
+        assertFalse(out[27 * w + 37])
+        assertEquals(30 * 20, out.count { it })
+    }
+
+    @Test fun `bluish floor under the bumper is trimmed, a blue body above it stays`() {
+        val w = 10; val h = 10
+        val blueBody = argb(255, 40, 70, 160)
+        val bumper = argb(255, 22, 22, 22)
+        val floor = argb(255, 73, 94, 105)
+        val px = IntArray(w * h) { i -> val y = i / w
+            when { y < 6 -> blueBody; y < 8 -> bumper; else -> floor } }
+        val out = CarImageOps.trimFloor(px, w, h, BooleanArray(w * h) { true })
+        assertTrue(out[2 * w + 5])
+        assertTrue(out[7 * w + 5])
+        assertFalse(out[8 * w + 5])
+        assertFalse(out[9 * w + 5])
+    }
+
     @Test fun `empty image has no bounds`() {
         assertNull(CarImageOps.contentBounds(IntArray(16), 4, 4))
     }
