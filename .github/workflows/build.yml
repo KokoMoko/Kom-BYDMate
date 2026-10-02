@@ -66,10 +66,14 @@ jobs:
           if [ ! -s release-notes.md ]; then
             echo "Kom-BYDMate $VERSION" > release-notes.md
           fi
+          # The license / unofficial-fork notice that every release carries follows the notes.
           {
             echo
-            echo "---"
             echo "Full history: [CHANGELOG-KOM.md](https://github.com/$GITHUB_REPOSITORY/blob/main/CHANGELOG-KOM.md)"
+            echo
+            echo "---"
+            echo
+            cat .github/RELEASE_NOTICE.md
           } >> release-notes.md
 
       - name: Publish release (tags only)
@@ -78,7 +82,6 @@ jobs:
         with:
           files: app/build/outputs/apk/release/*.apk
           body_path: release-notes.md
-          body_path: .github/RELEASE_NOTICE.md
 
       - name: Upload reports on failure
         if: failure()
