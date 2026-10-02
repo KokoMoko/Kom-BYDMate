@@ -86,7 +86,12 @@ History starts empty on first install, and the estimate is marked provisional un
 
 Download a Kom-BYDMate APK from this repository's [Releases](../../releases). What changed in each release: [CHANGELOG-KOM.md](CHANGELOG-KOM.md). The application package is `kom.bydmate` and releases are signed independently from upstream BYDMate.
 
-**Important:** uninstall the official BYDMate application before installing Kom-BYDMate because the two variants currently rely on the same helper-service architecture.
+**Important:** Kom-BYDMate and the official BYDMate can stay installed side by side, but both drive the same helper service, the cluster and Yandex Navigator. Force-stop one of them (Settings → Apps → Force stop) before using the other.
+
+### Getting updates
+
+- **In the app:** Kom-BYDMate checks this repository when it starts. When a newer release is out, it shows the version and what changed; **Update** downloads the APK and opens the Android installer. No GitHub account is needed, only an internet connection. It can be turned off and checked by hand in Settings.
+- **By email:** with a GitHub account, open this repository, press **Watch → Custom → Releases → Apply**, and GitHub will email you every new release.
 
 Everything below this line is retained from the upstream BYDMate README for technical documentation and reference.
 
