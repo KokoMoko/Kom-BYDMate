@@ -1747,10 +1747,25 @@ private fun pullBackInOneStep(taskId: Int) {
 }
 
 /**
- * Move first because this ROM can reset windowing mode on reparent. Combine mode and bounds
- * in one WCT afterwards, avoiding the old separate mode and resize relaunches.
- * The display move remains a separate binder operation; this is not atomic across displays.
- * Never retype a task here: mismatched activity types still use the existing compatibility path.
+ * Places [taskId] into a freeform window on [displayId] so that the app restarts at most ONCE and
+ * that one restart already sees the final window.
+ *
+ * The cluster differs from the main screen in ways an app cannot take live (no touchscreen, no
+ * HDR), so the display move restarts it. Moving first and sizing the window afterwards made that
+ * restart run at the full cluster size and the window arrive as a live resize — Yandex Navigator
+ * then kept guiding but never drew the route line again (on-car 2026-10-02). Sizing it on the
+ * main screen while it is shown restarts it there too (a freeform window loses the bars' height,
+ * sw720 -> sw604) and the second restart throws the map back to the world view.
+ *
+ * AOSP defers configuration changes of a STOPPED activity, so the task is first sent to the
+ * bottom as it is ([sendToBack]: an ordinary switch back to the dashboard), then, once stopped,
+ * given its freeform mode and bounds there ([park], kept at the bottom in the same transaction,
+ * so nothing restarts and no small window shows on the main screen). The move then shows it on
+ * the cluster, where it restarts once, straight into its window (verified on-car with
+ * `am display move-stack`). Mode and bounds go out again after the move — this ROM can reset the
+ * mode on a reparent; on a task that kept them nothing changes. When the hide or the park fails
+ * the old order is used: move, then mode and bounds. Never retypes a task: mismatched activity
+ * types still use the existing compatibility path.
  */
 internal fun tryCombinedFreeformPlacement(
     taskId: Int, displayId: Int,
@@ -1763,6 +1778,10 @@ internal fun tryCombinedFreeformPlacement(
     focus: (Int) -> Unit,
     log: (String) -> Unit,
     sleep: (Long) -> Unit,
+    sendToBack: (Int) -> Unit = { throw UnsupportedOperationException() },
+    park: (Int, Int, Int, Int, Int) -> Unit = { _, _, _, _, _ -> throw UnsupportedOperationException() },
+    isVisible: (Int) -> Boolean? = { null },
+    isStopped: (Int) -> Boolean? = { null },
 ): Boolean {
     if (taskId <= 0 || left < 0 || top < 0 || right <= left || bottom <= top) return false
     if (runCatching { getActivityType(taskId) }.getOrNull() != desiredActivityType) {
@@ -1770,7 +1789,28 @@ internal fun tryCombinedFreeformPlacement(
         return false
     }
     return try {
-        if (state(taskId)?.displayId != displayId) move(taskId, displayId)
+        if (state(taskId)?.displayId != displayId) {
+            // 1. Fullscreen as it is, to the bottom: the dashboard under it comes back with an
+            //    ordinary task switch, and the navigator never shows as a small window there.
+            val hidden = runCatching { sendToBack(taskId) }.isSuccess
+            // 2. Only a STOPPED activity keeps a configuration change pending: one that is merely
+            //    stopping restarts for the park AND for the move (two restarts within 20 ms, world
+            //    map; on-car 2026-10-03). The stop lands ~0.4 s after the task is covered.
+            if (hidden) {
+                var polls = 0
+                while (polls < STOP_POLLS && runCatching { isStopped(taskId) }.getOrNull() == false) {
+                    sleep(STOP_POLL_MS); polls++
+                }
+                log("freeform combined task=$taskId stop wait ${polls * STOP_POLL_MS} ms")
+            }
+            // 3. Freeform with the final bounds while nobody sees it (kept at the bottom).
+            val parked = hidden && runCatching { park(taskId, left, top, right, bottom) }.isSuccess
+            if (parked && runCatching { isVisible(taskId) }.getOrNull() == true) {
+                log("freeform combined task=$taskId still shown after parking")
+            }
+            move(taskId, displayId)
+            log("freeform combined task=$taskId moved ${if (parked) "parked" else "full-size"}")
+        }
         applyModeAndBounds(taskId, left, top, right, bottom)
         runCatching { focus(taskId) }
         repeat(4) {
@@ -1787,6 +1827,70 @@ internal fun tryCombinedFreeformPlacement(
         log("freeform combined failed task=$taskId: ${t.cause?.message ?: t.message}")
         false
     }
+}
+
+private const val STOP_POLLS = 25
+private const val STOP_POLL_MS = 100L
+
+/**
+ * Whether the top activity of [taskId] has reached STOPPED, read from `dumpsys activity
+ * activities` (ATMS exposes no activity state over binder); null when it cannot be told.
+ */
+private fun taskActivityStopped(taskId: Int): Boolean? = runCatching {
+    val out = amShell("dumpsys activity activities", emptyList())
+    val start = Regex("""Hist\s+#\d+: ActivityRecord\{[^}]* t$taskId\}""").find(out) ?: return@runCatching null
+    val state = Regex("""\sstate=([A-Z_]+)""").find(out, start.range.last)?.groupValues?.get(1)
+        ?: return@runCatching null
+    state == "STOPPED"
+}.getOrNull()
+
+/** RunningTaskInfo.isVisible (Android 12) of [taskId]; null when the task or the field is missing. */
+private fun taskVisible(taskId: Int): Boolean? = runCatching {
+    val tasks = atmGetTasks(activityTaskManager(), 100) ?: return@runCatching null
+    for (task in tasks) {
+        if (task == null) continue
+        val idField = fieldByName(task, "taskId") ?: fieldByName(task, "id") ?: continue
+        idField.isAccessible = true
+        if (idField.getInt(task) != taskId) continue
+        val f = fieldByName(task, "isVisible") ?: return@runCatching null
+        f.isAccessible = true
+        return@runCatching f.getBoolean(task)
+    }
+    null
+}.getOrNull()
+
+/** Applies one WindowContainerTransaction built by [build] against [taskId]'s container token. */
+private fun applyTaskWct(taskId: Int, build: (wct: Any, wctClass: Class<*>, tokenClass: Class<*>, token: Any) -> Unit) {
+    val wctClass = Class.forName("android.window.WindowContainerTransaction")
+    val tokenClass = Class.forName("android.window.WindowContainerToken")
+    val iAtm = activityTaskManager()
+    val task = (atmGetTasks(iAtm, 100) ?: emptyList<Any>()).firstOrNull { t ->
+        t != null && (fieldByName(t, "taskId") ?: fieldByName(t, "id"))
+            ?.let { f -> f.isAccessible = true; f.getInt(t) == taskId } == true
+    } ?: throw IllegalStateException("task $taskId not found")
+    val token = fieldByName(task, "token")?.let { f -> f.isAccessible = true; f.get(task) }
+        ?: throw IllegalStateException("no WindowContainerToken for task $taskId")
+    val wct = wctClass.getConstructor().newInstance()
+    build(wct, wctClass, tokenClass, token)
+    val controller = iAtm.javaClass.getMethod("getWindowOrganizerController").invoke(iAtm)
+        ?: throw IllegalStateException("no WindowOrganizerController")
+    controller.javaClass.getMethod("applyTransaction", wctClass).invoke(controller, wct)
+}
+
+/** [taskId] to the bottom of its display, mode and size untouched. */
+private fun sendTaskToBack(taskId: Int) = applyTaskWct(taskId) { wct, wctClass, tokenClass, token ->
+    wctClass.getMethod("reorder", tokenClass, Boolean::class.javaPrimitiveType).invoke(wct, token, false)
+}
+
+/**
+ * [taskId] goes freeform with [bounds] and stays at the bottom, in one transaction (a mode change
+ * alone may raise it). See [tryCombinedFreeformPlacement].
+ */
+private fun parkTaskFreeform(taskId: Int, bounds: Rect) = applyTaskWct(taskId) { wct, wctClass, tokenClass, token ->
+    wctClass.getMethod("setWindowingMode", tokenClass, Int::class.javaPrimitiveType)
+        .invoke(wct, token, WINDOWING_MODE_FREEFORM)
+    wctClass.getMethod("setBounds", tokenClass, Rect::class.java).invoke(wct, token, bounds)
+    wctClass.getMethod("reorder", tokenClass, Boolean::class.javaPrimitiveType).invoke(wct, token, false)
 }
 
 /** Resolved focus method: setFocusedRootTask(int) (Android 12) or setFocusedTask(int) (Android 10). */
@@ -3381,6 +3485,10 @@ private fun launchFreeform(
         focus = ::setFocusedTaskReflect,
         log = ::helperDiag,
         sleep = { Thread.sleep(it) },
+        sendToBack = ::sendTaskToBack,
+        park = { t, l, y, r, b -> parkTaskFreeform(t, Rect(l, y, r, b)) },
+        isVisible = ::taskVisible,
+        isStopped = ::taskActivityStopped,
     )) return FreeformResultCodes.OK
     return launchFreeformCore(
         taskId, displayId, left, top, right, bottom, activityType,
