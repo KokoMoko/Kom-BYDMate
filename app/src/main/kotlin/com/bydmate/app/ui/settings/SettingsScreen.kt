@@ -2472,6 +2472,7 @@ private fun DiagnosticsRows(state: SettingsUiState, viewModel: SettingsViewModel
         )
     }
     SettingSubhead(stringResource(R.string.settings_diagnostics_header))
+    KomResourcesBlock()
     SettingActionRow(
         title = stringResource(R.string.settings_log_recording_start_button),
         description = stringResource(R.string.settings_log_recording_desc),

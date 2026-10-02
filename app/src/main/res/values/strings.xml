@@ -2321,4 +2321,13 @@
     <string name="kom_rated_range_desc">Запас хода машины на 100%. Оценка запаса никогда не превышает его с учётом текущего заряда. Пусто — без ограничения.</string>
     <string name="kom_police_title">Полицейский на дороге</string>
     <string name="kom_police_hint">Если скорость превышает ограничение дороги дольше 30 секунд, у края дороги появляется полицейский со свистком (короткое превышение — только звуковой сигнал). Три нажатия на полицейского в разные появления выключают его, включить снова можно здесь.</string>
+    <string name="kom_res_title">Ресурсы</string>
+    <string name="kom_res_waiting">Первое измерение через минуту после запуска.</string>
+    <string name="kom_res_ram">Память (RAM)</string>
+    <string name="kom_res_cpu">Процессор (CPU, % одного ядра)</string>
+    <string name="kom_res_24h_ago">24 ч назад</string>
+    <string name="kom_res_now">сейчас</string>
+    <string name="kom_res_storage">Хранилище</string>
+    <string name="kom_res_clear_cache">Очистить кэш</string>
+    <string name="kom_res_hint">Зелёный — Kom-BYDMate, синий — его helper-служба. Замер раз в минуту, хранятся последние 24 часа.</string>
 </resources>

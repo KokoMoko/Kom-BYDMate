@@ -405,6 +405,9 @@ interface HelperClient {
      */
     suspend fun daemonVersion(): Long?
 
+    /** Kom-BYDMate: the daemon's pid, RSS (kB) and CPU ticks for Settings → Resources; null if unreachable. */
+    suspend fun selfStats(): HelperSelfStats? = null
+
     /**
      * Tells the daemon this process now holds its Binder, so it stops re-announcing it by
      * broadcast (#64/#148). Returns the daemon's status (0 = registered), or null against a
@@ -880,6 +883,12 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
     override suspend fun forceStop(packageName: String): Boolean =
         statusOk(HelperBinderProtocol.TX_FORCE_STOP) { it.writeString(packageName) }
+
+    override suspend fun selfStats(): HelperSelfStats? =
+        transactParsed(HelperBinderProtocol.TX_SELF_STATS, { }) { reply ->
+            if (reply.dataAvail() < 4 || reply.readInt() != 0 || reply.dataAvail() < 16) return@transactParsed null
+            HelperSelfStats(pid = reply.readInt(), rssKb = reply.readInt(), cpuTicks = reply.readLong())
+        }
 
     override suspend fun daemonVersion(): Long? =
         transact(HelperBinderProtocol.TX_GET_VERSION) { }
@@ -1424,3 +1433,6 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         private const val MAX_DUMP_CHUNKS = 64
     }
 }
+
+/** Kom-BYDMate: the helper daemon's footprint (see HelperBinderProtocol.TX_SELF_STATS). */
+data class HelperSelfStats(val pid: Int, val rssKb: Int, val cpuTicks: Long)

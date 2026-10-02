@@ -672,6 +672,13 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
+                HelperBinderProtocol.TX_SELF_STATS -> runCatching {
+                    val (rssKb, cpuTicks) = selfStats()
+                    reply?.writeInt(0); reply?.writeInt(android.os.Process.myPid())
+                    reply?.writeInt(rssKb); reply?.writeLong(cpuTicks)
+                    true
+                }.getOrElse { reply?.writeInt(-1); true }
+
                 HelperBinderProtocol.TX_GET_TOP_PACKAGE -> runCatching {
                     val pkg = topTaskPackage() ?: ""
                     reply?.writeInt(0); reply?.writeString(pkg)
@@ -3578,4 +3585,18 @@ private fun launchFreeform(
         deadlineMs = startMs + GRACE_DEADLINE_MS,
         now = { monotonicMs() },
     ) { Thread.sleep(it) }
+}
+
+/** Kom-BYDMate: this process's resident set (kB) and CPU time (ticks), from /proc/self. */
+internal fun selfStats(): Pair<Int, Long> {
+    val rss = java.io.File("/proc/self/status").readLines()
+        .firstOrNull { it.startsWith("VmRSS:") }?.filter(Char::isDigit)?.toIntOrNull() ?: 0
+    return rss to procCpuTicks(java.io.File("/proc/self/stat").readText())
+}
+
+/** utime + stime (fields 14 and 15) of a /proc/<pid>/stat line; the name may contain spaces. */
+internal fun procCpuTicks(stat: String): Long {
+    val rest = stat.substringAfterLast(')').trim().split(' ')
+    // rest[0] is field 3 (state), so fields 14 and 15 are rest[11] and rest[12]
+    return (rest.getOrNull(11)?.toLongOrNull() ?: 0L) + (rest.getOrNull(12)?.toLongOrNull() ?: 0L)
 }

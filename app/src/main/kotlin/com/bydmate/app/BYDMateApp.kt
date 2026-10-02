@@ -147,6 +147,7 @@ class BYDMateApp : Application(), Configuration.Provider {
         com.bydmate.app.ui.dashboard.KomClusterExtras.start(this, appScope)
         com.bydmate.app.ui.dashboard.KomSpeedAlert.start(this, appScope)
         com.bydmate.app.ui.dashboard.KomGpsSignal.start(this)
+        com.bydmate.app.diagnostics.KomResources.start(this, appScope)
     }
 
     /**

@@ -2005,4 +2005,13 @@
     <string name="kom_rated_range_desc">Մեքենայի պաշարը 100% լիցքով։ Պաշարի գնահատականը երբեք չի գերազանցում այն՝ ընթացիկ լիցքի համեմատ։ Դատարկ՝ առանց սահմանի։</string>
     <string name="kom_police_title">Ոստիկանը ճանապարհին</string>
     <string name="kom_police_hint">Եթե արագությունը 30 վայրկյանից ավելի գերազանցում է ճանապարհի սահմանափակումը, ճանապարհի եզրին հայտնվում է ոստիկան սուլիչով (կարճ գերազանցման դեպքում՝ միայն ձայնային ազդանշան)։ Երեք տարբեր անգամ ոստիկանի վրա սեղմելով այն անջատվում է, նորից միացնել կարելի է այստեղ։</string>
+    <string name="kom_res_title">Ռեսուրսներ</string>
+    <string name="kom_res_waiting">Առաջին չափումը՝ գործարկումից մեկ րոպե անց։</string>
+    <string name="kom_res_ram">Հիշողություն (RAM)</string>
+    <string name="kom_res_cpu">Պրոցեսոր (CPU, մեկ միջուկի %)</string>
+    <string name="kom_res_24h_ago">24 ժ առաջ</string>
+    <string name="kom_res_now">հիմա</string>
+    <string name="kom_res_storage">Պահեստ</string>
+    <string name="kom_res_clear_cache">Մաքրել cache-ը</string>
+    <string name="kom_res_hint">Կանաչը Kom-BYDMate-ն է, կապույտը՝ նրա helper ծառայությունը։ Չափում՝ րոպեն մեկ, պահվում են վերջին 24 ժամը։</string>
 </resources>

@@ -512,6 +512,13 @@ object HelperBinderProtocol {
      */
     val TX_HUD_SDK: Int = IBinder.FIRST_CALL_TRANSACTION + 57  // 58
 
+    /**
+     * Kom-BYDMate: the daemon's own footprint for Settings → Resources. No args. Reply:
+     * int status (0 = ok), int pid, int RSS in kB, long CPU time (utime + stime) in clock ticks.
+     * The app cannot read another uid's /proc, so the daemon reads /proc/self for it.
+     */
+    val TX_SELF_STATS: Int = IBinder.FIRST_CALL_TRANSACTION + 58  // 59
+
     /** TX_HUD_SDK methods: sendSimpleGuidanceInfo, sendNextPathName, sendRestRouteInfo. */
     const val HUD_SDK_GUIDANCE = 1
     const val HUD_SDK_PATH_NAME = 2
