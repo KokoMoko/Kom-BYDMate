@@ -67,26 +67,33 @@ internal object ClusterLoadingCover {
             val text = context.appLocalizedContext().getString(R.string.kom_cluster_map_loading)
             val displayContext = context.createDisplayContext(display)
             val manager = displayContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val metrics = displayContext.resources.displayMetrics
-            fun px(dp: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, metrics).toInt()
+            // Sizes in pixels from the window itself: the projection display carries our density
+            // override while the cover is up, and dp/sp sizes wrapped the text so only its first
+            // word showed (on-car 2026-10-02).
+            val w = bounds[2] - bounds[0]
+            val h = bounds[3] - bounds[1]
             val content = LinearLayout(displayContext).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
                 addView(TextView(displayContext).apply {
                     this.text = text
                     setTextColor(Color.argb(0xCC, 0xF4, 0xF7, 0xFB))
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
-                })
+                    setTextSize(TypedValue.COMPLEX_UNIT_PX, h * 0.09f)
+                    isSingleLine = true
+                    gravity = Gravity.CENTER
+                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
                 // Indeterminate sweep in the dashboard's accent green: the wait looks alive, not stuck.
                 addView(ProgressBar(displayContext, null, android.R.attr.progressBarStyleHorizontal).apply {
                     isIndeterminate = true
                     indeterminateTintList = ColorStateList.valueOf(Color.rgb(0x4A, 0xDE, 0x80))
-                }, LinearLayout.LayoutParams(px(220f), px(6f)).apply { topMargin = px(14f) })
+                }, LinearLayout.LayoutParams((w * 0.25f).toInt(), (h * 0.015f).toInt().coerceAtLeast(4)).apply {
+                    topMargin = (h * 0.03f).toInt()
+                })
             }
             val root = FrameLayout(displayContext).apply {
                 setBackgroundColor(Color.rgb(0x06, 0x16, 0x33))
                 addView(content, FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER,
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER,
                 ))
             }
             val params = WindowManager.LayoutParams(

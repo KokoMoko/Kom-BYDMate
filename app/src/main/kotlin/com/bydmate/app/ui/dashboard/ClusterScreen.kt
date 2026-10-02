@@ -275,10 +275,11 @@ fun ClusterScreen(viewModel: DashboardViewModel = hiltViewModel()) {
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun <T> LookChips(options: List<Pair<T, Int>>, selected: T, onPick: (T) -> Unit) {
-    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Փոքր տառ և նեղ միջակայք՝ որ ոճերի հինգ կոճակը մեկ տողում տեղավորվեն
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         options.forEach { (v, label) ->
             androidx.compose.material3.FilterChip(selected = v == selected, onClick = { onPick(v) },
-                label = { Text(stringResource(label)) })
+                label = { Text(stringResource(label), fontSize = 12.sp, maxLines = 1) })
         }
     }
 }
