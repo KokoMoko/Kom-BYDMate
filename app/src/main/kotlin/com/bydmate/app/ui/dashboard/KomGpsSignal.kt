@@ -149,8 +149,8 @@ internal fun GpsSignalItem(fs: Int = 18) {
 @Composable
 internal fun AltitudeGpsStatus(fs: Int = 16) {
     val extras by KomClusterExtras.extras.collectAsStateWithLifecycle()
-    // ~0.5 cm off the right edge of the row (on-car 2026-10-03: it sat too close to the edge)
-    Row(Modifier.padding(end = 40.dp), verticalAlignment = Alignment.CenterVertically) {
+    // ~0.25 cm off the right edge of the row (on-car 2026-10-03: 0 was too close, 0.5 cm too far)
+    Row(Modifier.padding(end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
         GpsSignalItem(fs)
         Spacer(Modifier.width(8.dp))
         Box(Modifier.width(1.5.dp).height(fs.dp).background(TextSecondary.copy(alpha = 0.5f)))
