@@ -3474,7 +3474,9 @@ private fun launchFreeform(
     // The budget starts before the launch retry loop: it, not just the core, eats the client's 15s.
     val startMs = monotonicMs()
     val taskId = resolveOrLaunchTask(packageName, WINDOWING_MODE_FREEFORM, displayId, activityType)
-    if (tryCombinedFreeformPlacement(
+    // Kom-BYDMate: the combined path rests on WindowContainerTransaction (Android 11+). On
+    // Android 10 (DiLink 4) it failed after moving the task, and the old order then ran on top.
+    if (android.os.Build.VERSION.SDK_INT >= 30 && tryCombinedFreeformPlacement(
         taskId, displayId, left, top, right, bottom, activityType,
         getActivityType = ::taskActivityType,
         move = ::moveTaskToDisplayReflect,
