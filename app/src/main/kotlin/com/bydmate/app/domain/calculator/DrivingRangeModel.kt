@@ -25,9 +25,19 @@ class DrivingRangeModel(initial: State = State()) {
         val tempC: Double? = null,
         /** GPS altitude where the current block started; null = this block is not corrected. */
         val bucketAltStartM: Double? = null,
+        /** Driving time in the current block and in a provisional stop (short stops count). */
+        val bucketMs: Long = 0L,
+        val pendingMs: Long = 0L,
+        /** Average driving speed with short stops, km/h: turns climate kW into kWh/100 km. */
+        val avgSpeedKmh: Double? = null,
+        /** BMS energy per kWh on the consumption counter, so both sides of the range agree. */
+        val bmsRatio: Double? = null,
     )
 
-    /** What the range uses: temperature prior blended into the reactive window by distance. */
+    /**
+     * What the range uses: temperature prior blended into the reactive window by distance
+     * ([driveAvg], counter kWh), in BMS kWh, plus the climate running now ([climateKw]).
+     */
     data class Estimate(
         val avg: Double,
         val prior: Double,
@@ -36,9 +46,15 @@ class DrivingRangeModel(initial: State = State()) {
         val reactiveKm: Double,
         val weight: Double,
         val band: Int?,
+        val driveAvg: Double = avg,
+        val climateKw: Double = 0.0,
+        val speedKmh: Double = DEFAULT_SPEED_KMH,
+        val bmsRatio: Double = 1.0,
     )
 
     private var state = initial
+    private var calCounterKwh: Double? = null
+    private var calRemainKwh: Double? = null
 
     @Synchronized fun snapshot(): State = state
 
@@ -57,10 +73,13 @@ class DrivingRangeModel(initial: State = State()) {
      * cannot extrapolate itself over the whole battery. Below [BLEND_START_KM] the prior alone
      * is used; from there the reactive share grows linearly to [MAX_REACTIVE_WEIGHT] at
      * [BLEND_FULL_KM] — the prior always keeps the rest. On-car 2026-10-02: a 100% reactive
-     * share swung 90% between 448 and 783 km on a hilly start. Climate load is not modelled
-     * separately: it is already in measured energy, and the band captures its typical share.
+     * share swung 90% between 448 and 783 km on a hilly start.
+     *
+     * Climate is kept out of every block as well ([onSample] climateKw) and added back for
+     * what runs now: [climateKw] x 100 / the average driving speed. 2.9 kW is +10 kWh/100 km
+     * in town at 30 km/h but +3 at 90 km/h, so the AC costs a third of the range in town.
      */
-    @Synchronized fun rangeEstimate(nowMs: Long): Estimate {
+    @Synchronized fun rangeEstimate(nowMs: Long, climateKw: Double = 0.0): Estimate {
         val band = state.tempC?.let(::bandOf)
         val bucket = band?.let { state.tempBuckets[it] }
         val bucketAvg = bucket?.takeIf { it.km >= MIN_BUCKET_KM }?.let { it.kwh / it.km * 100.0 }
@@ -80,8 +99,12 @@ class DrivingRangeModel(initial: State = State()) {
         } else null
         val weight = MAX_REACTIVE_WEIGHT *
             ((reactiveKm - BLEND_START_KM) / (BLEND_FULL_KM - BLEND_START_KM)).coerceIn(0.0, 1.0)
-        val avg = if (reactive == null) prior else prior * (1.0 - weight) + reactive * weight
-        return Estimate(avg, prior, priorFromTemp, reactive, reactiveKm, weight, band)
+        val drive = if (reactive == null) prior else prior * (1.0 - weight) + reactive * weight
+        val ratio = (state.bmsRatio ?: 1.0).coerceIn(BMS_RATIO_USE)
+        val speed = (state.avgSpeedKmh ?: DEFAULT_SPEED_KMH).coerceIn(MIN_EST_SPEED_KMH, MAX_SPEED_KMH)
+        val climate = climateKw.takeIf { it.isFinite() }?.coerceIn(0.0, MAX_CLIMATE_KW) ?: 0.0
+        val avg = drive * ratio + climate * 100.0 / speed
+        return Estimate(avg, prior, priorFromTemp, reactive, reactiveKm, weight, band, drive, climate, speed, ratio)
     }
 
     @Synchronized fun setProvisionalBaseline(avg: Double) {
@@ -112,14 +135,17 @@ class DrivingRangeModel(initial: State = State()) {
         chargingOrDischarging: Boolean = false,
         exteriorTempC: Double? = null,
         altitudeM: Double? = null,
+        climateKw: Double? = null,
+        bmsRemainKwh: Double? = null,
     ) {
+        calibrate(totalKwh, bmsRemainKwh, sessionId == null || chargingOrDischarging)
         val alt = altitudeM?.takeIf { it.isFinite() && it in SANE_ALT_M }
         state = state.copy(tempC = exteriorTempC?.takeIf { it.isFinite() && it in SANE_TEMP_C })
         if (sessionId == null || chargingOrDischarging) {
             // Retain eligible distance; do not attribute charging to a pending stop.
             // excludedKwh reports parked loss since the last charge, so a charge restarts it.
             state = state.copy(
-                last = null, stationarySinceMs = null, pendingKwh = 0.0,
+                last = null, stationarySinceMs = null, pendingKwh = 0.0, pendingMs = 0L,
                 excludedKwh = if (chargingOrDischarging) 0.0 else state.excludedKwh,
             )
             return
@@ -128,25 +154,29 @@ class DrivingRangeModel(initial: State = State()) {
             !mileageKm.isFinite() || mileageKm < 1.0 ||
             !totalKwh.isFinite() || totalKwh < 0.0 || speedKmh == null || speedKmh !in 0..300
         ) {
-            state = state.copy(last = null, stationarySinceMs = null, pendingKwh = 0.0)
+            state = state.copy(last = null, stationarySinceMs = null, pendingKwh = 0.0, pendingMs = 0L)
             return
         }
         val sample = Sample(nowMs, mileageKm, totalKwh, sessionId)
         val previous = state.last
         if (previous == null || previous.session != sessionId) {
-            state = state.copy(last = sample, stationarySinceMs = null, pendingKwh = 0.0)
+            state = state.copy(last = sample, stationarySinceMs = null, pendingKwh = 0.0, pendingMs = 0L)
             return
         }
         val elapsed = nowMs - previous.timeMs
         val km = mileageKm - previous.km
-        val energy = totalKwh - previous.kwh
+        val counted = totalKwh - previous.kwh
+        // What the climate drew over this interval is not driving.
+        val climateKwh = (climateKw?.takeIf { it.isFinite() }?.coerceIn(0.0, MAX_CLIMATE_KW) ?: 0.0) *
+            elapsed.coerceAtLeast(0L) / 3_600_000.0
+        val energy = counted - climateKwh
         // Permit net regenerative recovery but reject large counter discontinuities.
         val energyBound = 300.0 * elapsed.coerceAtLeast(0L) / 3_600_000.0 + 0.25
         val distanceBound = 300.0 * elapsed.coerceAtLeast(0L) / 3_600_000.0 + 0.1
         if (elapsed !in 1..MAX_GAP_MS || km < -MOVEMENT_EPSILON_KM ||
-            km > distanceBound || abs(energy) > energyBound
+            km > distanceBound || abs(counted) > energyBound
         ) {
-            state = state.copy(last = sample, stationarySinceMs = null, pendingKwh = 0.0)
+            state = state.copy(last = sample, stationarySinceMs = null, pendingKwh = 0.0, pendingMs = 0L)
             return
         }
         val moving = speedKmh > 0 || km > MOVEMENT_EPSILON_KM
@@ -155,11 +185,14 @@ class DrivingRangeModel(initial: State = State()) {
             val pending = state.pendingKwh + energy
             if (nowMs - start >= STATIONARY_THRESHOLD_MS) {
                 state = state.copy(
-                    last = sample, stationarySinceMs = start, pendingKwh = 0.0,
+                    last = sample, stationarySinceMs = start, pendingKwh = 0.0, pendingMs = 0L,
                     excludedKwh = state.excludedKwh + pending,
                 )
             } else {
-                state = state.copy(last = sample, stationarySinceMs = start, pendingKwh = pending)
+                state = state.copy(
+                    last = sample, stationarySinceMs = start, pendingKwh = pending,
+                    pendingMs = state.pendingMs + elapsed,
+                )
             }
             return
         }
@@ -171,9 +204,10 @@ class DrivingRangeModel(initial: State = State()) {
         val altStart = state.bucketAltStartM ?: alt?.takeIf { state.bucketKm < ALT_LATE_START_KM }
         state = state.copy(
             bucketAltStartM = altStart,
-            last = sample, stationarySinceMs = null, pendingKwh = 0.0,
+            last = sample, stationarySinceMs = null, pendingKwh = 0.0, pendingMs = 0L,
             bucketKm = state.bucketKm + km.coerceAtLeast(0.0),
             bucketKwh = state.bucketKwh + energy + if (shortStop) state.pendingKwh else 0.0,
+            bucketMs = state.bucketMs + elapsed + if (shortStop) state.pendingMs else 0L,
             excludedKwh = state.excludedKwh + excluded,
         )
         if (state.bucketKm >= BLOCK_KM) commitBlock(nowMs, alt)
@@ -184,6 +218,13 @@ class DrivingRangeModel(initial: State = State()) {
         val climb = state.bucketAltStartM?.let { s -> altEndM?.let { it - s } }
             ?.takeIf { abs(it) <= MAX_CLIMB_PER_BLOCK_M }
         val block = Block(state.bucketKm, state.bucketKwh - (climb ?: 0.0) * HILL_KWH_PER_M)
+        val hours = state.bucketMs / 3_600_000.0
+        val speed = if (hours > 0.0) {
+            // Averaged as time per km, so a stop weighs by how long it lasted.
+            val pace = 1.0 / (block.km / hours).coerceIn(MIN_SPEED_KMH, MAX_SPEED_KMH)
+            val w = (block.km / SPEED_WINDOW_KM).coerceIn(0.0, 1.0)
+            1.0 / (state.avgSpeedKmh?.let { 1.0 / it + (pace - 1.0 / it) * w } ?: pace)
+        } else state.avgSpeedKmh
         // A long pause (overnight, a parked hour) means new conditions: restart the reactive
         // window so the temperature prior leads again until fresh distance accumulates.
         val reactiveBase = if (state.lastCommitMs?.let { nowMs - it in 0..REACTIVE_RESET_MS } == true) {
@@ -205,9 +246,37 @@ class DrivingRangeModel(initial: State = State()) {
             reactive = trimToKm(reactiveBase + block, REACTIVE_KM),
             tempBuckets = buckets,
             lastCommitMs = nowMs,
-            bucketKm = 0.0, bucketKwh = 0.0,
+            bucketKm = 0.0, bucketKwh = 0.0, bucketMs = 0L,
             bucketAltStartM = altEndM,
+            avgSpeedKmh = speed,
         )
+    }
+
+    /**
+     * Learns [State.bmsRatio] over stretches of [CAL_MIN_KWH] on the counter with no charging
+     * in between: the range divides BMS energy by a counter-learned average, so a counter
+     * that reads a few % high (on-car 2026-10-04: ~28 kWh counted for ~27 off the pack)
+     * would make it that much too short.
+     */
+    private fun calibrate(counterKwh: Double?, remainKwh: Double?, reset: Boolean) {
+        val c = counterKwh?.takeIf { it.isFinite() && it >= 0.0 }
+        val r = remainKwh?.takeIf { it.isFinite() && it in 0.0..1000.0 }
+        val c0 = calCounterKwh
+        val r0 = calRemainKwh
+        if (reset || c == null || r == null) {
+            if (reset) { calCounterKwh = null; calRemainKwh = null }
+            return
+        }
+        if (c0 == null || r0 == null || c < c0 || r > r0 + CAL_REMAIN_RISE_KWH) {
+            calCounterKwh = c; calRemainKwh = r
+            return
+        }
+        if (c - c0 < CAL_MIN_KWH) return
+        val ratio = (r0 - r) / (c - c0)
+        if (ratio in BMS_RATIO_SANE) {
+            state = state.copy(bmsRatio = state.bmsRatio?.let { it + (ratio - it) * CAL_BLEND } ?: ratio)
+        }
+        calCounterKwh = c; calRemainKwh = r
     }
 
     private fun trimToKm(source: List<Block>, limitKm: Double): List<Block> {
@@ -273,5 +342,19 @@ class DrivingRangeModel(initial: State = State()) {
         /** A fix that arrives after this much of a block is too late to start it. */
         const val ALT_LATE_START_KM = 0.1
         val SANE_ALT_M = -500.0..6000.0
+
+        const val DEFAULT_SPEED_KMH = 40.0
+        const val MIN_SPEED_KMH = 3.0
+        /** Below this the climate share is not projected: a crawl would zero the range. */
+        const val MIN_EST_SPEED_KMH = 15.0
+        const val MAX_SPEED_KMH = 150.0
+        const val SPEED_WINDOW_KM = 50.0
+        const val MAX_CLIMATE_KW = 10.0
+        const val CAL_MIN_KWH = 10.0
+        const val CAL_BLEND = 0.5
+        /** The pack gaining this much without a charge seen means one was missed. */
+        const val CAL_REMAIN_RISE_KWH = 0.5
+        val BMS_RATIO_SANE = 0.8..1.2
+        val BMS_RATIO_USE = 0.85..1.15
     }
 }

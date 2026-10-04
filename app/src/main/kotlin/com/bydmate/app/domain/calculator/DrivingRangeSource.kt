@@ -33,6 +33,10 @@ data class DrivingRangeStatus(
     val reactiveKm: Double = 0.0,
     val blendWeight: Double = 0.0,
     val tempBand: Int? = null,
+    val driveAvgKwhPer100: Double = DrivingRangeModel.FALLBACK_AVG,
+    val climateKw: Double = 0.0,
+    val avgSpeedKmh: Double = DrivingRangeModel.DEFAULT_SPEED_KMH,
+    val bmsRatio: Double = 1.0,
 )
 
 /** Persistent range-only history; no legacy aggregate trip is imported. */
@@ -43,6 +47,7 @@ class DrivingRangeSource @Inject constructor(
 ) : ConsumptionAvgSource {
     private val prefs = context.getSharedPreferences("kom_driving_range_v1", Context.MODE_PRIVATE)
     private val model = DrivingRangeModel(decode(prefs.getString("state", null)))
+    private val climate = ClimateLoad(decodeClimate(prefs.getString("climate", null)))
     private val _status = MutableStateFlow(DrivingRangeStatus())
     val status: StateFlow<DrivingRangeStatus> = _status
     private var lastBaselineReadMs = 0L
@@ -89,12 +94,20 @@ class DrivingRangeSource @Inject constructor(
                 avg?.toDouble()?.let { model.setProvisionalBaseline(it) }
             }
         }
+        val charging = isChargingOrDischarging(data)
+        val climateKw = climate.onSample(
+            nowMs = nowMs, acOn = data.acStatus?.let { it == 1 }, fanLevel = data.fanLevel,
+            compressorW = data.compressorW, batteryPowerW = data.batteryPowerW,
+            speedKmh = data.speed, charging = charging,
+        )
         model.onSample(
             nowMs = nowMs, mileageKm = data.mileage, totalKwh = data.totalElecConsumption,
             speedKmh = data.speed, sessionId = sessionId,
-            chargingOrDischarging = isChargingOrDischarging(data),
+            chargingOrDischarging = charging,
             exteriorTempC = data.exteriorTemp?.toDouble(),
             altitudeM = altitudeOf(location),
+            climateKw = climateKw,
+            bmsRemainKwh = data.batteryRemainKwh,
         )
         lastSampleMs = nowMs
         val state = model.snapshot()
@@ -106,11 +119,12 @@ class DrivingRangeSource @Inject constructor(
             state.baseline, state.baselineFromVehicle,
         )
         if (key != lastWrittenKey || nowMs - lastWriteMs !in 0 until WRITE_INTERVAL_MS) {
-            prefs.edit().putString("state", encode(state)).apply()
+            prefs.edit().putString("state", encode(state))
+                .putString("climate", encodeClimate(climate.learned())).apply()
             lastWrittenKey = key
             lastWriteMs = nowMs
         }
-        val estimate = model.rangeEstimate(nowMs)
+        val estimate = model.rangeEstimate(nowMs, climate.smoothedKw())
         _status.value = DrivingRangeStatus(
             avgKwhPer100 = estimate.avg, learned = model.isLearned(),
             vehicleBaseline = state.baselineFromVehicle,
@@ -119,11 +133,13 @@ class DrivingRangeSource @Inject constructor(
             priorKwhPer100 = estimate.prior, priorFromTemp = estimate.priorFromTemp,
             reactiveKwhPer100 = estimate.reactive, reactiveKm = estimate.reactiveKm,
             blendWeight = estimate.weight, tempBand = estimate.band,
+            driveAvgKwhPer100 = estimate.driveAvg, climateKw = estimate.climateKw,
+            avgSpeedKmh = estimate.speedKmh, bmsRatio = estimate.bmsRatio,
         )
     }
 
     override suspend fun recentAvgConsumption(): Double =
-        model.rangeEstimate(lastSampleMs ?: System.currentTimeMillis()).avg
+        model.rangeEstimate(lastSampleMs ?: System.currentTimeMillis(), climate.smoothedKw()).avg
 
     companion object {
         private const val WRITE_INTERVAL_MS = 60_000L
@@ -167,9 +183,32 @@ class DrivingRangeSource @Inject constructor(
             return blocks
         }
 
+        internal fun encodeClimate(c: ClimateLoad.Learned): String = JSONObject().apply {
+            put("baseKw", c.baseKw)
+            put("acOnKw", c.acOnKw ?: JSONObject.NULL)
+            put("fan", JSONObject().apply { c.fanExtraKw.forEach { (k, v) -> put(k.toString(), v) } })
+        }.toString()
+
+        internal fun decodeClimate(raw: String?): ClimateLoad.Learned = runCatching {
+            if (raw == null) return@runCatching ClimateLoad.Learned()
+            val o = JSONObject(raw)
+            val base = o.getDouble("baseKw")
+            require(base in 0.0..ClimateLoad.MAX_PARKED_KW)
+            val fan = o.optJSONObject("fan")?.let { f ->
+                f.keys().asSequence().associate { it.toInt() to f.getDouble(it) }
+                    .filter { (k, v) -> k in 1..ClimateLoad.MAX_FAN && v in 0.0..ClimateLoad.MAX_EXTRA_KW }
+            } ?: emptyMap()
+            val acOn = if (o.isNull("acOnKw")) null else o.getDouble("acOnKw").takeIf { it in 0.0..DrivingRangeModel.MAX_CLIMATE_KW }
+            ClimateLoad.Learned(base, fan, acOn)
+        }.getOrElse { ClimateLoad.Learned() }
+
         internal fun encode(s: DrivingRangeModel.State): String = JSONObject().apply {
             put("v", FORMAT)
             put("bucketAltStartM", s.bucketAltStartM ?: JSONObject.NULL)
+            put("bucketMs", s.bucketMs)
+            put("pendingMs", s.pendingMs)
+            put("avgSpeedKmh", s.avgSpeedKmh ?: JSONObject.NULL)
+            put("bmsRatio", s.bmsRatio ?: JSONObject.NULL)
             put("blocks", blocksJson(s.blocks))
             put("reactive", blocksJson(s.reactive))
             put("tempBuckets", JSONObject().apply {
@@ -245,6 +284,12 @@ class DrivingRangeSource @Inject constructor(
                 lastCommitMs = lastCommitMs, tempC = tempC,
                 bucketAltStartM = if (o.isNull("bucketAltStartM")) null
                     else o.optDouble("bucketAltStartM").takeIf { it in DrivingRangeModel.SANE_ALT_M },
+                bucketMs = o.optLong("bucketMs").coerceIn(0L, DrivingRangeModel.STATIONARY_THRESHOLD_MS * 8),
+                pendingMs = o.optLong("pendingMs").coerceIn(0L, DrivingRangeModel.STATIONARY_THRESHOLD_MS),
+                avgSpeedKmh = if (o.isNull("avgSpeedKmh") || !o.has("avgSpeedKmh")) null
+                    else o.getDouble("avgSpeedKmh").takeIf { it in DrivingRangeModel.MIN_SPEED_KMH..DrivingRangeModel.MAX_SPEED_KMH },
+                bmsRatio = if (o.isNull("bmsRatio") || !o.has("bmsRatio")) null
+                    else o.getDouble("bmsRatio").takeIf { it in DrivingRangeModel.BMS_RATIO_SANE },
             )
         }.getOrElse { DrivingRangeModel.State() }
     }

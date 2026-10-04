@@ -35,8 +35,17 @@ class DrivingRangePersistenceTest {
         assertEquals(DrivingRangeModel.State(baseline = 18.8, baselineFromVehicle = true), state)
     }
 
+    @Test fun climateLearningSurvivesSerialization() {
+        val c = ClimateLoad.Learned(baseKw = 0.38, fanExtraKw = mapOf(1 to 0.06, 7 to 0.43), acOnKw = 2.9)
+        assertEquals(c, DrivingRangeSource.decodeClimate(DrivingRangeSource.encodeClimate(c)))
+        assertEquals(ClimateLoad.Learned(), DrivingRangeSource.decodeClimate("{bad"))
+    }
+
     @Test fun blockStartAltitudeSurvivesSerialization() {
-        val state = DrivingRangeModel.State(bucketKm = 0.4, bucketKwh = 0.1, bucketAltStartM = 1234.5)
+        val state = DrivingRangeModel.State(
+            bucketKm = 0.4, bucketKwh = 0.1, bucketAltStartM = 1234.5, bucketMs = 24_000L,
+            pendingMs = 60_000L, avgSpeedKmh = 37.5, bmsRatio = 0.96,
+        )
         assertEquals(state, DrivingRangeSource.decode(DrivingRangeSource.encode(state)))
     }
 

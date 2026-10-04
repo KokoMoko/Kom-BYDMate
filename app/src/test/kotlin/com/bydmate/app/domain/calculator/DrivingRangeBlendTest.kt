@@ -16,9 +16,11 @@ class DrivingRangeBlendTest {
         var energy = 500.0
         var tempC: Double? = 20.0
         var altM: Double? = null
+        var climateKw: Double? = null
+        var remain: Double? = null
         init { sample(0) }
         fun sample(speed: Int, charging: Boolean = false) =
-            model.onSample(now, km, energy, speed, 1L, charging, tempC, altM)
+            model.onSample(now, km, energy, speed, 1L, charging, tempC, altM, climateKw, remain)
         /**
          * [distance] km at [avg] kWh/100 km, in 0.5-km steps, climbing [climbM] in total
          * (needs [altM]); [avg] is what the car's counter shows, hill included.
@@ -84,6 +86,54 @@ class DrivingRangeBlendTest {
         assertTrue(up in 17.0..18.5)
         d.drive(49.0, avg = 12.7, climbM = -467.0)
         assertTrue(d.model.average() in 17.0..18.5)
+    }
+
+    @Test fun climateEnergyIsNotLearnedAsDrivingAndIsAddedBackBySpeed() {
+        val d = Drive()
+        d.climateKw = 1.0
+        // 0.5 km per 30 s = 60 km/h; the counter includes the 1 kW climate (1.667 kWh/100 km).
+        d.drive(30.0, avg = 20.0 + 100.0 / 60.0)
+        assertEquals(20.0, d.model.average(), 0.01)
+        assertEquals(60.0, d.model.snapshot().avgSpeedKmh!!, 0.01)
+        val off = d.model.rangeEstimate(d.now, climateKw = 0.0)
+        assertEquals(20.0, off.avg, 0.01)
+        // 3 kW running now at 60 km/h: +5 kWh/100 km.
+        val on = d.model.rangeEstimate(d.now, climateKw = 3.0)
+        assertEquals(25.0, on.avg, 0.01)
+    }
+
+    @Test fun shortStopsCountAsDrivingTime() {
+        val d = Drive()
+        d.drive(10.0, avg = 20.0)
+        repeat(10) { d.now += 30_000L; d.sample(0) }   // 5 minutes at a light
+        d.drive(10.0, avg = 20.0)
+        // The block with the stop took 6 minutes: its time, not its count, lowers the speed.
+        assertEquals(1.0 / (1.0 / 60 + (0.1 - 1.0 / 60) * 0.02), d.model.snapshot().avgSpeedKmh!!, 1.5)
+    }
+
+    @Test fun counterIsCalibratedToTheBmsOverLongStretches() {
+        val d = Drive()
+        d.remain = 60.0
+        d.sample(60)
+        // The counter reads 5% high: 0.95 kWh leaves the pack per counted kWh.
+        repeat(120) {
+            d.now += 30_000L; d.km += 0.5; d.energy += 0.1; d.remain = d.remain!! - 0.095
+            d.sample(60)
+        }
+        assertEquals(0.95, d.model.snapshot().bmsRatio!!, 0.002)
+        val e = d.estimate()
+        assertEquals(e.driveAvg * 0.95, e.avg, 0.001)
+    }
+
+    @Test fun chargingRestartsTheCalibrationStretch() {
+        val d = Drive()
+        d.remain = 60.0
+        d.sample(60)
+        repeat(60) { d.now += 30_000L; d.km += 0.5; d.energy += 0.1; d.remain = d.remain!! - 0.095; d.sample(60) }
+        d.remain = 70.0
+        d.sample(0, charging = true)
+        repeat(60) { d.now += 30_000L; d.km += 0.5; d.energy += 0.1; d.remain = d.remain!! - 0.095; d.sample(60) }
+        assertNull(d.model.snapshot().bmsRatio)
     }
 
     @Test fun aBlockWithoutAltitudeIsNotCorrected() {
