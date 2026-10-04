@@ -54,7 +54,7 @@
     <string name="settings_display_offset_y_desc">Պատուհանի դիրքը․ 0՝ վերև, 50՝ կենտրոն, 100՝ ներքև</string>
     <string name="settings_display_scale">Մասշտաբ</string>
     <string name="settings_display_scale_desc">Ինտերֆեյսի չափը․ փոքր արժեք՝ փոքր տարրեր և ավելի շատ քարտեզ պատուհանում</string>
-    <string name="settings_display_scale_direct_hint">Նոր մասշտաբը կիրառելու համար անջատեք և նորից միացրեք պրոյեկցիան վարորդի էկրանին։</string>
+    <string name="settings_display_scale_direct_hint">Նոր մասշտաբը կիրառվում է ինքնաբերաբար․ քարտեզը մի պահ կվերադառնա և նորից կուղարկվի։</string>
     <string name="steering_button_right_star">Աջ աստղանիշ</string>
     <string name="steering_button_left_star">Ձախ աստղանիշ</string>
     <string name="steering_button_carousel">Վարորդի էկրանի կարուսել</string>

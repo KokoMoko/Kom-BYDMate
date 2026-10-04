@@ -114,6 +114,8 @@ object ClusterProjectionManager {
     // (MIN_SCALE_PCT..MAX, default 100 = 1:1). Tunes what the projected app renders INSIDE the
     // window — how big the UI is and how much map fits — independent of the window size/position.
     const val KEY_SCALE_PCT = "scale_pct"
+    /** Kom-BYDMate: quiet time after the last scale edit before the map is sent again with it. */
+    private const val RESCALE_SETTLE_MS = 1_500L
     // App to project onto the cluster (default Yandex Navi). Label is cached only for the settings row.
     const val KEY_TARGET_PACKAGE = "target_package"
     const val KEY_TARGET_LABEL = "target_label"
@@ -253,6 +255,8 @@ object ClusterProjectionManager {
 
     /** Post-move liveness watch of the direct projection (#134); see [armDirectDeathWatch]. */
     private var directDeathWatchJob: Job? = null
+    /** Kom-BYDMate: the pending re-send that applies a new scale (debounced slider edits). */
+    private var rescaleJob: Job? = null
     // PROJECT_MEDIA has no app-side query API (unlike SYSTEM_ALERT_WINDOW / canDrawOverlays),
     // so we grant both via the daemon once per process the first time we project.
     private var projectionPermissionsGranted = false
@@ -589,6 +593,33 @@ object ClusterProjectionManager {
                     log("resize failed; rebuilding projection (reason=settings)")
                     applyModeLocked(appContext, ClusterMode.FULLSCREEN, helper, bootstrap)
                 }
+            }
+            scheduleRescaleResend(appContext, helper, bootstrap)
+        }
+    }
+
+    /**
+     * Kom-BYDMate: in direct mode the scale is a density set before the launch, so a scale edit used
+     * to wait for the next star press, and moving the slider seemed to do nothing. When the density
+     * the new scale needs differs from the one the map was launched with, the map is brought back
+     * and sent again (one restart of the navigator) [RESCALE_SETTLE_MS] after the last edit.
+     */
+    private fun scheduleRescaleResend(context: Context, helper: HelperClient, bootstrap: HelperBootstrap) {
+        if (currentMode != ClusterMode.FULLSCREEN || directDisplayId == -1) return
+        val pkg = projectedPackage ?: targetPackage(context)
+        if (densityUnsafe(context, pkg)) return
+        val requested = directDensityFor(readScalePct(context))
+        val wanted = if (handlesSmallestWidth(context, pkg)) requested
+                     else singleRecreateDensity(requested, clusterDensityDpi, clusterHeight)
+        if (wanted == directDensityApplied) return
+        rescaleJob?.cancel()
+        rescaleJob = scope.launch {
+            delay(RESCALE_SETTLE_MS)
+            mutex.withLock {
+                if (currentMode != ClusterMode.FULLSCREEN || directDisplayId == -1) return@withLock
+                log("scale changed: sending the map again to apply it (dpi ${directDensityLabel(directDensityApplied)} -> ${directDensityLabel(wanted)})")
+                applyModeLocked(context, ClusterMode.OFF, helper, bootstrap)
+                applyModeLocked(context, ClusterMode.FULLSCREEN, helper, bootstrap)
             }
         }
     }
