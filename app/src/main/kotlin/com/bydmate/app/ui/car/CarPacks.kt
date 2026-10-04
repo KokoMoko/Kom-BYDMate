@@ -88,7 +88,19 @@ object CarPacks {
 
     fun find(ctx: Context, id: String) = packs(ctx).firstOrNull { it.id == id }
 
-    fun selectedPackId(ctx: Context): String = prefs(ctx).getString(KEY_PACK, DEFAULT_ID) ?: DEFAULT_ID
+    fun selectedPackId(ctx: Context): String = prefs(ctx).getString(KEY_PACK, null) ?: modelPackId()
+
+    /**
+     * Kom-BYDMate: until a car is chosen, the built-in pack of this car's model. DiLink's Bluetooth
+     * name carries the model ("宋Plus", or the owner's "SongPlus"); anything else gets [DEFAULT_ID].
+     */
+    private fun modelPackId(): String {
+        val bt = runCatching {
+            Class.forName("android.os.SystemProperties").getMethod("get", String::class.java)
+                .invoke(null, "persist.sys.byd.bluetooth_name") as String
+        }.getOrDefault("").lowercase()
+        return if (listOf("songplus", "song plus", "宋plus", "宋 plus").any { it in bt }) "songplus" else DEFAULT_ID
+    }
     fun selectedColorId(ctx: Context): String = prefs(ctx).getString(KEY_COLOR, ORIGINAL) ?: ORIGINAL
 
     /** Colours offered for [pack]: its own, else the generic set. */

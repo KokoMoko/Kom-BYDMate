@@ -1,0 +1,19 @@
+{
+  "format": 1,
+  "id": "songplus",
+  "name": {
+    "en": "BYD Song Plus",
+    "hy": "BYD Song Plus",
+    "ru": "BYD Song Plus",
+    "zh": "宋PLUS"
+  },
+  "author": "KomS",
+  "dilink": "4.0",
+  "plate": [
+    206,
+    241,
+    149,
+    42
+  ],
+  "refLum": 0.4461
+}
