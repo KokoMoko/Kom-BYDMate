@@ -27,14 +27,17 @@ class DrivingRangePersistenceTest {
         assertEquals(state, DrivingRangeSource.decode(DrivingRangeSource.encode(state)))
     }
 
-    @Test fun firstBuildHistoryLoadsWithoutTheNewFields() {
+    @Test fun historyLearnedBeforeHillCorrectionIsDroppedButTheBaselineKept() {
         val legacy = """{"blocks":[{"km":5.0,"kwh":1.0}],"bucketKm":0.0,"bucketKwh":0.0,""" +
             """"pendingKwh":0.0,"stationarySinceMs":null,"excludedKwh":0.4,"baseline":18.8,""" +
-            """"baselineFromVehicle":true,"last":null}"""
+            """"baselineFromVehicle":true,"last":null,"tempBuckets":{"4":{"km":104,"kwh":24.2}}}"""
         val state = DrivingRangeSource.decode(legacy)
-        assertEquals(listOf(DrivingRangeModel.Block(5.0, 1.0)), state.blocks)
-        assertEquals(emptyMap<Int, DrivingRangeModel.Block>(), state.tempBuckets)
-        assertEquals(18.8, state.baseline, 0.0)
+        assertEquals(DrivingRangeModel.State(baseline = 18.8, baselineFromVehicle = true), state)
+    }
+
+    @Test fun blockStartAltitudeSurvivesSerialization() {
+        val state = DrivingRangeModel.State(bucketKm = 0.4, bucketKwh = 0.1, bucketAltStartM = 1234.5)
+        assertEquals(state, DrivingRangeSource.decode(DrivingRangeSource.encode(state)))
     }
 
     @Test fun corruptedStorageStartsFreshInsteadOfImportingOldTripTotals() {

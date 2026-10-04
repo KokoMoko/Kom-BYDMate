@@ -1622,7 +1622,7 @@ class TrackingService : Service(), LocationListener {
 
                     val nowMs = System.currentTimeMillis()
                     val sessionId = updateSessionState(nowMs, data)
-                    drivingRangeSource.onSample(nowMs, data, sessionId)
+                    drivingRangeSource.onSample(nowMs, data, sessionId, loc)
 
                     odometerBuffer.onSample(
                         mileage = data.mileage,

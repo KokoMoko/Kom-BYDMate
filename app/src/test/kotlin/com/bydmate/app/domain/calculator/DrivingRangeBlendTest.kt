@@ -15,15 +15,21 @@ class DrivingRangeBlendTest {
         var km = 100.0
         var energy = 500.0
         var tempC: Double? = 20.0
+        var altM: Double? = null
         init { sample(0) }
         fun sample(speed: Int, charging: Boolean = false) =
-            model.onSample(now, km, energy, speed, 1L, charging, tempC)
-        /** [distance] km at [avg] kWh/100 km, in 0.5-km steps. */
-        fun drive(distance: Double, avg: Double) {
-            repeat((distance * 2).toInt()) {
+            model.onSample(now, km, energy, speed, 1L, charging, tempC, altM)
+        /**
+         * [distance] km at [avg] kWh/100 km, in 0.5-km steps, climbing [climbM] in total
+         * (needs [altM]); [avg] is what the car's counter shows, hill included.
+         */
+        fun drive(distance: Double, avg: Double, climbM: Double = 0.0) {
+            val steps = (distance * 2).toInt()
+            repeat(steps) {
                 now += 30_000L
                 km += 0.5
                 energy += avg / 200.0
+                altM = altM?.plus(climbM / steps)
                 sample(60)
             }
         }
@@ -35,7 +41,7 @@ class DrivingRangeBlendTest {
         fun estimate() = model.rangeEstimate(now)
     }
 
-    @Test fun coldStartUsesItsTemperatureBandBeforeReactiveDistance() {
+    @Test fun coldStartScalesThePriorByItsTemperatureBandAsItsHistoryGrows() {
         val d = Drive()
         d.drive(20.0, avg = 16.0)
         d.tempC = -5.0
@@ -44,12 +50,58 @@ class DrivingRangeBlendTest {
         val e = d.estimate()
         assertTrue(e.priorFromTemp)
         assertEquals(-1, e.band)
-        assertEquals(28.0, e.prior, 0.001)
         assertEquals(0.0, e.reactiveKm, 0.001)
-        assertEquals(28.0, e.avg, 0.001)
+        // 20 km of band history: (28/22 - 1) x 20/170 of the way up from the 22 average.
+        val trust = 20.0 / (20.0 + DrivingRangeModel.TEMP_TRUST_KM)
+        assertEquals(22.0 * (1 + (28.0 / 22.0 - 1) * trust), e.prior, 0.001)
+        assertEquals(e.prior, e.avg, 0.001)
         d.tempC = 22.0
         d.sample(0)
-        assertEquals(16.0, d.estimate().avg, 0.001)
+        assertTrue(d.estimate().avg < 22.0)
+    }
+
+    @Test fun aLongBandHistoryLeadsThePrior() {
+        val d = Drive()
+        d.drive(500.0, avg = 16.0)
+        d.tempC = -5.0
+        d.drive(500.0, avg = 28.0)
+        d.tempC = 22.0
+        d.drive(100.0, avg = 16.0)
+        d.tempC = -5.0
+        d.pause(8 * 60)
+        // Bands 16 vs 28 at 500 km each: cold is 28/22 of the average, trusted 500/650.
+        val e = d.estimate()
+        assertEquals(16.0 * (1 + (28.0 / 22.0 - 1) * 500.0 / 650.0), e.prior, 0.01)
+    }
+
+    @Test fun climbsAndDescentsAreLearnedAsFlatRoad() {
+        val d = Drive()
+        d.altM = 1200.0
+        // 51 km climbing 409 m at 22.2 on the counter, 57 km descending 544 m at 12.7 (on-car).
+        d.drive(51.0, avg = 22.2, climbM = 409.0)
+        val up = d.model.average()
+        assertEquals((11.322 - 409 * DrivingRangeModel.HILL_KWH_PER_M) / 51 * 100, up, 0.1)
+        assertTrue(up in 17.0..18.5)
+        d.drive(49.0, avg = 12.7, climbM = -467.0)
+        assertTrue(d.model.average() in 17.0..18.5)
+    }
+
+    @Test fun aBlockWithoutAltitudeIsNotCorrected() {
+        val d = Drive()
+        d.drive(10.0, avg = 20.0)
+        assertEquals(20.0, d.model.average(), 0.001)
+        d.altM = 1000.0
+        d.drive(10.0, avg = 20.0, climbM = 0.0)
+        assertEquals(20.0, d.model.average(), 0.001)
+    }
+
+    @Test fun aGpsAltitudeJumpIsNotAHill() {
+        val d = Drive()
+        d.altM = 1000.0
+        d.drive(5.0, avg = 20.0)
+        d.altM = 1600.0
+        d.drive(5.0, avg = 20.0)
+        assertEquals(20.0, d.model.average(), 0.001)
     }
 
     @Test fun reactiveWindowBlendsInLinearlyBetweenFiveAndTwentyKm() {
@@ -77,7 +129,8 @@ class DrivingRangeBlendTest {
         assertEquals(DrivingRangeModel.MAX_REACTIVE_WEIGHT, e.weight, 0.001)
         assertEquals(25.0, e.reactiveKm, 0.001)
         assertEquals(26.0, e.reactive!!, 0.001)
-        assertEquals(e.prior * 0.4 + 26.0 * 0.6, e.avg, 0.001)
+        val w = DrivingRangeModel.MAX_REACTIVE_WEIGHT
+        assertEquals(e.prior * (1 - w) + 26.0 * w, e.avg, 0.001)
         // The long-term 100-km average is unaffected by the reactive split.
         assertEquals((30 * 18.0 + 25 * 26.0) / 55.0, d.model.average(), 0.001)
     }
@@ -145,8 +198,8 @@ class DrivingRangeBlendTest {
         d.drive(25.0, avg = 4.0)
         val e = d.estimate()
         assertEquals(e.prior * DrivingRangeModel.REACTIVE_MIN_RATIO, e.reactive!!, 0.001)
-        // At worst 0.4 × prior + 0.6 × 0.95 × prior = 0.97 × prior: range +3% at most.
-        assertTrue(e.avg >= e.prior * 0.97 - 0.001)
+        val worst = 1 - DrivingRangeModel.MAX_REACTIVE_WEIGHT * (1 - DrivingRangeModel.REACTIVE_MIN_RATIO)
+        assertTrue(e.avg >= e.prior * worst - 0.001)
     }
 
     @Test fun longClimbCannotPushTheEstimateFarAboveThePrior() {

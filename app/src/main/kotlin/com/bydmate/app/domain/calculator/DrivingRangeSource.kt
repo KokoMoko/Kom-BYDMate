@@ -1,6 +1,9 @@
 package com.bydmate.app.domain.calculator
 
 import android.content.Context
+import android.location.Location
+import android.os.Build
+import android.os.SystemClock
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.remote.DiParsData
@@ -49,7 +52,29 @@ class DrivingRangeSource @Inject constructor(
     private var lastWriteMs = 0L
     private var lastWrittenKey: Any? = null
 
-    fun onSample(nowMs: Long, data: DiParsData, sessionId: Long?) {
+    private var altSmoothM: Double? = null
+    private var altFixTimeMs = 0L
+
+    /**
+     * Smoothed GPS altitude, or null without a recent fix. Only the difference between two
+     * block ends matters, so the geoid offset cancels; the smoothing damps the vertical jitter.
+     */
+    private fun altitudeOf(location: Location?): Double? {
+        val loc = location?.takeIf { it.hasAltitude() } ?: return null.also { altSmoothM = null }
+        val ageMs = (SystemClock.elapsedRealtimeNanos() - loc.elapsedRealtimeNanos) / 1_000_000L
+        val vAcc = if (Build.VERSION.SDK_INT >= 26 && loc.hasVerticalAccuracy()) loc.verticalAccuracyMeters else null
+        if (ageMs !in 0..ALT_MAX_AGE_MS || (vAcc != null && vAcc > ALT_MAX_V_ACCURACY_M)) {
+            altSmoothM = null
+            return null
+        }
+        if (loc.time != altFixTimeMs) {
+            altFixTimeMs = loc.time
+            altSmoothM = altSmoothM?.let { it + ALT_SMOOTHING * (loc.altitude - it) } ?: loc.altitude
+        }
+        return altSmoothM
+    }
+
+    fun onSample(nowMs: Long, data: DiParsData, sessionId: Long?, location: Location? = null) {
         // Keep optional initialization IO outside the main telemetry coroutine.
         // One in-flight request at a time; failed reads retry on a later poll.
         if (!model.snapshot().baselineFromVehicle && !model.isLearned() &&
@@ -69,6 +94,7 @@ class DrivingRangeSource @Inject constructor(
             speedKmh = data.speed, sessionId = sessionId,
             chargingOrDischarging = isChargingOrDischarging(data),
             exteriorTempC = data.exteriorTemp?.toDouble(),
+            altitudeM = altitudeOf(location),
         )
         lastSampleMs = nowMs
         val state = model.snapshot()
@@ -101,6 +127,15 @@ class DrivingRangeSource @Inject constructor(
 
     companion object {
         private const val WRITE_INTERVAL_MS = 60_000L
+        private const val ALT_MAX_AGE_MS = 10_000L
+        private const val ALT_MAX_V_ACCURACY_M = 40f
+        private const val ALT_SMOOTHING = 0.3
+
+        /**
+         * Saved history before hill correction holds climbs and descents as consumption
+         * (a window with a climb read 21.6 kWh/100 for 18 flat), so it is not carried over.
+         */
+        private const val FORMAT = 2
 
         /** Below this (kW, negative = into the pack) a standstill can only be charging. */
         private const val STANDSTILL_CHARGE_KW = -1.0
@@ -133,6 +168,8 @@ class DrivingRangeSource @Inject constructor(
         }
 
         internal fun encode(s: DrivingRangeModel.State): String = JSONObject().apply {
+            put("v", FORMAT)
+            put("bucketAltStartM", s.bucketAltStartM ?: JSONObject.NULL)
             put("blocks", blocksJson(s.blocks))
             put("reactive", blocksJson(s.reactive))
             put("tempBuckets", JSONObject().apply {
@@ -158,6 +195,12 @@ class DrivingRangeSource @Inject constructor(
         internal fun decode(raw: String?): DrivingRangeModel.State = runCatching {
             if (raw == null) return@runCatching DrivingRangeModel.State()
             val o = JSONObject(raw)
+            if (o.optInt("v") < FORMAT) {
+                val baseline = o.optDouble("baseline", DrivingRangeModel.FALLBACK_AVG)
+                return@runCatching if (baseline in DrivingRangeModel.SANE_AVG) DrivingRangeModel.State(
+                    baseline = baseline, baselineFromVehicle = o.optBoolean("baselineFromVehicle"),
+                ) else DrivingRangeModel.State()
+            }
             val blocks = parseBlocks(o.getJSONArray("blocks"), DrivingRangeModel.WINDOW_KM)
             // Fields added with the temperature/reactive model are optional, so the
             // first build's saved history still loads.
@@ -200,6 +243,8 @@ class DrivingRangeSource @Inject constructor(
                 baselineFromVehicle = o.optBoolean("baselineFromVehicle"),
                 tempBuckets = tempBuckets, reactive = reactive,
                 lastCommitMs = lastCommitMs, tempC = tempC,
+                bucketAltStartM = if (o.isNull("bucketAltStartM")) null
+                    else o.optDouble("bucketAltStartM").takeIf { it in DrivingRangeModel.SANE_ALT_M },
             )
         }.getOrElse { DrivingRangeModel.State() }
     }

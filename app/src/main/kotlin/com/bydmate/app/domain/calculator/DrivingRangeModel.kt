@@ -23,6 +23,8 @@ class DrivingRangeModel(initial: State = State()) {
         val reactive: List<Block> = emptyList(),
         val lastCommitMs: Long? = null,
         val tempC: Double? = null,
+        /** GPS altitude where the current block started; null = this block is not corrected. */
+        val bucketAltStartM: Double? = null,
     )
 
     /** What the range uses: temperature prior blended into the reactive window by distance. */
@@ -41,8 +43,16 @@ class DrivingRangeModel(initial: State = State()) {
     @Synchronized fun snapshot(): State = state
 
     /**
-     * Prior: the long-term average for the current exterior-temperature band, else the
-     * 100-km [average]. Reactive: the recent window, kept within [REACTIVE_MIN_RATIO]..
+     * Every block is stored as flat-road energy: the potential energy of its altitude change
+     * is taken out ([HILL_KWH_PER_M]). On-car 2026-10-04 a 57-km descent (-544 m) read
+     * 12.7 kWh/100 and a 51-km climb (+409 m) 22.2; corrected both are 18, as is the city
+     * driving that day. Uncorrected, a climb in the window showed 238 km at 75% where the
+     * car really had ~320 km. The future route is unknown, so the range assumes flat road.
+     *
+     * Prior: the 100-km [average], scaled by how the current exterior-temperature band
+     * compares with all bands, trusted by its distance ([TEMP_TRUST_KM]); a band with
+     * little history barely moves it, so the route mix it happened to see cannot dominate.
+     * Reactive: the recent window, kept within [REACTIVE_MIN_RATIO]..
      * [REACTIVE_MAX_RATIO] of the prior (and above [C_FLOOR]) so a long descent or climb
      * cannot extrapolate itself over the whole battery. Below [BLEND_START_KM] the prior alone
      * is used; from there the reactive share grows linearly to [MAX_REACTIVE_WEIGHT] at
@@ -54,8 +64,13 @@ class DrivingRangeModel(initial: State = State()) {
         val band = state.tempC?.let(::bandOf)
         val bucket = band?.let { state.tempBuckets[it] }
         val bucketAvg = bucket?.takeIf { it.km >= MIN_BUCKET_KM }?.let { it.kwh / it.km * 100.0 }
-        val priorFromTemp = bucketAvg != null && bucketAvg in SANE_AVG
-        val prior = if (priorFromTemp) bucketAvg!! else average()
+        val allKm = state.tempBuckets.values.sumOf { it.km }
+        val allAvg = if (allKm > 0.0) state.tempBuckets.values.sumOf { it.kwh } / allKm * 100.0 else Double.NaN
+        val priorFromTemp = bucketAvg != null && bucketAvg in SANE_AVG && allAvg in SANE_AVG
+        val prior = if (priorFromTemp) {
+            val trust = bucket!!.km / (bucket.km + TEMP_TRUST_KM)
+            (average() * (1.0 + (bucketAvg!! / allAvg - 1.0) * trust)).coerceIn(SANE_AVG)
+        } else average()
         val fresh = state.lastCommitMs?.let { nowMs - it in 0..REACTIVE_RESET_MS } == true
         val reactiveKm = if (fresh) state.reactive.sumOf { it.km } else 0.0
         val reactive = if (reactiveKm > 0.0) {
@@ -96,7 +111,9 @@ class DrivingRangeModel(initial: State = State()) {
         sessionId: Long?,
         chargingOrDischarging: Boolean = false,
         exteriorTempC: Double? = null,
+        altitudeM: Double? = null,
     ) {
+        val alt = altitudeM?.takeIf { it.isFinite() && it in SANE_ALT_M }
         state = state.copy(tempC = exteriorTempC?.takeIf { it.isFinite() && it in SANE_TEMP_C })
         if (sessionId == null || chargingOrDischarging) {
             // Retain eligible distance; do not attribute charging to a pending stop.
@@ -150,18 +167,23 @@ class DrivingRangeModel(initial: State = State()) {
         val shortStop = start != null && nowMs - start < STATIONARY_THRESHOLD_MS
         // At the boundary a previously provisional stop must be excluded retroactively.
         val excluded = if (start != null && !shortStop) state.pendingKwh else 0.0
+        // A block that starts without a fix is left uncorrected; the next one starts at a fix.
+        val altStart = state.bucketAltStartM ?: alt?.takeIf { state.bucketKm < ALT_LATE_START_KM }
         state = state.copy(
+            bucketAltStartM = altStart,
             last = sample, stationarySinceMs = null, pendingKwh = 0.0,
             bucketKm = state.bucketKm + km.coerceAtLeast(0.0),
             bucketKwh = state.bucketKwh + energy + if (shortStop) state.pendingKwh else 0.0,
             excludedKwh = state.excludedKwh + excluded,
         )
-        if (state.bucketKm >= BLOCK_KM) commitBlock(nowMs)
+        if (state.bucketKm >= BLOCK_KM) commitBlock(nowMs, alt)
     }
 
-    private fun commitBlock(nowMs: Long) {
+    private fun commitBlock(nowMs: Long, altEndM: Double?) {
         // Freeze the consumption estimate during a stop: only confirmed movement commits.
-        val block = Block(state.bucketKm, state.bucketKwh)
+        val climb = state.bucketAltStartM?.let { s -> altEndM?.let { it - s } }
+            ?.takeIf { abs(it) <= MAX_CLIMB_PER_BLOCK_M }
+        val block = Block(state.bucketKm, state.bucketKwh - (climb ?: 0.0) * HILL_KWH_PER_M)
         // A long pause (overnight, a parked hour) means new conditions: restart the reactive
         // window so the temperature prior leads again until fresh distance accumulates.
         val reactiveBase = if (state.lastCommitMs?.let { nowMs - it in 0..REACTIVE_RESET_MS } == true) {
@@ -184,6 +206,7 @@ class DrivingRangeModel(initial: State = State()) {
             tempBuckets = buckets,
             lastCommitMs = nowMs,
             bucketKm = 0.0, bucketKwh = 0.0,
+            bucketAltStartM = altEndM,
         )
     }
 
@@ -215,22 +238,40 @@ class DrivingRangeModel(initial: State = State()) {
         const val BLEND_START_KM = 5.0
         const val BLEND_FULL_KM = 20.0
         /** Share of the reactive window at and beyond [BLEND_FULL_KM]; the prior keeps the rest. */
-        const val MAX_REACTIVE_WEIGHT = 0.6
         /**
-         * The reactive window stays within these multiples of the prior. The lower one is tight:
-         * a descent recovers energy but in practice adds only 2-3% of range (on-car), so with
-         * [MAX_REACTIVE_WEIGHT] it may lower the average by 3% at most (0.4 + 0.6 x 0.95).
+         * On-car 2026-10-04 a 0.6 share let two short warm-up trips (2.9 km at 34 kWh/100)
+         * and a climb drop 90% from ~390 to 261 km. The window now only nudges the prior.
          */
-        const val REACTIVE_MIN_RATIO = 0.95
-        const val REACTIVE_MAX_RATIO = 1.6
+        const val MAX_REACTIVE_WEIGHT = 0.35
+        /**
+         * The reactive window stays within these multiples of the prior. Hills are already
+         * taken out of every block, so what remains is speed, climate and wind: at most
+         * [MAX_REACTIVE_WEIGHT] x 30% = ~10% either way.
+         */
+        const val REACTIVE_MIN_RATIO = 0.8
+        const val REACTIVE_MAX_RATIO = 1.3
         const val REACTIVE_RESET_MS = 60 * 60_000L
         const val TEMP_BAND_C = 5.0
         const val MIN_BUCKET_KM = 10.0
+        /** A band with this many km moves the prior halfway to its own ratio. */
+        const val TEMP_TRUST_KM = 150.0
         const val BUCKET_CAP_KM = 500.0
 
         /** Lower bound blocks regen-heavy windows from extrapolating an absurd range. */
         const val C_FLOOR = 8.0
         val SANE_AVG = C_FLOOR..100.0
         val SANE_TEMP_C = -45.0..65.0
+
+        /**
+         * Potential energy per metre of altitude, kWh: ~2150 kg loaded x g / 3.6e6. Taken in
+         * full both ways, as the on-car trips matched: a long descent mostly saves energy
+         * (gravity pushes instead of the motor) rather than going through regen losses.
+         */
+        const val HILL_KWH_PER_M = 2150.0 * 9.81 / 3_600_000.0
+        /** More than this per 1-km block is a GPS jump, not a road (15% grade = 150 m). */
+        const val MAX_CLIMB_PER_BLOCK_M = 200.0
+        /** A fix that arrives after this much of a block is too late to start it. */
+        const val ALT_LATE_START_KM = 0.1
+        val SANE_ALT_M = -500.0..6000.0
     }
 }
