@@ -152,9 +152,12 @@ internal fun AltitudeGpsStatus(fs: Int = 16) {
     // ~0.25 cm off the right edge of the row (on-car 2026-10-03: 0 was too close, 0.5 cm too far)
     Row(Modifier.padding(end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
         GpsSignalItem(fs)
-        Spacer(Modifier.width(8.dp))
-        Box(Modifier.width(1.5.dp).height(fs.dp).background(TextSecondary.copy(alpha = 0.5f)))
-        Spacer(Modifier.width(8.dp))
-        InfoItem(Icons.Outlined.Terrain, extras.altitudeM?.let { "$it m" } ?: "— m", fs)
+        // The Song Plus head unit shows the altitude in its own status bar already.
+        if (!com.bydmate.app.ui.car.CarPacks.isSongPlus) {
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.width(1.5.dp).height(fs.dp).background(TextSecondary.copy(alpha = 0.5f)))
+            Spacer(Modifier.width(8.dp))
+            InfoItem(Icons.Outlined.Terrain, extras.altitudeM?.let { "$it m" } ?: "— m", fs)
+        }
     }
 }

@@ -94,12 +94,15 @@ object CarPacks {
      * Kom-BYDMate: until a car is chosen, the built-in pack of this car's model. DiLink's Bluetooth
      * name carries the model ("宋Plus", or the owner's "SongPlus"); anything else gets [DEFAULT_ID].
      */
-    private fun modelPackId(): String {
+    private fun modelPackId(): String = if (isSongPlus) "songplus" else DEFAULT_ID
+
+    /** A BYD Song Plus, by the head unit's Bluetooth name (e.g. "SongPlus", "宋Plus"). */
+    val isSongPlus: Boolean by lazy {
         val bt = runCatching {
             Class.forName("android.os.SystemProperties").getMethod("get", String::class.java)
                 .invoke(null, "persist.sys.byd.bluetooth_name") as String
         }.getOrDefault("").lowercase()
-        return if (listOf("songplus", "song plus", "宋plus", "宋 plus").any { it in bt }) "songplus" else DEFAULT_ID
+        listOf("songplus", "song plus", "宋plus", "宋 plus").any { it in bt }
     }
     fun selectedColorId(ctx: Context): String = prefs(ctx).getString(KEY_COLOR, ORIGINAL) ?: ORIGINAL
 

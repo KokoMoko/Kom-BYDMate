@@ -17,7 +17,7 @@ Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարվա�
 - The learned range history starts over once after this update (it had hills in it); until it relearns, the range starts from the car's lifetime average.
 
 **Dashboard**
-- GPS signal and altitude in the top-right corner of the dashboards.
+- GPS signal and altitude in the top-right corner of the dashboards; on a Song Plus only the satellites, since its head unit shows the altitude itself.
 - Swipe down on the title row to put the app away.
 - A traffic officer with a whistle steps onto the road after 30 s over the speed limit; three taps switch him off, Settings switches him back on.
 
@@ -41,7 +41,7 @@ Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարվա�
 - Այս թարմացումից հետո պաշարի սովորած պատմությունը մեկ անգամ զրոյացվում է (այն պարունակում էր վերելքներ)․ մինչև նորից սովորելը պաշարը սկսում է մեքենայի ամբողջ կյանքի միջին ծախսից։
 
 **Dashboard**
-- GPS ազդանշանը և բարձրությունը dashboard-ների վերևի աջ անկյունում։
+- GPS ազդանշանը և բարձրությունը dashboard-ների վերևի աջ անկյունում․ Song Plus-ում՝ միայն արբանյակները, քանի որ բարձրությունն արդեն ցույց է տալիս մեքենայի վերևի տողը։
 - Վերնագրի տողի վրա ներքև սահեցնելով app-ը թաքցվում է։
 - Արագության սահմանը 30 վայրկյան գերազանցելիս ճանապարհին հայտնվում է սուլիչով ոստիկան․ երեք հպումով անջատվում է, Settings-ից նորից միացվում։
 
