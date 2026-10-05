@@ -4,6 +4,56 @@ What changed in each Kom-BYDMate release, in English and Armenian. Changes inher
 
 Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարված փոփոխությունները՝ անգլերեն և հայերեն։ Upstream BYDMate-ից եկած փոփոխությունները՝ [CHANGELOG.md](CHANGELOG.md)-ում։
 
+## 3.19.3-kom.17 — 2026-10-05
+
+### English
+
+**Range**
+- Climbs and descents no longer distort the range: the altitude change of every kilometre (GPS) is taken out, so the app learns what driving costs on a flat road. On a hilly day the old estimate was off by a quarter.
+- The climate counts the moment it runs: switching the AC on lowers the range at once, by its real power (the compressor's own sensor plus the fan) and your average speed, more in town and less on the highway; switching it off brings the range back.
+- Short trips and the last few kilometres only nudge the estimate, and a temperature's history counts by how much of it there is, so two short warm-up trips no longer halve the range.
+- The consumption counter is calibrated against the battery's own energy over long stretches.
+- The range never exceeds the car's rated range at the current charge (Settings, 605 km by default).
+- The learned range history starts over once after this update (it had hills in it); until it relearns, the range starts from the car's lifetime average.
+
+**Dashboard**
+- GPS signal and altitude in the top-right corner of the dashboards.
+- Swipe down on the title row to put the app away.
+- A traffic officer with a whistle steps onto the road after 30 s over the speed limit; three taps switch him off, Settings switches him back on.
+
+**Driver's display**
+- Yandex Navigator restarts only once, straight into its window on the driver's display: no world map, and the route line stays.
+- A scale change while the map is on the driver's display applies at once.
+- Song Plus (DiLink 4): sending the map to the driver's display works again.
+
+**Cars and updates**
+- Built-in BYD Song Plus picture, chosen automatically when the car's Bluetooth name shows a Song Plus.
+- In-app updates: Kom-BYDMate checks its own releases and offers the new version.
+
+### Հայերեն
+
+**Պաշար**
+- Վերելքներն ու վայրէջքները այլևս չեն աղավաղում պաշարը․ յուրաքանչյուր կիլոմետրի բարձրության փոփոխությունը (GPS) հանվում է, և app-ը սովորում է հարթ ճանապարհի ծախսը։ Լեռնային օրը հին հաշվարկը սխալվում էր մոտ քառորդով։
+- Կլիման հաշվվում է հենց միանալու պահից․ AC-ն միացնելիս պաշարը միանգամից նվազում է՝ ըստ իրական հզորության (կոմպրեսորի սեփական տվիչ և օդափոխիչ) և ձեր միջին արագության, քաղաքում՝ ավելի շատ, մայրուղում՝ ավելի քիչ․ անջատելիս պաշարը վերադառնում է։
+- Կարճ ուղևորություններն ու վերջին մի քանի կիլոմետրը միայն թեթևակի են ազդում, իսկ ջերմաստիճանի պատմությունը կշիռ ունի ըստ իր ծավալի․ երկու կարճ տաքացման ուղևորությունն այլևս պաշարը կիսով չեն կրճատում։
+- Ծախսի հաշվիչը երկար հատվածներում ճշգրտվում է մարտկոցի սեփական էներգիայով։
+- Պաշարը երբեք չի գերազանցում մեքենայի անվանական պաշարը ընթացիկ լիցքի դեպքում (Settings, լռելյայն 605 կմ)։
+- Այս թարմացումից հետո պաշարի սովորած պատմությունը մեկ անգամ զրոյացվում է (այն պարունակում էր վերելքներ)․ մինչև նորից սովորելը պաշարը սկսում է մեքենայի ամբողջ կյանքի միջին ծախսից։
+
+**Dashboard**
+- GPS ազդանշանը և բարձրությունը dashboard-ների վերևի աջ անկյունում։
+- Վերնագրի տողի վրա ներքև սահեցնելով app-ը թաքցվում է։
+- Արագության սահմանը 30 վայրկյան գերազանցելիս ճանապարհին հայտնվում է սուլիչով ոստիկան․ երեք հպումով անջատվում է, Settings-ից նորից միացվում։
+
+**Վարորդի էկրան**
+- Յանդեքս Նավիգատորը վերաբացվում է միայն մեկ անգամ՝ անմիջապես վարորդի էկրանի իր պատուհանում․ առանց աշխարհի քարտեզի, և երթուղու գիծը մնում է։
+- Մասշտաբի փոփոխությունը, երբ քարտեզը վարորդի էկրանին է, կիրառվում է անմիջապես։
+- Song Plus (DiLink 4)․ քարտեզը վարորդի էկրան ուղարկելը նորից աշխատում է։
+
+**Մեքենաներ և թարմացումներ**
+- Ներկառուցված BYD Song Plus-ի նկար, որն ընտրվում է ավտոմատ, երբ մեքենայի Bluetooth անունը Song Plus է։
+- Թարմացումներ app-ի ներսից․ Kom-BYDMate-ը ստուգում է իր սեփական թողարկումները և առաջարկում նոր տարբերակը։
+
 ## 3.19.3-kom.16 — 2026-10-02
 
 ### English
