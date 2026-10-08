@@ -2,6 +2,7 @@ package com.bydmate.app.media
 
 import com.bydmate.app.navdata.NavGuidanceHub
 import com.bydmate.app.navdata.NavManeuverCodes
+import com.bydmate.app.navdata.NavManeuverRaw
 
 /**
  * Donor YandexNaviNotificationListener post-processing (lines 65-166) split out as
@@ -57,12 +58,18 @@ object NaviRichPostProcessor {
             cameraDistanceMeters = rich.cameraDistanceM,
             cameraIconPng = rich.cameraIconPng,
             applyCamera = true,
+            maneuverRaw = when {
+                maneuverGaode == 0 -> ""
+                rich.maneuverGaode != null -> NavManeuverRaw.name("res", rich.maneuverRes)
+                else -> NavManeuverRaw.text("text", rich.instruction)
+            },
         )
     }
 
     /**
      * EXTRAS_FALLBACK outcome: no RemoteViews. Returns null for idle stubs
-     * (app-logo icon, or zero distance with a "навигатор" road). Camera untouched
+     * (app-logo icon, or zero distance with a "навигатор" road) and for service notices
+     * (no distance in the text at all and no maneuver). Camera untouched
      * (applyCamera=false - extras carry no camera). Maps rule R2-1: while the hub
      * already holds a known maneuver, a Maps extras maneuver is dropped.
      */
@@ -80,13 +87,12 @@ object NaviRichPostProcessor {
         val maneuverFromText = NavManeuverCodes.richPhraseGaode("$title $text")
         val maneuver = if (maneuverFromText == 0) NavManeuverCodes.richIconNameGaode(smallIconName)
             else maneuverFromText
-        val distanceMeters = parseDistance(text) ?: parseDistance(title) ?: 0
+        val parsedDistance = parseDistance(text) ?: parseDistance(title)
+        val distanceMeters = parsedDistance ?: 0
         val road = extractRoad(title, text)
         val etaSeconds = parseEtaSeconds(extraSubText ?: "")
 
-        if (smallIconName == "notifications_app_logo" ||
-            (distanceMeters == 0 && road.contains("навигатор", ignoreCase = true))
-        ) return null
+        if (isIdleOrNotice(smallIconName, distanceMeters, parsedDistance != null, maneuver, road)) return null
 
         val mergeManeuver = if (isMaps && hubHasKnownManeuver) 0 else maneuver
         val mergeRoad = if (road.isNotEmpty() && road != "Навигатор запущен") road else ""
@@ -99,8 +105,30 @@ object NaviRichPostProcessor {
             totalDistMeters = 0,
             maneuverPng = null,
             applyCamera = false,
+            maneuverRaw = extrasRaw(mergeManeuver, maneuverFromText != 0, "$title $text", smallIconName),
         )
     }
+
+    /** #294 field journal: the extras text when a phrase gave the maneuver, else the small icon. */
+    private fun extrasRaw(maneuver: Int, fromText: Boolean, text: String, smallIconName: String): String = when {
+        maneuver == 0 -> ""
+        fromText -> NavManeuverRaw.text("text", text)
+        else -> NavManeuverRaw.name("icon", smallIconName)
+    }
+
+    /** An idle stub (app-logo icon, or a zero distance with a "навигатор" road) or a service
+     *  notice: no distance in the text at all ("0 м" is one) and no maneuver, whose title would
+     *  otherwise become the road and start guidance without a route (#198: "Установите сервисы
+     *  Google Play" without Google services). */
+    private fun isIdleOrNotice(
+        smallIconName: String,
+        distanceMeters: Int,
+        hasDistance: Boolean,
+        maneuver: Int,
+        road: String,
+    ): Boolean = smallIconName == "notifications_app_logo" ||
+        (distanceMeters == 0 && road.contains("навигатор", ignoreCase = true)) ||
+        (!hasDistance && maneuver == 0)
 
     internal fun parseEtaSeconds(s: String): Int {
         if (s.isBlank()) return 0

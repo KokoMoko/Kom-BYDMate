@@ -295,6 +295,7 @@ class SettingsViewModelConnectionsTest {
                 mockk(relaxed = true),
                 kotlinx.coroutines.test.TestScope(),
             ),
+            cloudOverWifiManager = mockk(relaxed = true),
             fidCatalogManager = mockk(relaxed = true),
             writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
             ruleDao = mockk(relaxed = true),
@@ -311,6 +312,8 @@ class SettingsViewModelConnectionsTest {
             autoBackupScheduler = mockk(relaxed = true),
             appStrings = com.bydmate.app.util.AppStrings(ctx),
             telegramReporter = mockk(relaxed = true),
+            clusterMusicBridge = mockk(relaxed = true),
+            vehicleWriteLogDao = mockk(relaxed = true),
         )
     }
 

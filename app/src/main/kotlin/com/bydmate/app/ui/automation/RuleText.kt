@@ -232,7 +232,7 @@ private fun onOffText(nameRes: Int, onRes: Int, offRes: Int, payload: String?, l
 @Suppress("CyclomaticComplexMethod") // one branch per action kind
 internal fun actionText(a: ActionDef, lc: Context): String = when (a.kind) {
     "param" -> ACTION_COMMANDS.firstOrNull { it.toggleTarget == null && it.command == a.command }
-        ?.let { lc.getString(it.nameRes) } ?: a.displayName
+        ?.let { lc.getString(it.nameRes) } ?: levelActionName(a.command, lc) ?: a.displayName
     "toggle" -> a.payload?.let { ActionDispatcher.toggleTargetNameRes(it) }
         ?.let { lc.getString(R.string.auto_ui_act_toggle, lc.getString(it)) } ?: a.displayName
     "delay" -> lc.getString(R.string.auto_ui_act_wait, durationText(a.payload?.toLongOrNull() ?: 1000L, lc))
@@ -241,6 +241,7 @@ internal fun actionText(a: ActionDef, lc: Context): String = when (a.kind) {
     "speak" -> quoted(R.string.automation_action_speak, a.speakText(), lc)
     "agent_query" -> quoted(R.string.automation_action_agent_query, a.agentPrompt(), lc)
     "app_launch" -> quoted(R.string.automation_action_app_launch, a.appLaunchLabel(), lc)
+    "app_close" -> quoted(R.string.automation_action_app_close, a.appLaunchLabel(), lc)
     "call" -> quoted(R.string.automation_action_call, a.callName().ifBlank { a.callPhone() }, lc)
     "navigate" -> quoted(R.string.automation_action_navigate, a.navigateName(), lc)
     "url" -> quoted(R.string.automation_action_url, a.urlString(), lc)
@@ -255,6 +256,7 @@ internal fun actionText(a: ActionDef, lc: Context): String = when (a.kind) {
         R.string.automation_action_cluster_projection, R.string.automation_action_cluster_projection_on,
         R.string.automation_action_cluster_projection_off, a.payload, lc,
     )
+    "media_key" -> ActionDispatcher.mediaKeyNameRes(a.payload)?.let { lc.getString(it) } ?: a.displayName
     "media_volume" -> a.payload?.toIntOrNull()
         ?.let { lc.getString(R.string.auto_ui_act_volume, lc.getString(R.string.automation_action_media_volume), it) }
         ?: a.displayName
@@ -330,6 +332,7 @@ private val PAYLOAD_KIND_NAMES = mapOf(
     "speak" to R.string.automation_action_speak,
     "agent_query" to R.string.automation_action_agent_query,
     "app_launch" to R.string.automation_action_app_launch,
+    "app_close" to R.string.automation_action_app_close,
     "call" to R.string.automation_action_call,
     "navigate" to R.string.automation_action_navigate,
     "url" to R.string.automation_action_url,
@@ -542,6 +545,7 @@ internal fun ActionValidationError.toMissing(lc: Context): Missing.Action = when
     is ActionValidationError.MediaVolumeMissing -> Missing.Action(index, lc.getString(R.string.auto_msg_media_volume_missing, index))
     is ActionValidationError.SentryInvalid -> Missing.Action(index, lc.getString(R.string.auto_msg_sentry_invalid, index))
     is ActionValidationError.HotspotInvalid -> Missing.Action(index, lc.getString(R.string.auto_msg_hotspot_invalid, index))
+    is ActionValidationError.MediaKeyInvalid -> Missing.Action(index, lc.getString(R.string.auto_msg_media_key_invalid, index))
     is ActionValidationError.SpeakTextEmpty -> Missing.Action(index, lc.getString(R.string.auto_msg_speak_text_empty, index))
     is ActionValidationError.AgentQueryPromptEmpty -> Missing.Action(index, lc.getString(R.string.auto_msg_agent_query_prompt_empty, index))
     is ActionValidationError.SplitScreenNarrowEmpty -> Missing.Action(index, lc.getString(R.string.auto_msg_split_narrow_empty, index))

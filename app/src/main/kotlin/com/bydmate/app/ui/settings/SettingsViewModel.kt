@@ -355,6 +355,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val driverMemory: com.bydmate.app.agent.DriverMemory,
     private val dayMemory: com.bydmate.app.agent.DayMemory,
     private val adbRestoreManager: com.bydmate.app.data.autoservice.AdbRestoreManager,
+    private val cloudOverWifiManager: com.bydmate.app.data.autoservice.CloudOverWifiManager,
     private val fidCatalogManager: com.bydmate.app.data.nativestack.FidCatalogManager,
     private val writeAllowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
     private val ruleDao: com.bydmate.app.data.local.dao.RuleDao,
@@ -368,6 +369,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val autoBackupScheduler: AutoBackupScheduler,
     private val appStrings: AppStrings,
     private val telegramReporter: com.bydmate.app.data.telegram.TelegramReporter,
+    private val clusterMusicBridge: com.bydmate.app.media.ClusterMusicBridge,
+    private val vehicleWriteLogDao: com.bydmate.app.data.local.dao.VehicleWriteLogDao,
 ) : ViewModel() {
 
     /** ADB control-channel verdict for the line under the ADB-restore toggle. */
@@ -1696,9 +1699,10 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         private const val BIND_CODE_SPAN = 900_000
         /** Same tag as TelegramReporter: the report's settings changes sit next to its sends. */
         private const val TAG_TG_REPORT = "TgReport"
-        /** Shared budget for the daemon-backed dump sections (liveness + seat and steering heat reads).
+        /** Shared budget for the daemon-backed dump sections (liveness + seat, steering heat and window reads).
          *  The dump must not hang on a wedged daemon. */
         private const val HELPER_DIAG_BUDGET_MS = 3_000L
+        private const val VEHICLE_WRITES_IN_DUMP = 40
 
         /**
          * A binder transact is a blocking call: wrapping it in withTimeoutOrNull here would not
@@ -1724,6 +1728,12 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 collected.set(collected.get().copy(seats = seats))
                 val steeringHeat = runCatching { helper.readBatch(SteeringHeatDiagnostics.batchItems()) }.getOrNull()
                 collected.set(collected.get().copy(steeringHeat = steeringHeat))
+                val windows = runCatching { helper.readBatch(WindowDiagnostics.batchItems()) }.getOrNull()
+                collected.set(collected.get().copy(windows = windows))
+                val hud = runCatching { helper.readBatch(HudDiagnostics.batchItems()) }.getOrNull()
+                collected.set(collected.get().copy(hud = hud))
+                val hudSwitch = runCatching { helper.readBatch(HudDiagnostics.switchBatchItems()) }.getOrNull()
+                collected.set(collected.get().copy(hudSwitch = hudSwitch))
             }
             withTimeoutOrNull(budgetMs) { probe.join() }
             return collected.get()
@@ -1735,9 +1745,12 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         val alive: Boolean?,
         val seats: List<Pair<Int, Int>>?,
         val steeringHeat: List<Pair<Int, Int>>? = null,
+        val windows: List<Pair<Int, Int>>? = null,
+        val hud: List<Pair<Int, Int>>? = null,
+        val hudSwitch: List<Pair<Int, Int>>? = null,
     )
 
-    /** Liveness, the seat fid snapshot and the steering heat snapshot under ONE shared budget. */
+    /** Liveness and the seat, steering heat and window fid snapshots under ONE shared budget. */
     private suspend fun gatherHelperDiagnostics(): HelperDiagnostics =
         collectHelperDiagnostics(viewModelScope, helperClient, HELPER_DIAG_BUDGET_MS)
 
@@ -1804,6 +1817,20 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             } catch (e: Exception) {
                 appendLine("(failed to gather app/device metadata: ${e.message})")
             }
+            try {
+                val pm = appContext.packageManager
+                appendLine(RecordingDumpFormat.appVersionsLine { pkg ->
+                    try {
+                        val pi = pm.getPackageInfo(pkg, 0)
+                        pi.versionName to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) pi.longVersionCode
+                        else @Suppress("DEPRECATION") pi.versionCode.toLong()
+                    } catch (_: PackageManager.NameNotFoundException) {
+                        null
+                    }
+                })
+            } catch (e: Exception) {
+                appendLine("(failed to gather app versions: ${e.message})")
+            }
 
             appendLine("--- settings ---")
             try {
@@ -1828,9 +1855,14 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                         "trigger=${adbRestoreManager.lastTrigger} retries=${adbRestoreManager.retryCount} " +
                         "write_secure_settings=$secureSettingsGranted"
                 )
+                appendLine(cloudOverWifiManager.dumpLine())
                 appendLine("adb_verdict: ${adbVerdictMonitor.verdict.value ?: "(none)"}")
                 appendLine("daemon_ever_alive: ${helperBootstrap.daemonEverAlive()}")
                 appendLine(com.bydmate.app.data.backup.PostRestoreCheck.dumpLine(appContext))
+                appendLine(
+                    "widget_home_only=${com.bydmate.app.ui.widget.WidgetPreferences(appContext).isHomeOnly()} " +
+                        "home_packages=${com.bydmate.app.ui.widget.WidgetController.queryHomePackages(appContext)}"
+                )
             } catch (e: Exception) {
                 appendLine("(failed to gather settings: ${e.message})")
             }
@@ -2031,13 +2063,32 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     com.bydmate.app.hud.HudSomeIpBridge.isServicePresent(appContext.packageManager)
                 appendLine("someip_gateway: " + if (gatewayPresent) "present" else "absent")
                 appendLine("speed_sign: ${hudPrefs.getBoolean(com.bydmate.app.hud.HudController.KEY_SPEED_SIGN, true)}")
+                // The way to the glass (1..3, «Способ вывода на стекло»).
                 appendLine("mode: ${hudController.mode()}")
                 // Frame/RC counters from HudPushLoop via HudController.diag().
                 val diag = hudController.diag()
+                // Ways 2 and 3: CAN guidance writes the car accepted and refused (clears not
+                // counted), and what a process death may have left on the instrument or the gateway.
+                appendLine(
+                    "can_accepted=${diag?.canAccepted ?: 0} can_refused=${diag?.canRefused ?: 0} " +
+                        "can_left=${hudPrefs.contains(com.bydmate.app.hud.HudWayChannels.KEY_CAN_LEFT)} " +
+                        "lmcn_left=${hudPrefs.contains(com.bydmate.app.hud.HudWayChannels.KEY_LMCN_LEFT)}"
+                )
                 appendLine("frames_sent=${diag?.framesSent ?: 0} last_frame_ts=${diag?.lastFrameTs ?: 0}")
                 appendLine("last_fire_rc=${diag?.lastRc ?: "n/a"} nonzero_rc_count=${diag?.nonZeroRcCount ?: 0}")
+                // Every gateway service the product's binding holds open (the HUD check's step 4 adds
+                // its own while it runs on that binding), and each topic's fireEvent rcs.
+                val someIp = hudController.boundBridge
+                appendLine("someip_services=${someIp?.startedServices()?.let { com.bydmate.app.hud.HudSomeIpBridge.describeServices(it) } ?: "n/a"}")
+                appendLine("someip_fire_rc=${someIp?.fireCounts()?.let { com.bydmate.app.hud.HudSomeIpBridge.describeFires(it) } ?: "n/a"}")
                 appendLine("amap_capable=${diag?.amapCapable ?: false} amap_frames=${diag?.amapFramesSent ?: 0} amap_stops=${diag?.amapStopsSent ?: 0}")
-                appendLine("hub_snapshot=${com.bydmate.app.navdata.NavGuidanceHub.snapshot()}")
+                // No gateway (#301): TYPE 0 frames and KILLs to the Amap adapter's cluster card.
+                appendLine(hudController.amapCluster?.let {
+                    "amap_cluster: frames=${it.framesSent} kills=${it.killsSent} last_frame_ts=${it.lastFrameTs}"
+                } ?: "amap_cluster: n/a")
+                appendLine("hub_snapshot=${RecordingDumpFormat.hubSnapshot(com.bydmate.app.navdata.NavGuidanceHub.snapshot())}")
+                // The current route's counters, or the last route's (the route-summary trace line).
+                appendLine("route_summary: ${com.bydmate.app.navdata.NavGuidanceHub.routeSummary()}")
                 // What each channel actually carried at every maneuver change (#94): the
                 // SOME/IP arrow field next to the Amap icon, on one timeline.
                 val maneuvers = com.bydmate.app.hud.HudManeuverJournal(hudPrefs).lines()
@@ -2095,13 +2146,15 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     "target=${clusterPrefs.getString(cpm.KEY_TARGET_PACKAGE, "(default)")}")
                 // #121: the density override carries the scale in direct mode, and apps latched by
                 // the death watch as dying on a non-native density are sent at the panel's own
-                // density instead — their scale slider is inert.
+                // density instead — their scale slider is inert. Each with why and when it latched.
                 val densityUnsafe = cpm.densityUnsafePackages(appContext)
                 appendLine("density: " + when (diag.directDensityDpi) {
                     -1 -> "(not set this session)"
                     0 -> "native"
                     else -> "${diag.directDensityDpi} dpi"
-                } + " unsafe=" + if (densityUnsafe.isEmpty()) "(none)" else densityUnsafe.joinToString())
+                } + " unsafe=" + if (densityUnsafe.isEmpty()) "(none)" else densityUnsafe.joinToString { pkg ->
+                    "$pkg (${cpm.densityUnsafeReason(appContext, pkg) ?: "no reason recorded"})"
+                })
                 appendLine("vd: id=${diag.vdDisplayId} overlay_attached=${diag.overlayAttached} " +
                     "direct_display=${diag.directDisplayId} " +
                     "direct_marker=${clusterPrefs.getInt(cpm.KEY_DIRECT_DISPLAY_ID, -1)}")
@@ -2188,6 +2241,11 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 else clusterJournal.forEach { appendLine("  $it") }
             } catch (e: Exception) { appendLine("(failed to gather cluster state: ${e.message})") }
 
+            appendLine("--- cluster music ---")
+            try {
+                clusterMusicBridge.dumpLines().forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("(failed to gather cluster music state: ${e.message})") }
+
             appendLine("--- trip counters ---")
             try {
                 // Live-count integrity: km/kWh only tick when liveWholeSession=true and
@@ -2244,6 +2302,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     com.bydmate.app.cluster.ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
                 appendLine("mirror_enabled: ${clusterPrefs.getBoolean(
                     com.bydmate.app.cluster.ClusterProjectionManager.KEY_MIRROR_ENABLED, false)}")
+                appendLine(com.bydmate.app.cluster.SteeringWheelKeyService.keyCounters.line())
             } catch (e: Exception) { appendLine("(failed to gather steering key state: ${e.message})") }
 
             appendLine("--- autostart ---")
@@ -2280,6 +2339,11 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             appendLine("--- helper daemon ---")
             try {
                 appendLine("alive: ${helperDiag.alive?.toString() ?: "(unknown — probe timed out)"}")
+                // The car's own «Опц. содержимое → Навигация» gate (#269), read only.
+                appendLine("hud_navi_gate:")
+                HudDiagnostics.format(helperDiag.hud).forEach { appendLine(it) }
+                // The HUD master switch (#292) and the HUD type, read only.
+                appendLine(HudDiagnostics.switchLine(helperDiag.hudSwitch))
                 // How the daemon is reachable: a registered service name, or the Binder it
                 // broadcast to us on firmwares that refuse addService (#64/#148).
                 val registered = com.bydmate.app.data.vehicle.helperServiceBinder() != null
@@ -2361,6 +2425,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             appendLine("--- windows ---")
             // Which write channel this firmware ended up on (#79): percent fids or CTRL.
             appendLine("window channel: ${windowChannelStore.winner()}")
+            WindowDiagnostics.format(helperDiag.windows).forEach { appendLine(it) }
 
             appendLine("--- seats ---")
             SeatsDiagnostics.format(helperDiag.seats).forEach { appendLine(it) }
@@ -2404,6 +2469,12 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                         "chat=${chatId?.let { "…" + it.toString().takeLast(4) } ?: "(none)"}"
                 )
                 telegramReporter.diagnosticsLines().forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
+
+            appendLine("--- vehicle writes ---")
+            try {
+                RecordingDumpFormat.vehicleWriteLines(vehicleWriteLogDao.getLatest(VEHICLE_WRITES_IN_DUMP))
+                    .forEach { appendLine(it) }
             } catch (e: Exception) { appendLine("error: ${e.message}") }
 
             appendLine("--- fid push ---")
@@ -2803,7 +2874,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 _uiState.update { it.copy(tgBackupCode = newBindCode(), tgBackupBotName = botName) }
                 return null
             }
-            telegramBackupSink.findPrivateChat(token, code).getOrElse { return tgBackupError(it) }
+            telegramBackupSink.findLinkChat(token, code).getOrElse { return tgBackupError(it) }
                 ?: return appStrings.get(R.string.settings_tg_backup_code_not_received)
         }
         telegramBackupSink.sendMessage(token, chat.id, appStrings.get(R.string.settings_tg_backup_greeting))

@@ -89,20 +89,35 @@ class NavGuidanceHubTest {
         assertEquals(2, s.maneuverGaode)
     }
 
-    @Test fun `no-guidance streak deactivates after hysteresis`() {
+    @Test fun `guidance holds well past 10 s without an update`() {
         NavGuidanceHub.update(data(gaode = 2, dist = 250), NavGuidanceHub.Source.A11Y, nowMs = 1000)
-        NavGuidanceHub.markNoGuidance(nowMs = 2000)   // streak starts
         assertTrue(NavGuidanceHub.snapshot(nowMs = 2000).active)
-        NavGuidanceHub.markNoGuidance(nowMs = 2000 + NavGuidanceHub.NO_GUIDANCE_DEACTIVATE_MS)
-        assertFalse(NavGuidanceHub.snapshot(nowMs = 2000 + NavGuidanceHub.NO_GUIDANCE_DEACTIVATE_MS).active)
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 2000 + 10_000).active)
+        assertFalse(NavGuidanceHub.snapshot(nowMs = 1001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
     }
 
-    @Test fun `guidance update resets no-guidance streak`() {
+    @Test fun `each guidance update restarts the active timeout`() {
         NavGuidanceHub.update(data(gaode = 2), NavGuidanceHub.Source.A11Y, nowMs = 1000)
-        NavGuidanceHub.markNoGuidance(nowMs = 2000)
         NavGuidanceHub.update(data(dist = 100), NavGuidanceHub.Source.A11Y, nowMs = 3000)
-        NavGuidanceHub.markNoGuidance(nowMs = 4000)   // new streak, not a continuation
-        assertTrue(NavGuidanceHub.snapshot(nowMs = 4000 + 5000).active)
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 1001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
+        assertFalse(NavGuidanceHub.snapshot(nowMs = 3001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
+    }
+
+    @Test fun `keepAlive refreshes only the liveness of an active route`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 250, road = "ул. А", limit = 60), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        val before = NavGuidanceHub.snapshot(nowMs = 1000)
+        NavGuidanceHub.keepAlive(nowMs = 5000)
+        assertEquals(before.copy(lastUpdateMs = 5000), NavGuidanceHub.snapshot(nowMs = 5000))
+    }
+
+    @Test fun `keepAlive neither starts nor revives a route`() {
+        NavGuidanceHub.keepAlive(nowMs = 1000)
+        assertFalse(NavGuidanceHub.snapshot(nowMs = 1000).active)
+        assertEquals(0L, NavGuidanceHub.snapshot(nowMs = 1000).lastUpdateMs)
+        NavGuidanceHub.update(data(gaode = 2, dist = 250), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        // Stored as active, but older than the active timeout: expires as it would without the call.
+        NavGuidanceHub.keepAlive(nowMs = 2001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS)
+        assertFalse(NavGuidanceHub.snapshot(nowMs = 2001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
     }
 
     @Test fun `reset clears everything`() {
@@ -113,18 +128,20 @@ class NavGuidanceHubTest {
         assertEquals(0, s.maneuverGaode)
     }
 
-    @Test fun `single no-guidance signal deactivates via snapshot after deadline`() {
+    @Test fun `reading the snapshot alone never ends guidance before the active timeout`() {
         NavGuidanceHub.update(data(gaode = 2, dist = 500), NavGuidanceHub.Source.A11Y, nowMs = 1_000)
-        NavGuidanceHub.markNoGuidance(nowMs = 2_000)
-        assertTrue(NavGuidanceHub.snapshot(nowMs = 5_000).active)      // deadline not reached yet
-        assertFalse(NavGuidanceHub.snapshot(nowMs = 12_001).active)    // >=10 s, NO second event
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 5_000).active)
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 12_001).active)
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 1_000 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
     }
 
-    @Test fun `guidance update cancels pending no-guidance deadline`() {
-        NavGuidanceHub.update(data(gaode = 2, dist = 500), NavGuidanceHub.Source.A11Y, nowMs = 1_000)
-        NavGuidanceHub.markNoGuidance(nowMs = 2_000)
+    @Test fun `distance and road stay through a long gap between updates`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 500, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1_000)
         NavGuidanceHub.update(data(dist = 400), NavGuidanceHub.Source.A11Y, nowMs = 3_000)
-        assertTrue(NavGuidanceHub.snapshot(nowMs = 20_000).active)
+        val s = NavGuidanceHub.snapshot(nowMs = 60_000)
+        assertTrue(s.active)
+        assertEquals(400, s.distanceMeters)
+        assertEquals("ул. А", s.road)
     }
 
     @Test
@@ -174,12 +191,11 @@ class NavGuidanceHubTest {
     }
 
     @Test
-    fun `rich update within a11y priority still cancels no-guidance streak`() {
+    fun `rich update within a11y priority still restarts the active timeout`() {
         NavGuidanceHub.update(NavGuidance(maneuverGaode = 2), NavGuidanceHub.Source.A11Y, nowMs = 1000)
-        NavGuidanceHub.markNoGuidance(nowMs = 2000)
         NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(road = "ул. Б"), nowMs = 3000)
-        // Without the streak reset the 10s no-guidance deadline (2000+10000) would deactivate.
-        assertTrue(NavGuidanceHub.snapshot(nowMs = 12_500).active)
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 1001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
+        assertFalse(NavGuidanceHub.snapshot(nowMs = 3001 + NavGuidanceHub.ACTIVE_TIMEOUT_MS).active)
     }
 
     @Test
@@ -267,5 +283,142 @@ class NavGuidanceHubTest {
         val s = NavGuidanceHub.snapshot(nowMs = 1000 + 90_000)
         assertFalse(s.active)
         assertEquals("", s.cameraAlert)
+    }
+
+    // --- #294: a held arrow belongs to its next street ---
+
+    @Test fun `a read with another street and no maneuver drops the held arrow at once`() {
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            maneuverGaode = 2, distanceMeters = 300, road = "ул. А", maneuverPng = byteArrayOf(5)), nowMs = 1000)
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            distanceMeters = 800, road = "ул. Б"), nowMs = 2000)
+        val s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertEquals(0, s.maneuverGaode)
+        assertNull(s.maneuverPng)
+        assertEquals("", s.maneuverSource)
+        assertEquals("", s.maneuverRaw)
+        assertEquals("ул. Б", s.road)
+        assertEquals(800, s.distanceMeters)
+        assertTrue(s.active)
+    }
+
+    @Test fun `an a11y read with another street and no maneuver drops the held arrow too`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(data(dist = 800, road = "ул. Б"), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        assertEquals(0, NavGuidanceHub.snapshot(nowMs = 2000).maneuverGaode)
+    }
+
+    @Test fun `a read without a street keeps the held arrow (street plus distance cars, #198)`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(data(dist = 250), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(distanceMeters = 200), nowMs = 20_000)
+        val s = NavGuidanceHub.snapshot(nowMs = 20_000)
+        assertEquals(2, s.maneuverGaode)
+        assertEquals(200, s.distanceMeters)
+    }
+
+    @Test fun `a read with the same street keeps the held arrow`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(data(dist = 250, road = "ул. А "), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        assertEquals(2, NavGuidanceHub.snapshot(nowMs = 2000).maneuverGaode)
+    }
+
+    @Test fun `a street arriving while none was known keeps the held arrow`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(data(dist = 250, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        assertEquals(2, NavGuidanceHub.snapshot(nowMs = 2000).maneuverGaode)
+    }
+
+    @Test fun `a read with another street and its own maneuver replaces the arrow`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(data(gaode = 1, dist = 900, road = "ул. Б"), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        val s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertEquals(1, s.maneuverGaode)
+        assertEquals("ул. Б", s.road)
+    }
+
+    @Test fun `a notification ignored behind a fresh a11y read drops nothing`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            distanceMeters = 800, road = "ул. Б"), nowMs = 2000)
+        val s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertEquals(2, s.maneuverGaode)
+        assertEquals("ул. А", s.road)
+    }
+
+    // --- #294: where the held maneuver came from ---
+
+    @Test fun `the held maneuver keeps its source and raw input`() {
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, road = "ул. А", maneuverRaw = "desc:Поверните направо"),
+            NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(data(dist = 200), NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        var s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertEquals("a11y", s.maneuverSource)
+        assertEquals("desc:Поверните направо", s.maneuverRaw)
+
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            maneuverGaode = 1, maneuverRaw = "res:ic_left"), nowMs = 20_000)
+        s = NavGuidanceHub.snapshot(nowMs = 20_000)
+        assertEquals("notification", s.maneuverSource)
+        assertEquals("res:ic_left", s.maneuverRaw)
+    }
+
+    @Test fun `a matched raw text keeps the table key, never the street after it`() {
+        val ru = NavManeuverRaw.text("desc", "Поверните направо на Тверскую")
+        assertEquals("desc:key=поверните направо", ru)
+        assertFalse(ru, "Тверскую" in ru)
+        val en = NavManeuverRaw.text("text", "Turn right onto Main St")
+        assertEquals("text:key=right", en)
+        assertFalse(en, "Main" in en)
+        assertEquals("text:key=sharp+right", NavManeuverRaw.text("text", "Sharp right onto Main St"))
+        assertEquals("desc:key=2-й съезд", NavManeuverRaw.text("desc", "2-й съезд на Ленина"))
+        assertEquals("desc:key=>>>", NavManeuverRaw.text("desc", ">>>"))
+    }
+
+    @Test fun `an unmatched raw text keeps only maneuver vocabulary, every other word is a star`() {
+        assertEquals("text:* * * len=18", NavManeuverRaw.text("text", "Езжайте к Тверской"))
+        val ru = NavManeuverRaw.text("text", "Съезжайте на Тверскую")
+        assertEquals("text:съезжайте на * len=21", ru)
+        assertFalse(ru, "Тверск" in ru)
+        val en = NavManeuverRaw.text("text", "Turn onto Main St.")
+        assertEquals("text:turn * * * len=18", en)
+        assertFalse(en, "Main" in en)
+        val long = NavManeuverRaw.text("text", "один два три четыре пять шесть семь восемь девять десять")
+        assertTrue(long, long.length <= NavManeuverRaw.MAX_CHARS && long.endsWith(" len=56"))
+    }
+
+    @Test fun `an icon raw keeps its resource name`() {
+        assertEquals("res:notification_right_sdl", NavManeuverRaw.name("res", "notification_right_sdl"))
+    }
+
+    @Test fun `raw values are capped`() {
+        assertEquals("desc:null", NavManeuverRaw.text("desc", null))
+        val long = NavManeuverRaw.name("res", "x".repeat(100))
+        assertEquals(NavManeuverRaw.MAX_CHARS, long.length)
+        assertTrue(long.startsWith("res:xxx"))
+        assertEquals("icon:", NavManeuverRaw.name("icon", ""))
+    }
+
+    @Test fun `a current-street fallback without a maneuver keeps the held arrow`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(NavGuidance(distanceMeters = 250, road = "ул. Б", roadIsNextStreet = false),
+            NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        var s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertEquals(2, s.maneuverGaode)
+        assertEquals("ул. Б", s.road)   // what is displayed does not change
+        // The genuine next street comes back: it is the arrow's own street, not a change.
+        NavGuidanceHub.update(data(dist = 200, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 3000)
+        s = NavGuidanceHub.snapshot(nowMs = 3000)
+        assertEquals(2, s.maneuverGaode)
+        assertEquals("ул. А", s.road)
+    }
+
+    @Test fun `a new maneuver read with a fallback street forgets the old next street`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 300, road = "ул. А"), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 1, distanceMeters = 500, road = "ул. Б", roadIsNextStreet = false),
+            NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        // Its next street was unknown: the first genuine one belongs to it, nothing is dropped.
+        NavGuidanceHub.update(data(dist = 400, road = "ул. Б"), NavGuidanceHub.Source.A11Y, nowMs = 3000)
+        assertEquals(1, NavGuidanceHub.snapshot(nowMs = 3000).maneuverGaode)
     }
 }

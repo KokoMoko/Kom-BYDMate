@@ -4,6 +4,7 @@ import android.graphics.Rect
 import android.os.DeadObjectException
 import android.os.IBinder
 import android.os.Parcel
+import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
 import java.io.ByteArrayOutputStream
@@ -61,6 +62,25 @@ data class BatchReadItem(val tx: Int, val dev: Int, val fid: Int)
 data class HudNaviReply(val outcome: Int, val sdkReturn: Int) {
     /** The SDK took the status: called, and answered a non-negative code. */
     val accepted: Boolean get() = outcome == HelperBinderProtocol.HUD_NAVI_CALLED && sdkReturn >= 0
+}
+
+/** One TX_HUD_SDK call: the instrument SDK method way 3 makes after its raw writes, as OpenBYD does. */
+sealed class HudSdkCall(val method: Int, val sdkName: String) {
+    data class Guidance(val turnKind: Int, val distanceM: Int) :
+        HudSdkCall(HelperBinderProtocol.HUD_SDK_GUIDANCE, "sendSimpleGuidanceInfo")
+    data class PathName(val name: String) : HudSdkCall(HelperBinderProtocol.HUD_SDK_PATH_NAME, "sendNextPathName")
+    data class RestRoute(val hours: Int, val minutes: Int, val mileageM: Long) :
+        HudSdkCall(HelperBinderProtocol.HUD_SDK_REST_ROUTE, "sendRestRouteInfo")
+
+    /** The request after the method selector, in the order the daemon reads it. */
+    fun writeTo(p: Parcel) {
+        p.writeInt(method)
+        when (this) {
+            is Guidance -> { p.writeInt(turnKind); p.writeInt(distanceM) }
+            is PathName -> p.writeString(name)
+            is RestRoute -> { p.writeInt(hours); p.writeInt(minutes); p.writeLong(mileageM) }
+        }
+    }
 }
 
 /**
@@ -567,6 +587,10 @@ interface HelperClient {
      */
     suspend fun hudNaviStatus(status: Int): HudNaviReply?
 
+    /** Way 3's instrument SDK [call] inside the daemon (TX_HUD_SDK); null when the daemon is
+     *  unreachable or too old to know the transaction. */
+    suspend fun hudSdk(call: HudSdkCall): HudNaviReply?
+
     /** Raw autoservice setBuffer status (transact 14); null when the daemon is unreachable or too old. */
     suspend fun writeBufferStatus(dev: Int, fid: Int, bytes: ByteArray): Int?
 }
@@ -579,6 +603,8 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     @Volatile private var lastSource: String? = null
     /** The daemon binder the trace last reported, so it records a change, not every lookup. */
     @Volatile private var tracedBinder: IBinder? = null
+    /** Which write lines reach logcat: every sparse write, a streaming fid once a minute. */
+    private val writeLogGate = WriteLogGate()
 
     /** Test seam: invoked right before every attempt to acquire [mutex] in [transactParsed],
      *  i.e. right before the write path takes the lock — lets a test observe "about to enter the
@@ -627,7 +653,12 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         // 0 = accepted no-op (fid ineffective on this trim), <0 = error, null =
         // daemon unreachable. INFO so a "green" automation that physically did
         // nothing (no-op) is distinguishable from one that actually moved the actuator.
-        Log.i(TAG, "write dev=$dev fid=$fid value=$value status=$status accepted=${status != null && writeAccepted(status)}")
+        // Streaming writers (music card progress, HUD guidance) get a line a minute (WriteLogGate).
+        val accepted = status != null && writeAccepted(status)
+        writeLogGate.onWrite("$dev:$fid", status, accepted, SystemClock.elapsedRealtime())?.let { quiet ->
+            Log.i(TAG, "write dev=$dev fid=$fid value=$value status=$status accepted=$accepted" +
+                if (quiet > 0) " (+$quiet unlogged)" else "")
+        }
         return status
     }
 
@@ -1181,13 +1212,22 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         return reply
     }
 
+    // No line per call: way 3 counts the answers and logs them once per route.
+    override suspend fun hudSdk(call: HudSdkCall): HudNaviReply? =
+        transact(HelperBinderProtocol.TX_HUD_SDK) { call.writeTo(it) }
+            ?.let { (outcome, sdkReturn) -> HudNaviReply(outcome, sdkReturn) }
+
     override suspend fun writeBufferStatus(dev: Int, fid: Int, bytes: ByteArray): Int? {
         val status = transact(HelperBinderProtocol.TX_WRITE_BUFFER) {
             it.writeInt(dev); it.writeInt(fid); it.writeByteArray(bytes)
         }?.first
         // Same raw autoservice status convention as writeStatus, forwarded untouched; null also
         // covers a daemon too old to know TX_WRITE_BUFFER (transact returns false).
-        Log.i(TAG, "writeBuffer dev=$dev fid=$fid bytes=${bytes.size} status=$status accepted=${status != null && writeAccepted(status)}")
+        val accepted = status != null && writeAccepted(status)
+        writeLogGate.onWrite("buf:$dev:$fid", status, accepted, SystemClock.elapsedRealtime())?.let { quiet ->
+            Log.i(TAG, "writeBuffer dev=$dev fid=$fid bytes=${bytes.size} status=$status accepted=$accepted" +
+                if (quiet > 0) " (+$quiet unlogged)" else "")
+        }
         return status
     }
 

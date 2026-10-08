@@ -234,6 +234,14 @@ utterance	expected	category	danger
 пауза	UNRECOGNIZED	media	
 следующий трек	UNRECOGNIZED	media	
 включи музыку	UNRECOGNIZED	media	
+включи музыку на спотифай	UNRECOGNIZED	media	
+включи яндекс музыку	MUSIC	media	
+запусти яндекс мьюзик	MUSIC	media	
+открой яндекс музыка	MUSIC	media	
+поставь яндекс музыку	MUSIC	media	
+яндекс музыку	MUSIC	media	
+яндекс музыка	MUSIC	media	
+яндекс мьюзик	MUSIC	media	
 включи подсветку	氛围灯打开	misc	
 выключи амбиент	氛围灯关闭	misc	
 включи свет в салоне	打开车内灯	misc	
@@ -648,3 +656,18 @@ utterance	expected	category	danger
 закрой окна и какой заряд	UNRECOGNIZED	questions	
 температура на двадцать два	设置温度22	climate	
 поставь температуру на двадцать два	设置温度22	climate	
+включи hud	打开抬头显示	hud	
+выключи HUD	关闭抬头显示	hud	
+включи худ	打开抬头显示	hud	
+выключи худ	关闭抬头显示	hud	
+отключи худ	关闭抬头显示	hud	
+включи проекцию на стекле	打开抬头显示	hud	
+выключи проекцию на стекле	关闭抬头显示	hud	
+включи проекцию на лобовом	打开抬头显示	hud	
+выключи проекцию на лобовом	关闭抬头显示	hud	
+выключи проекцию на лобовом стекле	关闭抬头显示	hud	
+выключи худ и выключи подогрев руля	关闭抬头显示+关闭方向盘加热	hud	
+выключи проекцию	UNRECOGNIZED	hud	
+включи проекцию	UNRECOGNIZED	hud	
+выключи проекцию на приборке	UNRECOGNIZED	hud	
+худ	UNRECOGNIZED	hud	

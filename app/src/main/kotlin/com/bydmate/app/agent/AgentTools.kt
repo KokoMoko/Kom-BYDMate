@@ -14,6 +14,8 @@ import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.ConfirmOverlayManager
 import com.bydmate.app.data.automation.DispatchResult
 import com.bydmate.app.data.automation.PlaceGeometry
+import com.bydmate.app.data.automation.PowerStateRuleMigration
+import com.bydmate.app.data.automation.RouteNavigatorUris
 import com.bydmate.app.data.automation.RuleDraftValidator
 import com.bydmate.app.data.automation.RuleInserts
 import com.bydmate.app.data.automation.TriggerValidationError
@@ -271,6 +273,11 @@ class AgentTools @Inject constructor(
         foregroundPackagesSince(sinceMs).any { it in NavPackages.YANDEX_MAPS }
     }
 
+    /** The same question for a route pinned to 2GIS or Waze (#305): that package, not the Navigator. */
+    internal var pinnedForegroundCheck: (Long, String) -> Boolean = { since, pkg ->
+        pkg in foregroundPackagesSince(since)
+    }
+
     /** Test seam - poll interval for the navigate foreground verification. */
     internal var naviVerifyIntervalMs = 500L
 
@@ -285,9 +292,20 @@ class AgentTools @Inject constructor(
         // The route went to whichever app the payload named or the settings default resolved
         // to (#200), so that is the app whose arrival proves it: waiting for the Navigator on
         // a Maps route (explicit app="maps" or Maps chosen in settings) fails a working route.
+        // The same goes for a route pinned to 2GIS or Waze (#305).
         val maps = actionDispatcher.willOpenMaps(payload)
-        val surfaced = if (maps) mapsForegroundCheck else naviForegroundCheck
-        val appName = if (maps) "Яндекс Карты" else "Навигатор"
+        val pinned = if (maps) null else actionDispatcher.willOpenPinned(payload)
+        val surfaced: (Long) -> Boolean = when {
+            maps -> mapsForegroundCheck
+            pinned != null -> { since -> pinnedForegroundCheck(since, pinned) }
+            else -> naviForegroundCheck
+        }
+        val appName = when {
+            maps -> "Яндекс Карты"
+            pinned == RouteNavigatorUris.DGIS_PACKAGE -> "2ГИС"
+            pinned == RouteNavigatorUris.WAZE_PACKAGE -> "Waze"
+            else -> "Навигатор"
+        }
         val result = actionDispatcher.dispatch(
             ActionDef(command = "", displayName = displayName, kind = "navigate",
                 payload = payload.toString()), data = null)
@@ -807,7 +825,7 @@ class AgentTools @Inject constructor(
                                     .put("enum", JSONArray(listOf(
                                         "param", "delay", "media_volume", "notification",
                                         "call", "navigate", "url",
-                                        "yandex_music", "sentry", "hotspot", "app_launch",
+                                        "yandex_music", "sentry", "hotspot", "app_launch", "app_close", "media_key",
                                         "cluster_projection", "speak", "agent_query",
                                         "split_screen", "split_screen_close",
                                         "split_screen_toggle", "youtube", "go_home")))
@@ -849,7 +867,12 @@ class AgentTools @Inject constructor(
                                 .put("on", JSONObject().put("type", "boolean")
                                     .put("description", "Для kind=sentry: включить/выключить охрану. Для kind=cluster_projection: true = вывести проекцию на приборку, false = убрать. Для kind=hotspot: включить/выключить точку доступа Wi-Fi"))
                                 .put("app", JSONObject().put("type", "string")
-                                    .put("description", "Только для kind=app_launch: название приложения, как на домашнем экране"))
+                                    .put("description", "Для kind=app_launch и kind=app_close: название приложения, как на домашнем экране. " +
+                                        "app_close закрывает приложение полностью"))
+                                .put("key", JSONObject().put("type", "string")
+                                    .put("enum", JSONArray(listOf("play", "pause")))
+                                    .put("description", "Только для kind=media_key: play - играть, pause - пауза. " +
+                                        "Плеер должен быть уже запущен"))
                                 .put("narrow_app", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=split_screen: приложение в узкой панели (1/3), название как на домашнем экране"))
                                 .put("wide_app", JSONObject().put("type", "string")
@@ -1036,7 +1059,6 @@ class AgentTools @Inject constructor(
         // The old dev=1006 fid (d.driveMode) stays 3/NORMAL for sand/mud/mountain/smart (live L3
         // 2026-09-27); driveModeName reads the real target mode and falls back to it on failure.
         putIf("drive_mode", driveModeName(d.driveMode))
-        putIf("power_state", when (d.powerState) { 0 -> "OFF"; 1 -> "ON"; 2 -> "DRIVE"; else -> null })
         putIf("work_mode", when (d.workMode) { 0 -> "STOP"; 1 -> "EV"; 2 -> "FORCED_EV"; 3 -> "HEV"; else -> null })
         putIf("light_low_beam_on", d.lightLow?.let { it == 1 })
         putIf("light_high_beam_on", d.lightHigh?.let { it == 1 })
@@ -2567,6 +2589,7 @@ class AgentTools @Inject constructor(
         return when (kind) {
             "param" -> {
                 val paramArg = t.optString("param").trim()
+                if (paramArg.equals(PowerStateRuleMigration.PARAM, ignoreCase = true)) return powerStateTrigger(t)
                 val option = TRIGGER_PARAMS.firstOrNull { it.param.equals(paramArg, ignoreCase = true) }
                     ?: return Built.Error("неизвестный параметр триггера: $paramArg")
                 val operator = t.optString("operator").trim()
@@ -2677,6 +2700,26 @@ class AgentTools @Inject constructor(
         }
     }
 
+    /** The removed PowerState condition, converted the way a saved rule is: ON and DRIVE are the
+     *  app start, anything else could fire only with the car off and is refused. */
+    private fun powerStateTrigger(t: JSONObject): Built<TriggerDef> {
+        val value = when (val raw = t.optString("value").trim().uppercase()) {
+            "ON" -> "1"
+            "DRIVE" -> "2"
+            "OFF" -> "0"
+            else -> raw
+        }
+        val legacy = TriggerDef(
+            param = PowerStateRuleMigration.PARAM, chineseName = "", operator = t.optString("operator").trim(),
+            value = value, displayName = "",
+        )
+        val converted = PowerStateRuleMigration.convert("AND", listOf(legacy), AGENT_POWER_LABELS, driveIsGear = false)
+            ?: return Built.Error(
+                "условия PowerState нет: на выключенной машине правило не сработает. " +
+                    "При включении машины: kind=service_start; при движении: param=Gear, value=4")
+        return Built.Value(converted.single())
+    }
+
     private suspend fun buildAction(a: JSONObject): Built<ActionDef> {
         val kind = a.optString("kind")
         return when (kind) {
@@ -2762,18 +2805,25 @@ class AgentTools @Inject constructor(
                     displayName = if (on) "Включить точку доступа" else "Выключить точку доступа",
                     kind = "hotspot", payload = if (on) "1" else "0"))
             }
-            "app_launch" -> {
+            "app_launch", "app_close" -> {
                 val name = a.optString("app").trim()
                 if (name.isEmpty()) return Built.Error("не указано приложение (поле app)")
                 val (label, pkg) = when (val r = resolveLauncherApp(name)) {
                     is Built.Error -> return r
                     is Built.Value -> r.value
                 }
-                Built.Value(ActionDef(
+                val payload = JSONObject().put("packageName", pkg).put("appLabel", label)
+                Built.Value(if (kind == "app_launch") ActionDef(
                     command = "", displayName = "Запуск $label", kind = "app_launch",
-                    payload = JSONObject().put("packageName", pkg).put("appLabel", label)
-                        .put("minimize", false).toString(),
-                ))
+                    payload = payload.put("minimize", false).toString(),
+                ) else ActionDef(command = "", displayName = "Закрыть $label", kind = "app_close",
+                    payload = payload.toString()))
+            }
+            "media_key" -> {
+                val key = a.optString("key").trim()
+                if (ActionDispatcher.mediaKeyCode(key) == null) return Built.Error("для media_key укажи key: play или pause")
+                Built.Value(ActionDef(command = "", displayName = if (key == "play") "Медиа: играть" else "Медиа: пауза",
+                    kind = "media_key", payload = key))
             }
             "cluster_projection" -> {
                 val on = requireBoolArg(a, "on")
@@ -2857,6 +2907,8 @@ class AgentTools @Inject constructor(
                 "некорректное состояние охранного режима (действие ${err.index})"
             is ActionValidationError.HotspotInvalid ->
                 "некорректное состояние точки доступа (действие ${err.index})"
+            is ActionValidationError.MediaKeyInvalid ->
+                "для media_key нужен key: play или pause (действие ${err.index})"
             is ActionValidationError.SpeakTextEmpty ->
                 "не задан текст для озвучки (действие ${err.index})"
             is ActionValidationError.AgentQueryPromptEmpty ->
@@ -2929,6 +2981,8 @@ class AgentTools @Inject constructor(
         private const val SEARCH_ERROR = """{"error":"поиск недоступен"}"""
         private const val MAX_AUTOMATIONS = 50
         private const val MAX_DELAY_MS = 60_000
+        // The display names buildTrigger gives a service_start and a Gear == 4 trigger.
+        private val AGENT_POWER_LABELS = PowerStateRuleMigration.Labels("Запуск приложения", "Gear == D")
         private const val MAX_PLACES = 50
         private const val BAD_ARGS_ERROR = """{"error":"некорректные аргументы"}"""
         private const val CALL_CONTACT_FAILED = """{"error":"не удалось позвонить"}"""

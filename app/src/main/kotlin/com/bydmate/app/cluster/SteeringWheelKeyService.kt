@@ -46,6 +46,7 @@ private val TEXT_KEYS_OUTSIDE_RANGES = setOf(81, 216, 217)
  * no Accessibility UI on DiLink) AND the settings switch is on, so it does nothing for users who
  * never opt in.
  */
+@Suppress("TooManyFunctions") // the service callbacks, key handling and the Navigator window lookups
 class SteeringWheelKeyService : AccessibilityService() {
 
     private var cachedEntryPoint: ClusterEntryPoint? = null
@@ -91,6 +92,8 @@ class SteeringWheelKeyService : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val isDown = event.action == KeyEvent.ACTION_DOWN
+        val firstDown = isDown && event.repeatCount == 0
+        if (firstDown) keyCounters.onPress(event.keyCode)
         learnVerdict(event, isDown)?.let { return it }
         // Voice check: runs after learn-mode, before star decision. Returns true only when voice is
         // enabled and the configured voice key is pressed (isDown). Non-voice keys fall through.
@@ -127,17 +130,6 @@ class SteeringWheelKeyService : AccessibilityService() {
         val trigger = prefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE)
         return when (starDecision(event.keyCode, isDown, enabled, trigger)) {
             StarDecision.CONSUME_AND_TOGGLE -> {
-                // Kom-BYDMate: լիցքավորման ժամանակ վարորդի էկրանը զբաղված է լիցքավորման էկրանով,
-                // և Navigator-ը «կիսատ» էր մնում մեծ էկրանին՝ չենք ուղարկում, միայն հաղորդագրություն
-                val d = com.bydmate.app.service.TrackingService.lastData.value
-                val charging = d != null && (d.chargeGunState == 2 || d.bmsState == 1)
-                if (charging && !ClusterProjectionManager.isProjectionActive()) {
-                    android.widget.Toast.makeText(
-                        applicationContext, getString(com.bydmate.app.R.string.kom_cluster_charging_blocked),
-                        android.widget.Toast.LENGTH_LONG,
-                    ).show()
-                    return traced(event, "cluster_toggle_blocked_charging")
-                }
                 val ep = entryPoint()
                 ClusterProjectionManager.toggle(applicationContext, ep.helperClient(), ep.helperBootstrap())
                 traced(event, "cluster_toggle")
@@ -149,13 +141,20 @@ class SteeringWheelKeyService : AccessibilityService() {
                 steeringKeyDecision(event.keyCode, isDown, TrackingService.steeringKeyAssigned(event.keyCode))
             ) {
                 SteeringKeyDecision.FIRE -> {
-                    TrackingService.fireSteeringKey(event.keyCode) { matched ->
-                        Log.d(TAG, "steering key ${event.keyCode}: $matched rule(s)")
+                    if (firstDown) keyCounters.onMatched()
+                    // The rules it runs trace their own lines, linked to this press by by=#id.
+                    val keyId = traceId(event, "automation")
+                    TrackingService.fireSteeringKey(event.keyCode, keyId) { matched ->
+                        Log.i(TAG, "steering key ${event.keyCode}: $matched rule(s)")
                     }
-                    traced(event, "automation")
+                    true
                 }
                 SteeringKeyDecision.CONSUME -> true
-                SteeringKeyDecision.PASS_THROUGH -> traced(event, "pass", consumed = false)
+                // Counted, not traced: the volume keys alone wrote hundreds of lines a day.
+                SteeringKeyDecision.PASS_THROUGH -> {
+                    if (firstDown) keyCounters.onPassed()
+                    false
+                }
             }
         }
     }
@@ -196,14 +195,19 @@ class SteeringWheelKeyService : AccessibilityService() {
 
     /** Trace of a key press and what it did, once per press: only the first DOWN is written, so
      *  UP edges and auto-repeats (a held key, the volume knob) stay out of the journal, and keys that
-     *  type text never are. Returns
-     *  [consumed], the filter's verdict. */
-    private fun traced(event: KeyEvent, action: String, consumed: Boolean = true): Boolean {
+     *  type text never are. Returns true: every traced key is consumed. */
+    private fun traced(event: KeyEvent, action: String): Boolean {
+        traceId(event, action)
+        return true
+    }
+
+    /** [traced] that returns the event id (0 when nothing was written), for the rules a key fires. */
+    private fun traceId(event: KeyEvent, action: String): Long =
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && isTraceableKey(event.keyCode)) {
             Trace.event(TraceArea.USER, "key", "code" to event.keyCode, "action" to action)
+        } else {
+            0L
         }
-        return consumed
-    }
 
     private fun entryPoint(): ClusterEntryPoint =
         cachedEntryPoint ?: EntryPointAccessors
@@ -219,12 +223,7 @@ class SteeringWheelKeyService : AccessibilityService() {
             if (active.packageName?.toString() in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES) return active
             @Suppress("DEPRECATION") runCatching { active.recycle() }
         }
-        val windowList = runCatching {
-            if (android.os.Build.VERSION.SDK_INT >= 30) {
-                val byDisplay = windowsOnAllDisplays
-                (0 until byDisplay.size()).flatMap { byDisplay.valueAt(it) }
-            } else windows
-        }.getOrNull() ?: return null
+        val windowList = allWindows() ?: return null
         for (window in windowList) {
             val root = runCatching { window.root }.getOrNull() ?: continue
             if (root.packageName?.toString() in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES) return root
@@ -232,6 +231,26 @@ class SteeringWheelKeyService : AccessibilityService() {
         }
         return null
     }
+
+    /** Roots of every window on all displays that belongs to the Navigator, for the no-guidance
+     *  log; null when the window list cannot be read. Caller must recycle every returned node. */
+    fun navigatorWindowRoots(): List<android.view.accessibility.AccessibilityNodeInfo>? {
+        val windowList = allWindows() ?: return null
+        return windowList.mapNotNull { window ->
+            val root = runCatching { window.root }.getOrNull() ?: return@mapNotNull null
+            val pkg = runCatching { root.packageName?.toString() }.getOrNull()
+            if (pkg in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES) return@mapNotNull root
+            @Suppress("DEPRECATION") runCatching { root.recycle() }
+            null
+        }
+    }
+
+    private fun allWindows(): List<android.view.accessibility.AccessibilityWindowInfo>? = runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            val byDisplay = windowsOnAllDisplays
+            (0 until byDisplay.size()).flatMap { byDisplay.valueAt(it) }
+        } else windows
+    }.getOrNull()
 
     // Single volatile read when the HUD feature is off - see NavA11yFeed.enabled.
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -256,16 +275,20 @@ class SteeringWheelKeyService : AccessibilityService() {
 
     override fun onInterrupt() { /* no-op */ }
 
+    // The framework letting go of the service is the other half of a11y-connected: without it a
+    // dump showing a11y_connected=false next to an enabled setting has no moment to point at (#262).
     override fun onUnbind(intent: Intent?): Boolean {
         instance = null
         isConnected = false
-        Log.d(TAG, "unbound; star key filter inactive")
+        Log.i(TAG, "unbound; star key filter inactive")
+        Trace.event(TraceArea.APP, "a11y-unbound")
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         instance = null
         isConnected = false
+        Trace.event(TraceArea.APP, "a11y-destroyed")
         super.onDestroy()
     }
 
@@ -302,5 +325,8 @@ class SteeringWheelKeyService : AccessibilityService() {
 
         /** Last captured key while learning; null = nothing captured yet. */
         val capturedKey = MutableStateFlow<CaptureResult?>(null)
+
+        /** Process-wide key counters, for the steering key dump section and the end snapshot. */
+        val keyCounters = KeyCounters()
     }
 }

@@ -36,6 +36,7 @@ docs/research/
 docs/superpowers/
 docs/native-data-stack/
 docs/README.md
+docs/DECISIONS.md
 scripts/native-stack/
 screen/
 .superpowers/
@@ -58,3 +59,10 @@ docs/superpowers/**/handoff-*
 .kotlin/
 tools/icon-preview.png
 tools/speedo-preview.png
+
+# Build output of the :bydauto-stubs module (rebuilt by Gradle, was committed by mistake).
+/bydauto-stubs/build
+
+# Owner's private notes, kept out of the public repo.
+PHILOSOPHY.md
+CONTEXT.md

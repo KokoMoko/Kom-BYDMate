@@ -69,15 +69,22 @@ class NaviNotificationLane(
         runCatching { legacyStep.run() }
     }
 
-    /** Removal flow, binder thread: debounced deactivate check enqueued first,
-     *  then the synchronous legacy clear. */
-    fun onRemoved(legacyClear: Runnable) {
+    /** Removal flow, binder thread: debounced deactivate check enqueued first, then the
+     *  synchronous legacy clear, then the field [trace] (if any) on the lane, so its line
+     *  keeps callback order with the post lines. */
+    fun onRemoved(legacyClear: Runnable, trace: Runnable? = null) {
         val now = nowMs()
         if (now - removePostedMs >= REMOVE_DEBOUNCE_MS) {
             removePostedMs = now
             scheduleDeactivateCheck()
         }
         runCatching { legacyClear.run() }
+        if (trace == null) return
+        try {
+            executor.execute(Runnable { runCatching { trace.run() } })
+        } catch (_: RejectedExecutionException) {
+            // shutting down: the line is lost, nothing else depends on it
+        }
     }
 
     /** A guidance post reached the hub - cancel the pending removal grace (donor). */

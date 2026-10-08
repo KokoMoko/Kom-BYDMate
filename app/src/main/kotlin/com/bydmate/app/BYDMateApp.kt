@@ -20,6 +20,7 @@ import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.decideLanguage
 import com.bydmate.app.data.automation.DriveModeRuleMigration
+import com.bydmate.app.data.automation.PowerStateRuleMigration
 import com.bydmate.app.data.automation.TrunkRuleMigration
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.remote.InsightsManager
@@ -56,6 +57,7 @@ class BYDMateApp : Application(), Configuration.Provider {
     @Inject lateinit var splitOverlayController: com.bydmate.app.split.SplitOverlayController
     @Inject lateinit var driveModeRuleMigration: DriveModeRuleMigration
     @Inject lateinit var trunkRuleMigration: TrunkRuleMigration
+    @Inject lateinit var powerStateRuleMigration: PowerStateRuleMigration
     @Inject lateinit var traceJournal: TraceJournal
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -112,6 +114,8 @@ class BYDMateApp : Application(), Configuration.Provider {
             driveModeRuleMigration.runOnce()
             // One-shot: revive Trunk rules saved against the old "0" = closed code.
             trunkRuleMigration.runOnce()
+            // One-shot: move rules off the removed PowerState condition.
+            powerStateRuleMigration.runOnce()
             // One-time cleanup of existing duplicates from v2.0.0
             historyImporter.cleanupDuplicates()
             // Only sync if setup is completed (prevents duplicates during first wizard run)
@@ -129,24 +133,6 @@ class BYDMateApp : Application(), Configuration.Provider {
         registerActivityLifecycleCallbacks(WidgetLifecycleCallbacks(this, splitOverlayController))
         // Start split-screen overlay observers (mirrors WidgetController init pattern).
         splitOverlayController.start(appScope)
-        // Kom-BYDMate: մեքենան միացնելիս՝ Panel (Navigator) և Yandex Music (առանց նվագարկման)
-        com.bydmate.app.ui.dashboard.KomAutostart.start(this, appScope)
-        // Kom-BYDMate: split-ում ոչ ակտիվ պատուհանն էլ է հպում ստանում (տես KomSplitFocusShield)
-        com.bydmate.app.split.KomSplitFocusShield.start(this, appScope)
-        // Kom-BYDMate: արագության սահմանափակում OSM-ից՝ երբ Navigator-ը չի երևում
-        com.bydmate.app.navdata.KomOsmSpeedLimit.start(appScope)
-        // Kom-BYDMate: Navigator-ի սահմանափակումը՝ 2 վրկ-ը մեկ (նաև վարորդի էկրանից)
-        com.bydmate.app.navdata.KomNavLimit.start(appScope)
-        // Kom-BYDMate: Navigator-ի մանևրները HUD-ում և վարորդի էկրանին՝ CAN դաշտերով
-        com.bydmate.app.hud.KomCanGuidance.start(this, appScope)
-        // Kom-BYDMate: Yandex Music-ի երգը վարորդի վահանակի Music քարտում
-        com.bydmate.app.hud.KomCanMusic.start(this, appScope)
-        // Kom-BYDMate: քարտը թերթելուց հետո Navigator-ը վերադառնում է վարորդի էկրան
-        com.bydmate.app.cluster.KomClusterReturn.start(this, appScope)
-        // Kom-BYDMate: միջին արագություն, բարձրություն և արագության գերազանցման ձայն
-        com.bydmate.app.ui.dashboard.KomClusterExtras.start(this, appScope)
-        com.bydmate.app.ui.dashboard.KomSpeedAlert.start(this, appScope)
-        com.bydmate.app.ui.dashboard.KomGpsSignal.start(this)
     }
 
     /**

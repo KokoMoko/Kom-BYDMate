@@ -11,6 +11,7 @@ import com.bydmate.app.camera.blindSpotClusterDisplay
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.data.autoservice.AdbRestoreState
 import com.bydmate.app.data.autoservice.AdbVerdict
+import com.bydmate.app.data.autoservice.CloudOverWifiState
 import com.bydmate.app.data.backup.AutoBackupPeriod
 import com.bydmate.app.data.backup.BackupPart
 import com.bydmate.app.data.charging.ChargeConnector
@@ -33,6 +34,7 @@ import com.bydmate.app.ui.widget.LeftTapMode
 import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.ui.widget.WidgetPreferences
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
@@ -52,6 +54,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -458,13 +461,6 @@ private fun BatterySection(
             SettingHint(stringResource(R.string.kom_rated_range_desc))
             SettingDivider()
             SettingChipRow(
-                title = stringResource(R.string.settings_app_currency_label),
-                options = SettingsRepository.CURRENCIES.map { it.code },
-                selectedIndex = SettingsRepository.CURRENCIES.indexOfFirst { it.code == state.currency }.coerceAtLeast(0),
-                onSelect = { idx -> viewModel.saveCurrency(SettingsRepository.CURRENCIES[idx].code) },
-            )
-            SettingDivider()
-            SettingChipRow(
                 title = stringResource(R.string.settings_charge_connector_label),
                 description = stringResource(R.string.settings_charge_connector_desc),
                 options = ChargeConnector.entries.map { it.label },
@@ -831,6 +827,8 @@ private fun WidgetSection() {
     )
     val hideOnYoutube by prefs.hideOnYoutubeFlow()
         .collectAsStateWithLifecycle(initialValue = prefs.isHideOnYoutube())
+    val homeOnly by prefs.homeOnlyFlow()
+        .collectAsStateWithLifecycle(initialValue = prefs.isHomeOnly())
     val hideInApps by prefs.hideInAppsFlow()
         .collectAsStateWithLifecycle(initialValue = prefs.getHideInApps())
     var showLeftTapPicker by remember { mutableStateOf(false) }
@@ -876,6 +874,13 @@ private fun WidgetSection() {
                 description = stringResource(R.string.settings_widget_hide_youtube_description),
                 checked = hideOnYoutube,
                 onCheckedChange = { prefs.setHideOnYoutube(it) },
+            )
+            SettingToggleRow(
+                title = stringResource(R.string.settings_widget_home_only_label),
+                traceId = "widget_home_only",
+                description = stringResource(R.string.settings_widget_home_only_description),
+                checked = homeOnly,
+                onCheckedChange = { prefs.setHomeOnly(it) },
             )
             SettingValueRow(
                 title = stringResource(R.string.settings_widget_hide_apps_label),
@@ -1334,51 +1339,65 @@ private fun DisplaySection() {
         },
     ) {
         if (hudEnabled) {
-            SettingToggleRow(
-                title = stringResource(R.string.settings_hud_speed_sign_title),
-                traceId = "hud_speed_sign",
-                description = stringResource(R.string.settings_hud_speed_sign_desc),
-                checked = hudSpeedSign,
-                onCheckedChange = {
-                    hudSpeedSign = it
-                    hudController.setSpeedSignEnabled(it)
-                },
-            )
-            SettingDivider()
-            // #266: mode 1 (default) never raises the car's navigation status, mode 2 does.
-            SettingChipRow(
-                title = stringResource(R.string.settings_hud_mode_title),
-                options = listOf(
-                    stringResource(R.string.settings_hud_mode_1),
-                    stringResource(R.string.settings_hud_mode_2),
-                ),
-                selectedIndex = if (hudMode == HudController.MODE_NAVI_STATUS) 1 else 0,
-                onSelect = { idx ->
-                    val mode = if (idx == 1) HudController.MODE_NAVI_STATUS else HudController.MODE_GLASS_ONLY
-                    if (mode != hudMode) {
-                        Trace.event(TraceArea.USER, "choice", "id" to "hud_mode", "mode" to mode)
-                        hudMode = mode
-                        hudController.setMode(mode)
-                    }
-                },
-            )
-            SettingHint(text = stringResource(R.string.settings_hud_mode_1_desc))
-            SettingHint(text = stringResource(R.string.settings_hud_mode_2_desc))
-            SettingDivider()
+            // No gateway (#301): the hints go to the cluster card, the glass settings do not apply.
+            if (hudStatus != HudController.Status.CLUSTER_ONLY) {
+                SettingToggleRow(
+                    title = stringResource(R.string.settings_hud_speed_sign_title),
+                    traceId = "hud_speed_sign",
+                    description = stringResource(R.string.settings_hud_speed_sign_desc),
+                    checked = hudSpeedSign,
+                    onCheckedChange = {
+                        hudSpeedSign = it
+                        hudController.setSpeedSignEnabled(it)
+                    },
+                )
+                SettingDivider()
+                // «Способ вывода на стекло» (#266): way 1 (default) never raises the car's navigation
+                // status, ways 2 and 3 do and add their channels (HudWayChannels).
+                val hudWays = listOf(HudController.MODE_GLASS_ONLY, HudController.MODE_NAVI_STATUS, HudController.MODE_LMCN)
+                SettingChipRow(
+                    title = stringResource(R.string.settings_hud_mode_title),
+                    options = listOf(
+                        stringResource(R.string.settings_hud_mode_1),
+                        stringResource(R.string.settings_hud_mode_2),
+                        stringResource(R.string.settings_hud_mode_3),
+                    ),
+                    selectedIndex = hudWays.indexOf(hudMode).coerceAtLeast(0),
+                    onSelect = { idx ->
+                        val mode = hudWays[idx]
+                        if (mode != hudMode) {
+                            Trace.event(TraceArea.USER, "choice", "id" to "hud_mode", "mode" to mode)
+                            hudMode = mode
+                            hudController.setMode(mode)
+                        }
+                    },
+                )
+                SettingHint(text = stringResource(R.string.settings_hud_mode_1_desc))
+                SettingHint(text = stringResource(R.string.settings_hud_mode_2_desc))
+                HudTrialHint(
+                    text = stringResource(R.string.settings_hud_mode_3_desc),
+                    tag = stringResource(R.string.settings_hud_mode_trial),
+                )
+                SettingHint(text = stringResource(R.string.settings_hud_mode_pick_hint))
+                SettingDivider()
+            }
             SettingStatusRow(
                 title = when (hudStatus) {
                     HudController.Status.ON -> stringResource(R.string.settings_hud_status_on)
                     HudController.Status.UNSUPPORTED -> stringResource(R.string.settings_hud_status_unsupported)
                     HudController.Status.BIND_FAILED -> stringResource(R.string.settings_hud_status_bind_failed)
+                    HudController.Status.CLUSTER_ONLY -> stringResource(R.string.settings_hud_status_cluster_only)
                     else -> stringResource(R.string.settings_hud_status_connecting)
                 },
-                ok = hudStatus == HudController.Status.ON,
+                ok = hudStatus == HudController.Status.ON || hudStatus == HudController.Status.CLUSTER_ONLY,
             )
         }
-        SettingHint(text = stringResource(R.string.settings_hud_hint))
+        if (hudStatus != HudController.Status.CLUSTER_ONLY) {
+            SettingHint(text = stringResource(R.string.settings_hud_hint))
+        }
         // Outside the switch: the check is meant to run with HUD output turned off too.
         SettingDivider()
-        HudCheckRow()
+        HudCheckRow(onWayChosen = { hudMode = it })
     }
 
     if (learning) {
@@ -1409,6 +1428,30 @@ private fun DisplaySection() {
     }
 
     BlindSpotCard()
+
+    // Instrument music card: mirrors Yandex music, which the stock controller leaves blank.
+    // ClusterMusicBridge reads the flag on every poll, so no restart is needed.
+    var clusterMusicCard by remember {
+        mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_CLUSTER_MUSIC_CARD, false))
+    }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp)) {
+            SettingToggleRow(
+                title = stringResource(R.string.settings_cluster_music_card_title),
+                traceId = "cluster_music_card",
+                description = stringResource(R.string.settings_cluster_music_card_desc),
+                checked = clusterMusicCard,
+                onCheckedChange = {
+                    clusterMusicCard = it
+                    prefs.edit().putBoolean(ClusterProjectionManager.KEY_CLUSTER_MUSIC_CARD, it).apply()
+                },
+            )
+        }
+    }
 }
 
 /**
@@ -1506,7 +1549,10 @@ private fun BlindSpotCard() {
             steps = (BlindSpotPreferences.MAX_THRESHOLD_KMH - BlindSpotPreferences.MIN_THRESHOLD_KMH) / 5 - 1,
             enabled = enabled,
             onValueChangeFinished = {
+                val was = prefs.getInt(
+                    BlindSpotPreferences.KEY_THRESHOLD_KMH, BlindSpotPreferences.DEFAULT_THRESHOLD_KMH)
                 prefs.edit().putInt(BlindSpotPreferences.KEY_THRESHOLD_KMH, thresholdKmh).apply()
+                Trace.event(TraceArea.USER, "slider", "id" to "blindspot_threshold", "value" to thresholdKmh, "was" to was)
             },
         )
         SettingDivider()
@@ -2197,6 +2243,15 @@ private fun ServiceSection(
     LaunchedEffect(adbRestoreEnabled) {
         if (adbRestoreEnabled) adbRestore.requestAttempt("settings")
     }
+    // BYD cloud over Wi-Fi (#310), same card. Every step goes through ADB to ourselves.
+    val cloudOverWifi = remember { clusterEntryPoint.cloudOverWifiManager() }
+    var cloudOverWifiEnabled by remember { mutableStateOf(cloudOverWifi.isEnabled()) }
+    var cloudOverWifiHelpOpen by remember { mutableStateOf(false) }
+    val cloudOverWifiState by cloudOverWifi.state.collectAsStateWithLifecycle()
+    val cloudAdbReady = adbVerdict == AdbVerdict.OK || adbVerdict == AdbVerdict.HELPER_DOWN
+    LaunchedEffect(cloudOverWifiEnabled) {
+        if (cloudOverWifiEnabled) cloudOverWifi.requestAttempt("settings")
+    }
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -2242,6 +2297,31 @@ private fun ServiceSection(
                         .padding(bottom = 8.dp),
                 )
             }
+            SettingDivider()
+            SettingToggleRow(
+                title = stringResource(R.string.settings_cloud_wifi_title),
+                traceId = "cloud_over_wifi",
+                description = stringResource(R.string.settings_cloud_wifi_desc),
+                checked = cloudOverWifiEnabled,
+                onCheckedChange = { enabled ->
+                    cloudOverWifiEnabled = enabled
+                    cloudOverWifi.setEnabled(enabled)
+                },
+                // Locked off without ADB; once on, switching off stays possible so the return
+                // of the car's settings can wait for ADB to come back.
+                enabled = cloudOverWifiEnabled || cloudAdbReady,
+                onHelp = { cloudOverWifiHelpOpen = true },
+            )
+            // A known verdict only: while the check runs there is nothing true to say yet.
+            val cloudLockedNoAdb = adbVerdict != null && !cloudAdbReady
+            val cloudStatus = if (!cloudOverWifiEnabled && cloudLockedNoAdb &&
+                cloudOverWifiState == CloudOverWifiState.Disabled
+            ) {
+                stringResource(R.string.settings_cloud_wifi_status_no_adb)
+            } else {
+                cloudOverWifiStatusText(cloudOverWifiState)
+            }
+            cloudStatus?.let { SettingHint(text = it) }
         }
     }
     val dialogVerdict = adbVerdict
@@ -2276,6 +2356,27 @@ private fun ServiceSection(
             },
             confirmButton = {
                 TextButton(onClick = { adbRestoreHelpOpen = false }) {
+                    Text(stringResource(R.string.nav_autostart_dialog_button), color = AccentGreen)
+                }
+            },
+        )
+    }
+    if (cloudOverWifiHelpOpen) {
+        AppAlertDialog(
+            onDismissRequest = { cloudOverWifiHelpOpen = false },
+            containerColor = CardSurface,
+            title = {
+                Text(stringResource(R.string.settings_cloud_wifi_help_title), color = TextPrimary)
+            },
+            text = {
+                Text(
+                    stringResource(R.string.settings_cloud_wifi_help_body),
+                    color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp,
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { cloudOverWifiHelpOpen = false }) {
                     Text(stringResource(R.string.nav_autostart_dialog_button), color = AccentGreen)
                 }
             },
@@ -2498,12 +2599,30 @@ private fun DiagnosticsRows(state: SettingsUiState, viewModel: SettingsViewModel
 /** «Проверка HUD»: about 90 s of test hints on the glass; the recorded log and a video of the
  *  glass tell which channel draws on this car. The row only starts the check and shows where it is. */
 @Composable
-private fun HudCheckRow() {
+private fun HudCheckRow(onWayChosen: (Int) -> Unit) {
     val context = LocalContext.current
     val hudCheck = remember {
         EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java).hudCheck()
     }
     val checkState by hudCheck.state.collectAsStateWithLifecycle()
+    val askAnswer by hudCheck.askAnswer.collectAsStateWithLifecycle()
+    val notice by hudCheck.notice.collectAsStateWithLifecycle()
+    // After an answer: the way the check picked, 0 when the glass showed nothing.
+    var answered by remember { mutableStateOf<Int?>(null) }
+    if (askAnswer) {
+        HudCheckQuestionDialog(
+            onAnswer = { seen ->
+                val way = hudCheck.answer(seen)
+                way?.let(onWayChosen)
+                answered = way ?: 0
+            },
+            onDismiss = { hudCheck.dismissAnswer() },
+        )
+    }
+    answered?.let { way -> HudCheckAnswerDialog(way) { answered = null } }
+    // The hint line under the row is easy to miss: a refusal or a route that ended the check is
+    // also said once in a dialog.
+    notice?.let { HudCheckNoticeDialog(it) { hudCheck.dismissNotice() } }
     val running = checkState is HudCheck.State.Preparing || checkState is HudCheck.State.Step ||
         checkState == HudCheck.State.Restoring
     SettingActionRow(
@@ -2529,6 +2648,125 @@ private fun HudCheckRow() {
         )
     }
     hint?.let { SettingHint(text = it) }
+}
+
+/** A hint line with a small orange tag after it (way 3 «пробный»). */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun HudTrialHint(text: String, tag: String) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(text = text, color = TextMuted, fontSize = 12.sp, lineHeight = 16.sp)
+        Text(
+            text = tag,
+            color = AccentOrange,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier
+                .border(1.dp, AccentOrange, RoundedCornerShape(4.dp))
+                .padding(horizontal = 6.dp, vertical = 1.dp),
+        )
+    }
+}
+
+/** The end of a finished HUD check: which number the glass showed; the smallest picks the way. */
+@Composable
+private fun HudCheckQuestionDialog(onAnswer: (Int?) -> Unit, onDismiss: () -> Unit) {
+    AppAlertDialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(dismissOnClickOutside = false),
+        title = { Text(stringResource(R.string.settings_hud_answer_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.settings_hud_answer_text), color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HudCheck.MARKERS.forEach { marker ->
+                        Button(
+                            onClick = { onAnswer(marker) },
+                            modifier = Modifier.weight(1f).heightIn(min = 56.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+                        ) { Text(marker.toString(), fontSize = 20.sp, fontWeight = FontWeight.Medium, maxLines = 1) }
+                    }
+                }
+                OutlinedButton(
+                    onClick = { onAnswer(null) },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, CardBorder),
+                ) { Text(stringResource(R.string.settings_hud_answer_none), color = TextPrimary, fontSize = 15.sp) }
+            }
+        },
+        confirmButton = {},
+    )
+}
+
+/** What the answer did: the way picked ([way] 1..3), or 0 = the glass showed nothing, way kept. */
+@Composable
+private fun HudCheckAnswerDialog(way: Int, onDone: () -> Unit) {
+    AppAlertDialog(
+        onDismissRequest = onDone,
+        title = {
+            Text(
+                if (way > 0) stringResource(R.string.settings_hud_answer_chosen_title, way)
+                else stringResource(R.string.settings_hud_answer_nothing_title)
+            )
+        },
+        text = {
+            Text(
+                stringResource(
+                    if (way > 0) R.string.settings_hud_answer_chosen_text else R.string.settings_hud_answer_nothing_text
+                ),
+                fontSize = 14.sp, lineHeight = 19.sp,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onDone,
+                modifier = Modifier.heightIn(min = 48.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+            ) { Text(stringResource(R.string.settings_hud_answer_done), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+        },
+    )
+}
+
+/** Why the check did not run through, and what to do: [notice] is a refusal or a route that ended it. */
+@Composable
+private fun HudCheckNoticeDialog(notice: HudCheck.State, onDone: () -> Unit) {
+    val text = when (notice) {
+        HudCheck.State.RouteStarted -> R.string.settings_hud_check_notice_route_started
+        is HudCheck.State.Refused -> when (notice.reason) {
+            HudCheck.Refusal.GUIDANCE -> R.string.settings_hud_check_notice_guidance
+            HudCheck.Refusal.MOVING -> R.string.settings_hud_check_notice_moving
+            HudCheck.Refusal.NO_LINK -> R.string.settings_hud_check_refused_no_link
+        }
+        else -> return
+    }
+    AppAlertDialog(
+        onDismissRequest = onDone,
+        title = {
+            Text(
+                stringResource(
+                    if (notice == HudCheck.State.RouteStarted) R.string.settings_hud_check_notice_interrupted_title
+                    else R.string.settings_hud_check_notice_refused_title
+                )
+            )
+        },
+        text = { Text(stringResource(text), fontSize = 14.sp, lineHeight = 19.sp) },
+        confirmButton = {
+            Button(
+                onClick = onDone,
+                modifier = Modifier.heightIn(min = 48.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+            ) { Text(stringResource(R.string.settings_hud_check_notice_ok), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+        },
+    )
 }
 
 /**
@@ -3024,6 +3262,14 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                 selectedIndex = if (state.units == "km") 0 else 1,
                 onSelect = { idx -> viewModel.saveUnits(if (idx == 0) "km" else "miles") },
             )
+            SettingDivider()
+            SettingChipRow(
+                title = stringResource(R.string.settings_app_currency_label),
+                options = SettingsRepository.CURRENCIES.map { it.code },
+                selectedIndex = SettingsRepository.CURRENCIES.indexOfFirst { it.code == state.currency }.coerceAtLeast(0),
+                onSelect = { idx -> viewModel.saveCurrency(SettingsRepository.CURRENCIES[idx].code) },
+            )
+            SettingDivider()
             SettingChipRow(
                 title = stringResource(R.string.settings_map_tile_source_label),
                 options = listOf("OpenStreetMap", "Amap"),
@@ -3249,6 +3495,7 @@ private fun VoiceSettingsContent(
                 com.bydmate.app.data.automation.RouteNavigatorUris.YANDEX,
                 com.bydmate.app.data.automation.RouteNavigatorUris.DGIS,
                 com.bydmate.app.data.automation.RouteNavigatorUris.MAPS,
+                com.bydmate.app.data.automation.RouteNavigatorUris.WAZE,
             )
             SettingChipRow(
                 title = stringResource(R.string.settings_route_navigator_label),
@@ -3257,6 +3504,7 @@ private fun VoiceSettingsContent(
                     stringResource(R.string.settings_route_navigator_yandex),
                     stringResource(R.string.settings_route_navigator_dgis),
                     stringResource(R.string.settings_route_navigator_maps),
+                    stringResource(R.string.settings_route_navigator_waze),
                 ),
                 selectedIndex = routeNavigatorIds.indexOf(state.routeNavigator).coerceAtLeast(0),
                 onSelect = { viewModel.setRouteNavigator(routeNavigatorIds[it]) },
@@ -4367,4 +4615,16 @@ private fun adbRestoreStatusText(state: AdbRestoreState): String? = when (state)
             .format(java.util.Date(state.atMs)),
     )
     is AdbRestoreState.Failed -> stringResource(R.string.settings_adb_restore_status_failed, state.reason)
+}
+
+@Composable
+private fun cloudOverWifiStatusText(state: CloudOverWifiState): String? = when (state) {
+    CloudOverWifiState.Disabled -> null
+    CloudOverWifiState.NoAdb -> stringResource(R.string.settings_cloud_wifi_status_no_adb)
+    CloudOverWifiState.OwnCellular -> stringResource(R.string.settings_cloud_wifi_status_own_cellular)
+    CloudOverWifiState.WaitingInternet -> stringResource(R.string.settings_cloud_wifi_status_waiting)
+    CloudOverWifiState.ProfileRejected -> stringResource(R.string.settings_cloud_wifi_status_rejected)
+    CloudOverWifiState.CloudSilent -> stringResource(R.string.settings_cloud_wifi_status_silent)
+    CloudOverWifiState.Connected -> stringResource(R.string.settings_cloud_wifi_status_connected)
+    CloudOverWifiState.ReturnPending -> stringResource(R.string.settings_cloud_wifi_status_return_pending)
 }

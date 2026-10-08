@@ -21,6 +21,7 @@ sealed class ActionValidationError {
     data class MediaVolumeMissing(val index: Int) : ActionValidationError()
     data class SentryInvalid(val index: Int) : ActionValidationError()
     data class HotspotInvalid(val index: Int) : ActionValidationError()
+    data class MediaKeyInvalid(val index: Int) : ActionValidationError()
     data class SpeakTextEmpty(val index: Int) : ActionValidationError()
     data class AgentQueryPromptEmpty(val index: Int) : ActionValidationError()
     data class SplitScreenNarrowEmpty(val index: Int) : ActionValidationError()
@@ -77,7 +78,7 @@ object RuleDraftValidator {
                     val title = payloadJson(a.payload).optString("title")
                     if (title.isBlank()) return ActionValidationError.NotifTitleEmpty(n)
                 }
-                "app_launch" -> {
+                "app_launch", "app_close" -> {
                     val pkg = payloadJson(a.payload).optString("packageName")
                     if (pkg.isBlank()) return ActionValidationError.AppNotSelected(n)
                 }
@@ -117,6 +118,9 @@ object RuleDraftValidator {
                 }
                 "hotspot" -> {
                     if (a.payload !in listOf("0", "1")) return ActionValidationError.HotspotInvalid(n)
+                }
+                "media_key" -> {
+                    if (ActionDispatcher.mediaKeyCode(a.payload) == null) return ActionValidationError.MediaKeyInvalid(n)
                 }
                 "speak" -> {
                     if (payloadJson(a.payload).optString("text").isBlank()) {

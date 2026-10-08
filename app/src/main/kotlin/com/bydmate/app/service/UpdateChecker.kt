@@ -25,9 +25,7 @@ class UpdateChecker @Inject constructor(
     private val appStrings: AppStrings,
 ) {
     companion object {
-        // Kom-BYDMate: our own releases (kom.bydmate), not upstream's com.bydmate.app — installing
-        // those would add a second, conflicting app. /latest skips drafts and pre-releases.
-        private const val GITHUB_API = "https://api.github.com/repos/KokoMoko/Kom-BYDMate/releases/latest"
+        private const val GITHUB_API = "https://api.github.com/repos/AndyShaman/BYDMate/releases/latest"
         private const val PREFS_NAME = "update_prefs"
         private const val KEY_LAST_CHECK = "last_check"
         private const val KEY_AUTO_CHECK = "auto_check_enabled"
@@ -51,28 +49,6 @@ class UpdateChecker @Inject constructor(
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit().putString(KEY_LAST_SEEN_VERSION, version).apply()
         }
-
-        /**
-         * "3.19.3-kom.16" -> [3, 19, 3, 16]: the upstream base first, then the Kom build, so a
-         * merge of a newer upstream wins and within one base the higher kom build wins. A version
-         * without the suffix counts as kom 0. Anything else after "-" is ignored.
-         */
-        internal fun versionKey(version: String): List<Int> {
-            val base = version.removePrefix("v").substringBefore("-")
-            val kom = Regex("""-kom\.(\d+)""").find(version)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-            val parts = base.split(".").map { it.toIntOrNull() ?: 0 }.toMutableList()
-            while (parts.size < 3) parts += 0
-            return parts.take(3) + kom
-        }
-
-        internal fun isNewerVersion(remote: String, local: String): Boolean {
-            val r = versionKey(remote)
-            val l = versionKey(local)
-            for (i in r.indices) {
-                if (r[i] != l[i]) return r[i] > l[i]
-            }
-            return false
-        }
     }
 
     data class UpdateInfo(
@@ -93,7 +69,7 @@ class UpdateChecker @Inject constructor(
         val request = Request.Builder()
             .url(GITHUB_API)
             .header("Accept", "application/vnd.github+json")
-            .header("User-Agent", "Kom-BYDMate-UpdateCheck")
+            .header("User-Agent", "BYDMate-UpdateCheck")
             .build()
         val body = httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
@@ -147,16 +123,16 @@ class UpdateChecker @Inject constructor(
         // Delete old file if exists
         val destFile = File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            "Kom-BYDMate-${update.version}.apk"
+            "BYDMate-${update.version}.apk"
         )
         if (destFile.exists()) destFile.delete()
 
         val request = DownloadManager.Request(Uri.parse(update.downloadUrl))
-            .setTitle("Kom-BYDMate ${update.version}")
+            .setTitle("BYDMate ${update.version}")
             .setDescription(appStrings.get(R.string.update_download_notification_description))
             .setDestinationInExternalPublicDir(
                 Environment.DIRECTORY_DOWNLOADS,
-                "Kom-BYDMate-${update.version}.apk"
+                "BYDMate-${update.version}.apk"
             )
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
 
@@ -223,7 +199,7 @@ class UpdateChecker @Inject constructor(
     private fun installApk(context: Context, version: String) {
         val file = File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            "Kom-BYDMate-$version.apk"
+            "BYDMate-$version.apk"
         )
         if (!file.exists()) return
 
@@ -248,5 +224,15 @@ class UpdateChecker @Inject constructor(
         }
     }
 
-    private fun isNewer(remote: String, local: String): Boolean = isNewerVersion(remote, local)
+    private fun isNewer(remote: String, local: String): Boolean {
+        val r = remote.split(".").mapNotNull { it.toIntOrNull() }
+        val l = local.split(".").mapNotNull { it.toIntOrNull() }
+        for (i in 0 until maxOf(r.size, l.size)) {
+            val rv = r.getOrElse(i) { 0 }
+            val lv = l.getOrElse(i) { 0 }
+            if (rv > lv) return true
+            if (rv < lv) return false
+        }
+        return false
+    }
 }

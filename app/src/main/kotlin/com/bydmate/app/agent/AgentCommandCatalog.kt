@@ -54,7 +54,7 @@ object AgentCommandCatalog {
         Cmd("ac_on", "включить климат-контроль (авто)", { "自动空调" }),
         Cmd("ac_off", "выключить климат-контроль", { "关闭空调" }),
         Cmd("ac_flow_on", "включить вентиляцию климата (обдув без охлаждения)", { "打开空调通风" }),
-        Cmd("ac_set_temp", "температура климата N°C", { n -> "设置温度$n" }, 16..30),
+        Cmd("ac_set_temp", "температура климата N°C", { n -> "设置温度$n" }, 16..33),
         Cmd("ac_fan_level", "скорость вентилятора N (1..7)", { n -> "风量$n" }, 1..7),
         Cmd("ac_wind_face", "обдув в лицо", { "吹面" }),
         Cmd("ac_wind_face_feet", "обдув в лицо и ноги", { "吹面吹脚" }),
@@ -108,6 +108,9 @@ object AgentCommandCatalog {
         Cmd("hazard_off", "выключить аварийку", { "双闪关闭" }),
         Cmd("light_interior_on", "включить плафон света в салоне", { "打开车内灯" }),
         Cmd("light_interior_off", "выключить плафон света в салоне", { "关闭车内灯" }),
+        // HUD (projection on the windshield; the cluster projection is set_cluster_projection)
+        Cmd("hud_on", "включить HUD (проекцию на лобовом стекле)", { "打开抬头显示" }),
+        Cmd("hud_off", "выключить HUD (проекцию на лобовом стекле)", { "关闭抬头显示" }),
         // Locks
         Cmd("doors_lock", "запереть двери", { "车门上锁" }),
         Cmd("doors_unlock", "отпереть двери", { "车门解锁" }),
