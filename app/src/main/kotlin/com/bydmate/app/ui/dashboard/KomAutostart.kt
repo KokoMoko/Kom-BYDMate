@@ -71,6 +71,8 @@ object KomAutostart {
         val now = System.currentTimeMillis()
         if (now - lastRunMs < MIN_INTERVAL_MS) return
         lastRunMs = now
+        // վիջեթները (եղանակը)՝ թարմ տվյալներով, առանց սեղմելու
+        KomWidgetRefresh.afterSwitchOn(ctx, scope)
         scope.launch {
             Log.i(TAG, "car on -> autostart (music=${KomPrefs.autostartMusic(ctx)}, navi=${KomPrefs.autostartNavi(ctx)})")
             if (KomPrefs.autostartMusic(ctx)) connectMusic(ctx)
