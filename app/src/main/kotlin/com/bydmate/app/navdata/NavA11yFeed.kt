@@ -49,8 +49,26 @@ object NavA11yFeed {
             // A blind spell does not outlive the feed it was seen by.
             if (value != field) NavGuidanceHub.a11yBlind(false)
             field = value
-            if (!value) resetTimer(start = false)
+            // Kom-BYDMate: KomCanGuidance-ը կախված չէ upstream HUD-ից, ժամաչափը մնում է
+            if (!value && !komAlwaysOn) resetTimer(start = false)
         }
+
+    /**
+     * Kom-BYDMate: Kom-ի սեփական HUD-ը (KomCanGuidance) և սահմանափակումը կարդում են NavGuidanceHub-ը,
+     * ուրեմն feed-ը աշխատում է նաև երբ upstream-ի HUD-ը անջատված է կամ նրա կապը կտրվել է
+     * (3.20 merge-ում սա կորել էր, և HUD-ը որոշ ժամանակ անց դատարկվում էր)։
+     */
+    @Volatile var komAlwaysOn: Boolean = false
+        private set
+
+    /** Kom-BYDMate: from the app start; turns the feed and its 5 s re-read timer on for good. */
+    fun komStart() {
+        if (komAlwaysOn) return
+        komAlwaysOn = true
+        if (!enabled) resetTimer(start = true)
+    }
+
+    private val active: Boolean get() = enabled || komAlwaysOn
 
     /** Where the tree dump goes; logcat in production, a collector in tests. */
     internal var treeDumpSink: (String) -> Unit = { Log.i(TAG, it) }
@@ -81,7 +99,7 @@ object NavA11yFeed {
     internal var timerService: () -> SteeringWheelKeyService? = { SteeringWheelKeyService.instance }
 
     fun onEvent(service: SteeringWheelKeyService, event: AccessibilityEvent?) {
-        if (!enabled) return
+        if (!active) return
         val nowMs = System.currentTimeMillis()
         if (!shouldProcess(event?.packageName?.toString(), event?.eventType ?: 0, nowMs, lastProcessMs)) return
         lastProcessMs = nowMs
@@ -123,7 +141,7 @@ object NavA11yFeed {
      *  unreachable window says nothing here either, and there is no event source to fall
      *  back to. */
     internal fun onTimer(service: SteeringWheelKeyService?, nowMs: Long) {
-        if (!shouldTimerRead(enabled, NavGuidanceHub.snapshot(nowMs).active, nowMs, lastProcessMs)) return
+        if (!shouldTimerRead(active, NavGuidanceHub.snapshot(nowMs).active, nowMs, lastProcessMs)) return
         service ?: return
         lastProcessMs = nowMs
         val root = runCatching { service.findNavigatorRoot() }.getOrNull() ?: run {

@@ -141,6 +141,7 @@ class BYDMateApp : Application(), Configuration.Provider {
         com.bydmate.app.navdata.KomOsmSpeedLimit.start(appScope)
         // Kom-BYDMate: Navigator-ի սահմանափակումը՝ 2 վրկ-ը մեկ (նաև վարորդի էկրանից)
         com.bydmate.app.navdata.KomNavLimit.start(appScope)
+        com.bydmate.app.navdata.NavA11yFeed.komStart()
         // Kom-BYDMate: Navigator-ի մանևրները HUD-ում և վարորդի էկրանին՝ CAN դաշտերով
         com.bydmate.app.hud.KomCanGuidance.start(this, appScope)
         // Kom-BYDMate: Yandex Music-ի երգը վարորդի վահանակի Music քարտում
