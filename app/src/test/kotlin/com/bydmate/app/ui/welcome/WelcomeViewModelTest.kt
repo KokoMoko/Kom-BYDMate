@@ -147,20 +147,7 @@ class WelcomeViewModelTest {
         assertEquals("pl", vm.uiState.value.language)
     }
 
-    @Test
-    fun `choosing Chinese switches wizard currency to CNY`() {
-        val vm = viewModel()
-        vm.setLanguage("zh")
-        assertEquals("CNY", vm.uiState.value.currency)
-    }
 
-    @Test
-    fun `switching from Chinese back to English restores the default currency`() {
-        val vm = viewModel()
-        vm.setLanguage("zh")
-        vm.setLanguage("en")
-        assertEquals(SettingsRepository.DEFAULT_CURRENCY, vm.uiState.value.currency)
-    }
 
     @Test
     fun `currency picked by the user is not overridden by a language change`() {
@@ -171,14 +158,6 @@ class WelcomeViewModelTest {
         assertEquals("$", vm.uiState.value.currencySymbol)
     }
 
-    @Test
-    fun `initial currency follows the stored language`() {
-        localePreferences.setLanguage("zh")
-        val state = viewModel().uiState.value
-        assertEquals("zh", state.language)
-        assertEquals("CNY", state.currency)
-        assertEquals("¥", state.currencySymbol)
-    }
 
     @Test
     fun `startBydMate saves capacity, currency and tariffs but not the trip cost tariff`() = runTest(testDispatcher) {

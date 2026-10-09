@@ -2089,7 +2089,7 @@
     <string name="kom_speed_alert_hint">Beeps when speed is above the limit + tolerance (the dark red ring). Repeats every 10 s.</string>
     <!-- Kom-BYDMate -->
     <string name="kom_cluster_avg_speed">Avg: %1$s km/h</string>
-    <string name="kom_cluster_avg_consumption">Avg: %1$s kWh/100</string>
+    <string name="kom_cluster_avg_consumption">Avg: %1$s kW/100</string>
     <!-- Kom-BYDMate -->
     <string name="kom_cluster_theme">Style</string>
     <string name="kom_cluster_theme_classic">Classic</string>

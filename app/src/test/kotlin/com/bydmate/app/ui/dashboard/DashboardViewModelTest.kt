@@ -301,6 +301,10 @@ class DashboardViewModelTest {
             insightsManager = resolvedInsightsManager,
             batteryStateRepository = batteryStateRepo,
             adbVerdictMonitor = adbVerdictMonitor,
+            adbOnDeviceClient = mockk(relaxed = true),
+            drivingRangeSource = mockk(relaxed = true) {
+                every { status } returns MutableStateFlow(com.bydmate.app.domain.calculator.DrivingRangeStatus())
+            },
             tripCounterResets = TripCounterResets(settingsRepo).also { lastTripCounterResets = it },
         )
     }

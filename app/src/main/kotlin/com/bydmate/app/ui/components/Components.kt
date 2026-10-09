@@ -323,7 +323,7 @@ fun TripCard(
     trip: TripEntity,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    currencySymbol: String = "BYN",
+    currencySymbol: String = "֏",
     verticalPadding: Dp = 8.dp,
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -410,7 +410,7 @@ fun ChargeCard(
     charge: ChargeEntity,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    currencySymbol: String = "BYN"
+    currencySymbol: String = "֏"
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     Card(

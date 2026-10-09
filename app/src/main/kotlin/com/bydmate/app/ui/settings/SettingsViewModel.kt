@@ -144,7 +144,7 @@ data class SettingsUiState(
     val dcTariff: String = SettingsRepository.DEFAULT_DC_TARIFF,
     val units: String = SettingsRepository.DEFAULT_UNITS,
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
-    val currencySymbol: String = "BYN",
+    val currencySymbol: String = "֏",
     val chargeConnector: ChargeConnector = ChargeConnector.GBT,
     val importStatus: String? = null,
     val appVersion: String = "0.0.0",
@@ -408,10 +408,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     fun setAppLanguage(lang: String) {
         applyAppLanguage(appContext, localePreferences, lang)
         _appLanguage.value = lang
-        // Auto-select CNY when switching to Chinese
-        if (lang == "zh") {
-            saveCurrency("CNY")
-        }
     }
 
     /** Forget the remembered seat write-channel; next seat command re-probes primary→fallback. */

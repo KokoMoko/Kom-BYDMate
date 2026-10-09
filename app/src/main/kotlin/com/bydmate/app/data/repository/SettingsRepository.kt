@@ -183,7 +183,7 @@ open class SettingsRepository @Inject constructor(
         const val DEFAULT_HOME_TARIFF = "0.20"
         const val DEFAULT_DC_TARIFF = "0.73"
         const val DEFAULT_UNITS = "km"
-        const val DEFAULT_CURRENCY = "BYN"
+        const val DEFAULT_CURRENCY = "AMD"
         const val DEFAULT_CONSUMPTION_GOOD = "20"
         const val DEFAULT_CONSUMPTION_BAD = "30"
         const val DEFAULT_MAP_TILE_SOURCE = "osm" // "osm" or "amap"
@@ -204,18 +204,12 @@ open class SettingsRepository @Inject constructor(
             ManualRangePoint(-20, 27.2),
         )
 
+        // Kom-BYDMate: only these four; a stored code not in the list falls back to the first.
         val CURRENCIES = listOf(
-            Currency("BYN", "BYN"),
-            Currency("RUB", "₽"),
-            Currency("UAH", "₴"),
-            Currency("KZT", "₸"),
             Currency("AMD", "֏"),
             Currency("USD", "$"),
             Currency("EUR", "€"),
-            Currency("PLN", "zł"),
-            Currency("CNY", "¥"),
-            Currency("UZS", "UZS"),
-            Currency("KGS", "сом"),
+            Currency("RUB", "₽"),
         )
     }
 

@@ -4,6 +4,42 @@ What changed in each Kom-BYDMate release, in English and Armenian. Changes inher
 
 Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարված փոփոխությունները՝ անգլերեն և հայերեն։ Upstream BYDMate-ից եկած փոփոխությունները՝ [CHANGELOG.md](CHANGELOG.md)-ում։
 
+## 3.20.0-kom.1 — 2026-10-09
+
+### English
+
+**From BYDMate 3.20.0**
+- BYD cloud over Wi-Fi for cars with a native Chinese SIM (Settings).
+- Navigation card on the driver's display without the SOME/IP gateway (via the Amap adapter), steadier HUD arrows and street names.
+- Waze as a route navigator; one level row in automations for temperature, fan, seats, windows, fridge and volume; HUD on/off from automations and by voice.
+- The music card on the driver's display follows the player that is actually playing; a play key no longer resumes a stock player left paused.
+- Blind-spot camera: opens only on a turn signal, closes while the factory 360 view is shown.
+- Telegram report bot can be linked to a private group; spoken confirmations follow the agent's voice.
+- Cluster projection fixes: a navigator moved off the driver's display is brought back, the projection ends when its task is gone.
+
+**Kom-BYDMate**
+- Currencies: only AMD (default), USD, EUR and RUB.
+- Under the power dial: "Avg: X kW/100".
+- Song Plus: the dashboards show only the GPS satellites (the head unit shows the altitude itself).
+- Everything from 3.19.3-kom.17 is kept: range model, dashboards and cluster styles, Armenian interface, Song Plus picture, in-app updates.
+
+### Հայերեն
+
+**BYDMate 3.20.0-ից**
+- BYD cloud-ը Wi-Fi-ով՝ չինական SIM ունեցող մեքենաների համար (Settings)։
+- Նավիգացիայի քարտը վարորդի էկրանին՝ առանց SOME/IP gateway-ի (Amap adapter-ով), HUD-ի սլաքներն ու փողոցների անունները՝ ավելի կայուն։
+- Waze-ը՝ որպես նավիգատոր, ավտոմատացումներում՝ մեկ մակարդակի տող ջերմաստիճանի, օդափոխիչի, նստատեղերի, պատուհանների, սառնարանի և ձայնի համար, HUD-ի միացում/անջատում՝ ավտոմատացումներից և ձայնով։
+- Վարորդի էկրանի երաժշտության քարտը հետևում է իրականում նվագող player-ին, play կոճակն այլևս չի վերսկսում դադարեցված ստանդարտ player-ը։
+- Blind-spot տեսախցիկը՝ միանում է միայն շրջադարձի ազդանշանով, փակվում է, երբ գործարանային 360-ը ցուցադրվում է։
+- Telegram-ի հաշվետվությունների բոտը կարելի է կապել փակ խմբի հետ, ձայնային հաստատումները հետևում են գործակալի ձայնին։
+- Վարորդի էկրանի պրոյեկցիայի ուղղումներ․ էկրանից դուրս տեղափոխված նավիգատորը վերադարձվում է, պրոյեկցիան ավարտվում է, երբ դրա task-ը չկա։
+
+**Kom-BYDMate**
+- Արժույթներ՝ միայն AMD (լռելյայն), USD, EUR և RUB։
+- Հզորության սարքի տակ՝ «Միջ.՝ X kW/100»։
+- Song Plus․ վահանակներում միայն GPS արբանյակներն են (բարձրությունը ցույց է տալիս մեքենայի էկրանը)։
+- 3.19.3-kom.17-ի ամեն ինչ պահպանված է․ պաշարի մոդելը, վահանակների և cluster-ի ոճերը, հայերեն ինտերֆեյսը, Song Plus-ի նկարը, app-ի ներսում թարմացումները։
+
 ## 3.19.3-kom.17 — 2026-10-05
 
 ### English

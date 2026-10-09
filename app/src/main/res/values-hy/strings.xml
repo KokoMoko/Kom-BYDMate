@@ -1893,7 +1893,7 @@
     <string name="kom_speed_alert_test">Փորձել</string>
     <string name="kom_speed_alert_hint">Ազդանշան, երբ արագությունը սահմանափակումից + շեղումից բարձր է (մուգ կարմիր շրջան)։ Կրկնվում է 10 վայրկյանը մեկ։</string>
     <string name="kom_cluster_avg_speed">Միջ.՝ %1$s կմ/ժ</string>
-    <string name="kom_cluster_avg_consumption">Միջ.՝ %1$s kWh/100</string>
+    <string name="kom_cluster_avg_consumption">Միջ.՝ %1$s kW/100</string>
     <!-- Kom-BYDMate -->
     <string name="kom_cluster_theme">Ոճ</string>
     <string name="kom_cluster_theme_classic">Դասական</string>

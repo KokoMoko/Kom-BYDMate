@@ -133,6 +133,24 @@ class BYDMateApp : Application(), Configuration.Provider {
         registerActivityLifecycleCallbacks(WidgetLifecycleCallbacks(this, splitOverlayController))
         // Start split-screen overlay observers (mirrors WidgetController init pattern).
         splitOverlayController.start(appScope)
+        // Kom-BYDMate: մեքենան միացնելիս՝ Panel (Navigator) և Yandex Music (առանց նվագարկման)
+        com.bydmate.app.ui.dashboard.KomAutostart.start(this, appScope)
+        // Kom-BYDMate: split-ում ոչ ակտիվ պատուհանն էլ է հպում ստանում (տես KomSplitFocusShield)
+        com.bydmate.app.split.KomSplitFocusShield.start(this, appScope)
+        // Kom-BYDMate: արագության սահմանափակում OSM-ից՝ երբ Navigator-ը չի երևում
+        com.bydmate.app.navdata.KomOsmSpeedLimit.start(appScope)
+        // Kom-BYDMate: Navigator-ի սահմանափակումը՝ 2 վրկ-ը մեկ (նաև վարորդի էկրանից)
+        com.bydmate.app.navdata.KomNavLimit.start(appScope)
+        // Kom-BYDMate: Navigator-ի մանևրները HUD-ում և վարորդի էկրանին՝ CAN դաշտերով
+        com.bydmate.app.hud.KomCanGuidance.start(this, appScope)
+        // Kom-BYDMate: Yandex Music-ի երգը վարորդի վահանակի Music քարտում
+        com.bydmate.app.hud.KomCanMusic.start(this, appScope)
+        // Kom-BYDMate: քարտը թերթելուց հետո Navigator-ը վերադառնում է վարորդի էկրան
+        com.bydmate.app.cluster.KomClusterReturn.start(this, appScope)
+        // Kom-BYDMate: միջին արագություն, բարձրություն և արագության գերազանցման ձայն
+        com.bydmate.app.ui.dashboard.KomClusterExtras.start(this, appScope)
+        com.bydmate.app.ui.dashboard.KomSpeedAlert.start(this, appScope)
+        com.bydmate.app.ui.dashboard.KomGpsSignal.start(this)
     }
 
     /**
