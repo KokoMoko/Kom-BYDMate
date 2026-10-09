@@ -63,7 +63,7 @@ data class DashboardUiState(
     val lastTrip: TripEntity? = null,
     val recentTrips: List<TripEntity> = emptyList(),
     val isServiceRunning: Boolean = false,
-    val currencySymbol: String = "BYN",
+    val currencySymbol: String = "֏",
     val avgBatTemp: Int? = null,
     val cellVoltageMin: Double? = null,
     val cellVoltageMax: Double? = null,

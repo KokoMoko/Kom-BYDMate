@@ -334,7 +334,6 @@ fun main(args: Array<String>) {
                         sleep = { Thread.sleep(it) },
                         // Enables the non-destructive freeform probe before a retype remove.
                         stateOf = { ti -> taskModeState(ti) },
-                        oneStepFullscreen = ::pullBackInOneStep,
                     )
                     reply?.writeInt(0); reply?.writeInt(0)
                     true
@@ -355,7 +354,14 @@ fun main(args: Array<String>) {
                         else { surface.release(); reply?.writeInt(-1); reply?.writeInt(0) }
                         true
                     }.getOrElse { t ->
-                        android.util.Log.w("bydmate_helper", "TX_CREATE_VIRTUAL_DISPLAY failed flags=$logFlags ${logWidth}x$logHeight", t)
+                        // The app asks for a PUBLIC display first and falls back to private flags on
+                        // refusal: that SecurityException is expected, one line instead of a stack.
+                        if (t is SecurityException) {
+                            android.util.Log.w("bydmate_helper", "TX_CREATE_VIRTUAL_DISPLAY: SecurityException " +
+                                "flags=$logFlags ${logWidth}x$logHeight (expected for PUBLIC; app falls back to private flags)")
+                        } else {
+                            android.util.Log.w("bydmate_helper", "TX_CREATE_VIRTUAL_DISPLAY failed flags=$logFlags ${logWidth}x$logHeight", t)
+                        }
                         reply?.writeInt(-1); reply?.writeInt(0); true
                     }
                 }
@@ -897,6 +903,7 @@ fun main(args: Array<String>) {
                 HelperBinderProtocol.TX_OFFREPORT_STATUS -> handleOffReportTransact(code, data, reply)
 
                 HelperBinderProtocol.TX_HUD_NAVI_STATUS,
+                HelperBinderProtocol.TX_HUD_SDK,
                 HelperBinderProtocol.TX_WRITE_BUFFER -> handleHudTransact(code, data, reply, svc, autoIface)
 
                 else -> super.onTransact(code, data, reply, flags)
@@ -1164,8 +1171,8 @@ private fun autoserviceTransactBuffer(
 }
 
 /**
- * The two HUD verbs, out of line like the recorder's: the SDK navigation status call and the
- * setBuffer write. Every reply starts with a status int; a failure costs this call only.
+ * The HUD verbs, out of line like the recorder's: the SDK navigation status call, way 3's SDK
+ * calls and the setBuffer write. Every reply starts with a status int; a failure costs this call only.
  */
 private fun handleHudTransact(code: Int, data: Parcel, reply: Parcel?, svc: IBinder, autoIface: String): Boolean {
     if (code == HelperBinderProtocol.TX_HUD_NAVI_STATUS) {
@@ -1173,6 +1180,18 @@ private fun handleHudTransact(code: Int, data: Parcel, reply: Parcel?, svc: IBin
         val (outcome, sdkReturn) = sendAutoNaviStatusOutcome(status) {
             deviceInstance(FID_PUSH_DEVICE_CLASSES.getValue(HUD_NAVI_DEVICE))
         }
+        reply?.writeInt(outcome)
+        reply?.writeInt(sdkReturn)
+        return true
+    }
+    if (code == HelperBinderProtocol.TX_HUD_SDK) {
+        val (outcome, sdkReturn) = runCatching { readHudSdkInvocation(data) }.fold(
+            onSuccess = { call ->
+                call?.let { hudSdkOutcome(it) { deviceInstance(FID_PUSH_DEVICE_CLASSES.getValue(HUD_NAVI_DEVICE)) } }
+                    ?: (HelperBinderProtocol.HUD_NAVI_ABSENT to 0)
+            },
+            onFailure = { HelperBinderProtocol.HUD_NAVI_THREW to 0 },
+        )
         reply?.writeInt(outcome)
         reply?.writeInt(sdkReturn)
         return true
@@ -1220,6 +1239,48 @@ internal fun sendAutoNaviStatusOutcome(status: Int, device: () -> Any): Pair<Int
 }
 
 private const val HUD_NAVI_TAG = "HudArming"
+
+/** One TX_HUD_SDK call: the instrument method's name, its parameter types and the arguments. */
+internal class HudSdkInvocation(val method: String, val types: Array<Class<*>>, val args: Array<Any>) {
+    companion object {
+        private val INT = Int::class.javaPrimitiveType!!
+        fun guidance(icon: Int, distance: Int) = HudSdkInvocation("sendSimpleGuidanceInfo", arrayOf(INT, INT), arrayOf(icon, distance))
+        fun pathName(name: String) = HudSdkInvocation("sendNextPathName", arrayOf(String::class.java), arrayOf(name))
+        fun restRoute(hours: Int, minutes: Int, mileage: Long) = HudSdkInvocation(
+            "sendRestRouteInfo", arrayOf(INT, INT, Long::class.javaPrimitiveType!!), arrayOf(hours, minutes, mileage),
+        )
+    }
+}
+
+/** TX_HUD_SDK request (see HudSdkCall.writeTo); null for a method this daemon does not know. */
+internal fun readHudSdkInvocation(data: Parcel): HudSdkInvocation? = when (data.readInt()) {
+    HelperBinderProtocol.HUD_SDK_GUIDANCE -> HudSdkInvocation.guidance(data.readInt(), data.readInt())
+    HelperBinderProtocol.HUD_SDK_PATH_NAME -> HudSdkInvocation.pathName(data.readString().orEmpty())
+    HelperBinderProtocol.HUD_SDK_REST_ROUTE -> HudSdkInvocation.restRoute(data.readInt(), data.readInt(), data.readLong())
+    else -> null
+}
+
+/**
+ * TX_HUD_SDK body: [call] on the device [device] hands back, looked up by reflection like
+ * [sendAutoNaviStatusOutcome]. Returns (outcome, sdkReturn); a throw is logged by class name only
+ * (the road name is user data, the SDK may echo it) and reported, never propagated.
+ */
+@Suppress("SpreadOperator") // two or three arguments per call
+internal fun hudSdkOutcome(call: HudSdkInvocation, device: () -> Any): Pair<Int, Int> {
+    val target = runCatching(device).getOrElse { e ->
+        android.util.Log.w(HUD_SDK_TAG, "${call.method}: no device: ${unwrapReflectionCause(e).javaClass.simpleName}")
+        return HelperBinderProtocol.HUD_NAVI_THREW to 0
+    }
+    val method = runCatching { target.javaClass.getMethod(call.method, *call.types) }.getOrNull()
+        ?: return HelperBinderProtocol.HUD_NAVI_ABSENT to 0
+    return runCatching { HelperBinderProtocol.HUD_NAVI_CALLED to (method.invoke(target, *call.args) as? Int ?: 0) }
+        .getOrElse { e ->
+            android.util.Log.w(HUD_SDK_TAG, "${call.method} threw ${unwrapReflectionCause(e).javaClass.simpleName}")
+            HelperBinderProtocol.HUD_NAVI_THREW to 0
+        }
+}
+
+private const val HUD_SDK_TAG = "HudWayChannels"
 
 /**
  * TX_READ_BATCH body. Reads `count` then count × (tx, dev, fid) triples from [data],
@@ -1700,197 +1761,6 @@ private fun setTaskBoundsReflect(taskId: Int, left: Int, top: Int, right: Int, b
     val resizeTask = iAtm.javaClass.getMethod("resizeTask", Int::class.javaPrimitiveType, Rect::class.java, Int::class.javaPrimitiveType)
     val rect = if (left == 0 && top == 0 && right == 0 && bottom == 0) null else Rect(left, top, right, bottom)
     resizeTask.invoke(iAtm, taskId, rect, 1)
-}
-
-/** Logcat does not show this daemon's lines on Sea Lion 06; stdout lands in bydmate_helper.log. */
-private fun helperDiag(msg: String) {
-    android.util.Log.i("bydmate_helper", msg)
-    System.out.println(msg)
-    System.out.flush()
-}
-
-/**
- * Android 11+ replacement for the removed IActivityTaskManager.setTaskWindowingMode: sets
- * [windowingMode] and [bounds] (empty = fill the parent) of [taskId] in ONE
- * WindowContainerTransaction, i.e. one configuration change for the app. Throws when the API or
- * the task token is unavailable (Android 10 has no WindowContainerTransaction).
- */
-private fun applyTaskWindowingWct(taskId: Int, windowingMode: Int, bounds: Rect) {
-    val wctClass = Class.forName("android.window.WindowContainerTransaction")
-    val tokenClass = Class.forName("android.window.WindowContainerToken")
-    val iAtm = activityTaskManager()
-    val task = (atmGetTasks(iAtm, 100) ?: emptyList<Any>()).firstOrNull { t ->
-        t != null && (fieldByName(t, "taskId") ?: fieldByName(t, "id"))
-            ?.let { f -> f.isAccessible = true; f.getInt(t) == taskId } == true
-    } ?: throw IllegalStateException("task $taskId not found")
-    val token = fieldByName(task, "token")?.let { f -> f.isAccessible = true; f.get(task) }
-        ?: throw IllegalStateException("no WindowContainerToken for task $taskId")
-    val wct = wctClass.getConstructor().newInstance()
-    wctClass.getMethod("setWindowingMode", tokenClass, Int::class.javaPrimitiveType).invoke(wct, token, windowingMode)
-    wctClass.getMethod("setBounds", tokenClass, Rect::class.java).invoke(wct, token, bounds)
-    val controller = iAtm.javaClass.getMethod("getWindowOrganizerController").invoke(iAtm)
-        ?: throw IllegalStateException("no WindowOrganizerController")
-    controller.javaClass.getMethod("applyTransaction", wctClass).invoke(controller, wct)
-}
-
-/** Combine fullscreen mode and cleared bounds in WCT, then move home. The display move is
- * a separate operation and may still recreate the activity; it never explicitly removes the task. */
-private fun pullBackInOneStep(taskId: Int) {
-    try {
-        applyTaskWindowingWct(taskId, WINDOWING_MODE_FULLSCREEN, Rect())
-        if (taskModeState(taskId)?.displayId != 0) moveTaskToDisplayReflect(taskId, 0)
-        runCatching { setFocusedTaskReflect(taskId) }
-    } catch (t: Throwable) {
-        helperDiag("pullback one-step failed task=$taskId: ${t.cause?.message ?: t.message}")
-        throw t
-    }
-}
-
-/**
- * Places [taskId] into a freeform window on [displayId] so that the app restarts at most ONCE and
- * that one restart already sees the final window.
- *
- * The cluster differs from the main screen in ways an app cannot take live (no touchscreen, no
- * HDR), so the display move restarts it. Moving first and sizing the window afterwards made that
- * restart run at the full cluster size and the window arrive as a live resize — Yandex Navigator
- * then kept guiding but never drew the route line again (on-car 2026-10-02). Sizing it on the
- * main screen while it is shown restarts it there too (a freeform window loses the bars' height,
- * sw720 -> sw604) and the second restart throws the map back to the world view.
- *
- * AOSP defers configuration changes of a STOPPED activity, so the task is first sent to the
- * bottom as it is ([sendToBack]: an ordinary switch back to the dashboard), then, once stopped,
- * given its freeform mode and bounds there ([park], kept at the bottom in the same transaction,
- * so nothing restarts and no small window shows on the main screen). The move then shows it on
- * the cluster, where it restarts once, straight into its window (verified on-car with
- * `am display move-stack`). Mode and bounds go out again after the move — this ROM can reset the
- * mode on a reparent; on a task that kept them nothing changes. When the hide or the park fails
- * the old order is used: move, then mode and bounds. Never retypes a task: mismatched activity
- * types still use the existing compatibility path.
- */
-internal fun tryCombinedFreeformPlacement(
-    taskId: Int, displayId: Int,
-    left: Int, top: Int, right: Int, bottom: Int,
-    desiredActivityType: Int,
-    getActivityType: (Int) -> Int,
-    move: (Int, Int) -> Unit,
-    applyModeAndBounds: (Int, Int, Int, Int, Int) -> Unit,
-    state: (Int) -> TaskModeState?,
-    focus: (Int) -> Unit,
-    log: (String) -> Unit,
-    sleep: (Long) -> Unit,
-    sendToBack: (Int) -> Unit = { throw UnsupportedOperationException() },
-    park: (Int, Int, Int, Int, Int) -> Unit = { _, _, _, _, _ -> throw UnsupportedOperationException() },
-    isVisible: (Int) -> Boolean? = { null },
-    isStopped: (Int) -> Boolean? = { null },
-): Boolean {
-    if (taskId <= 0 || left < 0 || top < 0 || right <= left || bottom <= top) return false
-    if (runCatching { getActivityType(taskId) }.getOrNull() != desiredActivityType) {
-        log("freeform combined skipped task=$taskId: activityType mismatch")
-        return false
-    }
-    return try {
-        if (state(taskId)?.displayId != displayId) {
-            // 1. Fullscreen as it is, to the bottom: the dashboard under it comes back with an
-            //    ordinary task switch, and the navigator never shows as a small window there.
-            val hidden = runCatching { sendToBack(taskId) }.isSuccess
-            // 2. Only a STOPPED activity keeps a configuration change pending: one that is merely
-            //    stopping restarts for the park AND for the move (two restarts within 20 ms, world
-            //    map; on-car 2026-10-03). The stop lands ~0.4 s after the task is covered.
-            if (hidden) {
-                var polls = 0
-                while (polls < STOP_POLLS && runCatching { isStopped(taskId) }.getOrNull() == false) {
-                    sleep(STOP_POLL_MS); polls++
-                }
-                log("freeform combined task=$taskId stop wait ${polls * STOP_POLL_MS} ms")
-            }
-            // 3. Freeform with the final bounds while nobody sees it (kept at the bottom).
-            val parked = hidden && runCatching { park(taskId, left, top, right, bottom) }.isSuccess
-            if (parked && runCatching { isVisible(taskId) }.getOrNull() == true) {
-                log("freeform combined task=$taskId still shown after parking")
-            }
-            move(taskId, displayId)
-            log("freeform combined task=$taskId moved ${if (parked) "parked" else "full-size"}")
-        }
-        applyModeAndBounds(taskId, left, top, right, bottom)
-        runCatching { focus(taskId) }
-        repeat(4) {
-            sleep(200L)
-            val after = state(taskId)
-            if (after?.displayId == displayId && after.windowingMode == WINDOWING_MODE_FREEFORM) {
-                log("freeform combined ok task=$taskId display=$displayId bounds=$left,$top,$right,$bottom")
-                return true
-            }
-        }
-        log("freeform combined unconfirmed task=$taskId")
-        false
-    } catch (t: Throwable) {
-        log("freeform combined failed task=$taskId: ${t.cause?.message ?: t.message}")
-        false
-    }
-}
-
-private const val STOP_POLLS = 25
-private const val STOP_POLL_MS = 100L
-
-/**
- * Whether the top activity of [taskId] has reached STOPPED, read from `dumpsys activity
- * activities` (ATMS exposes no activity state over binder); null when it cannot be told.
- */
-private fun taskActivityStopped(taskId: Int): Boolean? = runCatching {
-    val out = amShell("dumpsys activity activities", emptyList())
-    val start = Regex("""Hist\s+#\d+: ActivityRecord\{[^}]* t$taskId\}""").find(out) ?: return@runCatching null
-    val state = Regex("""\sstate=([A-Z_]+)""").find(out, start.range.last)?.groupValues?.get(1)
-        ?: return@runCatching null
-    state == "STOPPED"
-}.getOrNull()
-
-/** RunningTaskInfo.isVisible (Android 12) of [taskId]; null when the task or the field is missing. */
-private fun taskVisible(taskId: Int): Boolean? = runCatching {
-    val tasks = atmGetTasks(activityTaskManager(), 100) ?: return@runCatching null
-    for (task in tasks) {
-        if (task == null) continue
-        val idField = fieldByName(task, "taskId") ?: fieldByName(task, "id") ?: continue
-        idField.isAccessible = true
-        if (idField.getInt(task) != taskId) continue
-        val f = fieldByName(task, "isVisible") ?: return@runCatching null
-        f.isAccessible = true
-        return@runCatching f.getBoolean(task)
-    }
-    null
-}.getOrNull()
-
-/** Applies one WindowContainerTransaction built by [build] against [taskId]'s container token. */
-private fun applyTaskWct(taskId: Int, build: (wct: Any, wctClass: Class<*>, tokenClass: Class<*>, token: Any) -> Unit) {
-    val wctClass = Class.forName("android.window.WindowContainerTransaction")
-    val tokenClass = Class.forName("android.window.WindowContainerToken")
-    val iAtm = activityTaskManager()
-    val task = (atmGetTasks(iAtm, 100) ?: emptyList<Any>()).firstOrNull { t ->
-        t != null && (fieldByName(t, "taskId") ?: fieldByName(t, "id"))
-            ?.let { f -> f.isAccessible = true; f.getInt(t) == taskId } == true
-    } ?: throw IllegalStateException("task $taskId not found")
-    val token = fieldByName(task, "token")?.let { f -> f.isAccessible = true; f.get(task) }
-        ?: throw IllegalStateException("no WindowContainerToken for task $taskId")
-    val wct = wctClass.getConstructor().newInstance()
-    build(wct, wctClass, tokenClass, token)
-    val controller = iAtm.javaClass.getMethod("getWindowOrganizerController").invoke(iAtm)
-        ?: throw IllegalStateException("no WindowOrganizerController")
-    controller.javaClass.getMethod("applyTransaction", wctClass).invoke(controller, wct)
-}
-
-/** [taskId] to the bottom of its display, mode and size untouched. */
-private fun sendTaskToBack(taskId: Int) = applyTaskWct(taskId) { wct, wctClass, tokenClass, token ->
-    wctClass.getMethod("reorder", tokenClass, Boolean::class.javaPrimitiveType).invoke(wct, token, false)
-}
-
-/**
- * [taskId] goes freeform with [bounds] and stays at the bottom, in one transaction (a mode change
- * alone may raise it). See [tryCombinedFreeformPlacement].
- */
-private fun parkTaskFreeform(taskId: Int, bounds: Rect) = applyTaskWct(taskId) { wct, wctClass, tokenClass, token ->
-    wctClass.getMethod("setWindowingMode", tokenClass, Int::class.javaPrimitiveType)
-        .invoke(wct, token, WINDOWING_MODE_FREEFORM)
-    wctClass.getMethod("setBounds", tokenClass, Rect::class.java).invoke(wct, token, bounds)
-    wctClass.getMethod("reorder", tokenClass, Boolean::class.javaPrimitiveType).invoke(wct, token, false)
 }
 
 /** Resolved focus method: setFocusedRootTask(int) (Android 12) or setFocusedTask(int) (Android 10). */
@@ -2386,11 +2256,11 @@ private fun logA11yFrameworkState(reassertOk: Boolean) {
     }.take(12)
     android.util.Log.i(tag, "a11y state after reassert ok=$reassertOk: sdk=${android.os.Build.VERSION.SDK_INT} lines=${a11y.size}")
     keep.forEach { android.util.Log.i(tag, "a11y: " + it.trim().take(300)) }
-    val pid = shExecBounded("pidof ${HelperBinderProtocol.APP_PACKAGE}")
-    val stopped = shExecBounded("dumpsys package ${HelperBinderProtocol.APP_PACKAGE}").lines()
+    val pid = shExecBounded("pidof com.bydmate.app")
+    val stopped = shExecBounded("dumpsys package com.bydmate.app").lines()
         .firstOrNull { it.contains("stopped=", ignoreCase = true) }?.trim()?.take(200)
     android.util.Log.i(tag, "pkg: pid=${pid.ifEmpty { "none" }} $stopped")
-    val am = shExecBounded("dumpsys activity services ${HelperBinderProtocol.APP_PACKAGE}").lines()
+    val am = shExecBounded("dumpsys activity services com.bydmate.app").lines()
     val start = am.indexOfFirst { it.contains("SteeringWheelKeyService") }
     if (start < 0) {
         android.util.Log.i(tag, "am: no ServiceRecord for SteeringWheelKeyService (lines=${am.size})")
@@ -2992,6 +2862,9 @@ private fun launchAndForce(packageName: String, displayId: Int, width: Int, heig
         packageName, windowingMode = null, displayId = displayId, activityType = ACTIVITY_TYPE_STANDARD,
     )
     if (taskId <= 0) return false
+    // #288: a task inside a native split pane may not follow the root-task move; remember where
+    // it started so [splitFallbackCore] can check it.
+    val before = taskModeState(taskId)
     // Each redirect op is best-effort, mirroring CarControlImpl (every reflective call there returns
     // a status string and swallows its own exception). resizeTask in particular throws "not allowed"
     // on a fullscreen task — that must NOT abort the move/focus or bubble up as a launchAndForce
@@ -3017,6 +2890,14 @@ private fun launchAndForce(packageName: String, displayId: Int, width: Int, heig
     // whose process is dying can still be listed by getTasks with a stale baseActivity and hide the
     // death from the check below.
     Thread.sleep(500L)
+    val placed = splitFallbackCore(
+        taskId, displayId, before,
+        stateOf = { ti -> taskModeState(ti) },
+        resolveComponent = { resolveLaunchComponent(packageName) },
+        shell = amShell,
+        sleep = { Thread.sleep(it) },
+    )
+    if (!placed) return false
     // App died during the move (2GIS/Qt) → relaunch ONCE born on the display; no retry loop.
     if (findTaskId(packageName) <= 0) {
         val rebornId = resolveOrLaunchTask(
@@ -3029,6 +2910,68 @@ private fun launchAndForce(packageName: String, displayId: Int, width: Int, heig
     return true
 }
 
+/**
+ * True when a task that sat in a native split pane ([before]) is still alive off [displayId] after
+ * the move ([after]). Fullscreen or unknown [before] is never a fallback case; a null [after]
+ * (task gone) is left to the liveness check.
+ */
+internal fun needsSplitFallback(before: TaskModeState?, after: TaskModeState?, displayId: Int): Boolean =
+    before != null && before.windowingMode in SPLIT_WINDOWING_MODES &&
+        after != null && after.displayId != displayId
+
+/**
+ * #288: a navigator pulled back into the native 50/50 split lives in a split pane (mode 3/4), and
+ * moveRootTaskToDisplay leaves it there without a word, so the cluster stayed dark while the
+ * launch reported success. When [before] is a split pane and the task is still off [displayId],
+ * the light pullback's `am start` (mode+display on the EXISTING task, task id kept) is aimed at
+ * the target display and the task is read back with the same settle budget. Returns false only
+ * when that fallback ran and the task did not arrive; any other start returns true untouched.
+ */
+@Suppress("LongParameterList") // every system touch is injected so tests pin the sequence
+internal fun splitFallbackCore(
+    taskId: Int,
+    displayId: Int,
+    before: TaskModeState?,
+    stateOf: (Int) -> TaskModeState?,
+    resolveComponent: () -> String?,
+    shell: (String, List<String>) -> String,
+    sleep: (Long) -> Unit,
+): Boolean {
+    if (before == null || before.windowingMode !in SPLIT_WINDOWING_MODES) return true
+    val after = stateOf(taskId)
+    if (!needsSplitFallback(before, after, displayId)) {
+        android.util.Log.i("bydmate_helper", "launchAndForce split: task=$taskId from=$before moved state=$after")
+        return true
+    }
+    val component = resolveComponent()
+    if (component == null) {
+        android.util.Log.w("bydmate_helper", "launchAndForce split: task=$taskId state=$after no launcher component")
+        return false
+    }
+    android.util.Log.i(
+        "bydmate_helper",
+        "launchAndForce split: task=$taskId from=$before still state=$after → am start display=$displayId",
+    )
+    val out = runCatching {
+        shell("am start --windowingMode $WINDOWING_MODE_FULLSCREEN --display $displayId -n \"\$1\"", listOf(component))
+    }.getOrElse { "Exception ${it.message}" }
+    if (out.contains("Error") || out.contains("Exception")) {
+        android.util.Log.w("bydmate_helper", "launchAndForce split: task=$taskId am failed: ${out.take(120)}")
+        return false
+    }
+    var last: TaskModeState? = null
+    repeat(PULLBACK_READS) {
+        sleep(PULLBACK_POLL_MS)
+        last = stateOf(taskId)
+        if (last?.displayId == displayId) {
+            android.util.Log.i("bydmate_helper", "launchAndForce split: task=$taskId fallback ok state=$last")
+            return true
+        }
+    }
+    android.util.Log.w("bydmate_helper", "launchAndForce split: task=$taskId fallback failed state=$last")
+    return false
+}
+
 /** Status codes for [launchFreeformCore] / TX_LAUNCH_FREEFORM. */
 internal object FreeformResultCodes {
     const val OK = 0
@@ -3039,6 +2982,8 @@ internal object FreeformResultCodes {
 // WindowConfiguration windowing modes (android.app; hidden constants, stable since API 28).
 internal const val WINDOWING_MODE_FULLSCREEN = 1
 internal const val WINDOWING_MODE_FREEFORM = 5
+// Native split panes (SPLIT_SCREEN_PRIMARY / SECONDARY).
+internal val SPLIT_WINDOWING_MODES = setOf(3, 4)
 
 /** Settle budget of the light fullscreen pull-back: [PULLBACK_READS] reads, one per pause. */
 internal const val PULLBACK_POLL_MS = 300L
@@ -3097,10 +3042,8 @@ internal fun handleSetWindowingModeTx(
     getActivityType: (Int) -> Int,
     sleep: (Long) -> Unit,
     stateOf: (Int) -> TaskModeState? = { _ -> null },
-    oneStepFullscreen: ((Int) -> Unit)? = null,
 ) = setWindowingModeCompat(
-    taskId, mode, 0, desiredActivityType, reflectSet, resolveComponent, shell, getActivityType, stateOf,
-    oneStepFullscreen = oneStepFullscreen, sleep = sleep,
+    taskId, mode, 0, desiredActivityType, reflectSet, resolveComponent, shell, getActivityType, stateOf, sleep,
 )
 
 /**
@@ -3141,7 +3084,6 @@ internal fun setWindowingModeCompat(
     shell: (String, List<String>) -> String,
     getActivityType: (Int) -> Int = { _ -> -1 },
     stateOf: (Int) -> TaskModeState? = { _ -> null },
-    oneStepFullscreen: ((Int) -> Unit)? = null,
     sleep: (Long) -> Unit,
 ) {
     // Skip reflectSet when placing into freeform and the task's activityType is not the desired
@@ -3180,26 +3122,6 @@ internal fun setWindowingModeCompat(
             taskId, freeformType, desiredActivityType, freeformDisplayId, component, shell, sleep, stateOf,
         )
     } else {
-        // One-step path (Android 11+, [oneStepFullscreen]): mode and bounds in one
-        // WindowContainerTransaction with the display move right behind it, so the app sees one
-        // configuration change instead of a relaunch per step. On Sea Lion 06 the light path below
-        // moves the task home but leaves it FREEFORM (on-car 2026-10-01: task #56 removed as
-        // mode=freeform), and the unconfirmed state then costs the navigator its task. Confirmed
-        // by the same reads as the light path; anything else falls through to it unchanged.
-        if (oneStepFullscreen != null && runCatching { oneStepFullscreen(taskId) }.isSuccess) {
-            var after: TaskModeState? = null
-            repeat(PULLBACK_READS) {
-                sleep(PULLBACK_POLL_MS)
-                after = stateOf(taskId)
-                if (after != null && after.displayId == 0 &&
-                    after.windowingMode == WINDOWING_MODE_FULLSCREEN
-                ) {
-                    helperDiag("pullback one-step ok task=$taskId")
-                    return
-                }
-            }
-            helperDiag("pullback one-step unconfirmed: task=$taskId state=$after")
-        }
         // Light path first (#134): the same `am start` trick the freeform direction uses —
         // mode+display applied to the EXISTING task, so the navigator keeps its id, its process
         // and its guidance session. Verified by reading the task back; only an unconfirmed
@@ -3243,7 +3165,10 @@ internal fun setWindowingModeCompat(
             throw IllegalStateException("am stack remove failed: ${removed.take(200)}")
         }
         sleep(500L)
-        val out = shell("am start --display 0 -n \"\$1\"", listOf(component))
+        // Explicit mode (#288): with no --windowingMode the platform resolves the fresh task's
+        // mode from display 0, and a native split still active there takes it into its secondary
+        // pane (wm=4), so the next projection starts from a split pane again.
+        val out = shell("am start --windowingMode $WINDOWING_MODE_FULLSCREEN --display 0 -n \"\$1\"", listOf(component))
         if (out.contains("Error")) throw IllegalStateException("am start fullscreen failed: ${out.take(200)}")
     }
 }
@@ -3474,24 +3399,6 @@ private fun launchFreeform(
     // The budget starts before the launch retry loop: it, not just the core, eats the client's 15s.
     val startMs = monotonicMs()
     val taskId = resolveOrLaunchTask(packageName, WINDOWING_MODE_FREEFORM, displayId, activityType)
-    // Kom-BYDMate: the combined path rests on WindowContainerTransaction (Android 11+). On
-    // Android 10 (DiLink 4) it failed after moving the task, and the old order then ran on top.
-    if (android.os.Build.VERSION.SDK_INT >= 30 && tryCombinedFreeformPlacement(
-        taskId, displayId, left, top, right, bottom, activityType,
-        getActivityType = ::taskActivityType,
-        move = ::moveTaskToDisplayReflect,
-        applyModeAndBounds = { t, l, y, r, b ->
-            applyTaskWindowingWct(t, WINDOWING_MODE_FREEFORM, Rect(l, y, r, b))
-        },
-        state = ::taskModeState,
-        focus = ::setFocusedTaskReflect,
-        log = ::helperDiag,
-        sleep = { Thread.sleep(it) },
-        sendToBack = ::sendTaskToBack,
-        park = { t, l, y, r, b -> parkTaskFreeform(t, Rect(l, y, r, b)) },
-        isVisible = ::taskVisible,
-        isStopped = ::taskActivityStopped,
-    )) return FreeformResultCodes.OK
     return launchFreeformCore(
         taskId, displayId, left, top, right, bottom, activityType,
         setMode = { t, m ->
@@ -3519,7 +3426,7 @@ private fun launchFreeform(
         getActivityType = { ti -> taskActivityType(ti) },
         // android.util.Log reaches logcat from the app_process daemon; System.err goes nowhere.
         // Passing the throwable prints the full stack trace including the cause chain.
-        log = { msg, t -> helperDiag(msg + (t?.let { ": ${it.cause?.message ?: it.message}" } ?: "")) },
+        log = { msg, t -> android.util.Log.w("bydmate_helper", msg, t) },
         // setMode recreates a STANDARD task (new id) — re-resolve by package, never by the old id.
         resolveCurrentTaskId = { findTaskState(packageName)?.taskId ?: -1 },
         deadlineMs = startMs + GRACE_DEADLINE_MS,

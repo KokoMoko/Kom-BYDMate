@@ -54,7 +54,7 @@ object VoiceCatalog {
         VoiceCommandSpec(ON, AC_AUTO_MODE) { "空调自动" },
         VoiceCommandSpec(ON, AC_FLOW) { "打开空调通风" },
         VoiceCommandSpec(SET, AC_FAN, ValueSpec(1, 7)) { n -> "风量${n}" },
-        VoiceCommandSpec(SET, AC_TEMP, ValueSpec(16, 30)) { n -> "设置温度${n}" },
+        VoiceCommandSpec(SET, AC_TEMP, ValueSpec(16, 33)) { n -> "设置温度${n}" },
         VoiceCommandSpec(ON, AC_RECIRC_INNER) { "内循环" },
         VoiceCommandSpec(ON, AC_RECIRC_OUTER) { "外循环" },
         VoiceCommandSpec(ON, DEFROST_FRONT) { "吹前挡" },
@@ -90,6 +90,9 @@ object VoiceCatalog {
         VoiceCommandSpec(OFF, LIGHT_DRL) { "关闭日行灯" },
         VoiceCommandSpec(ON, LIGHT_INTERIOR) { "打开车内灯" },
         VoiceCommandSpec(OFF, LIGHT_INTERIOR) { "关闭车内灯" },
+        // HUD master switch
+        VoiceCommandSpec(ON, HUD) { "打开抬头显示" },
+        VoiceCommandSpec(OFF, HUD) { "关闭抬头显示" },
         // Locks — "запри"/"отопри" via the door/lock synonyms ("замок", "двери").
         VoiceCommandSpec(ON, LOCK) { "车门上锁" },
         VoiceCommandSpec(OFF, LOCK) { "车门解锁" },

@@ -6,7 +6,10 @@ import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.HudNaviReply
+import com.bydmate.app.diagnostics.TraceRecorder
 import com.bydmate.app.helper.HelperBinderProtocol
+import com.bydmate.app.navdata.NavGuidance
+import com.bydmate.app.navdata.NavGuidanceHub
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -18,7 +21,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -33,9 +38,14 @@ class HudArmingTest {
     private val prefs: SharedPreferences = ApplicationProvider.getApplicationContext<Context>()
         .getSharedPreferences("hud_arming_test", Context.MODE_PRIVATE)
 
+    @get:Rule val trace = TraceRecorder()
+
     @Before fun clear() {
         prefs.edit().clear().commit()
+        NavGuidanceHub.reset()
     }
+
+    @After fun resetHub() = NavGuidanceHub.reset()
 
     /** The car as the daemon sees it. [sdk] null = a daemon too old for the SDK call. */
     private class FakeCar {
@@ -297,6 +307,45 @@ class HudArmingTest {
         coVerify(exactly = 0) { car.helper.readBatch(any()) }
     }
 
+    // --- the armed marker: a status raised over an unreadable layout ---
+
+    @Test fun `the armed marker is kept before the first write to the car`() = runTest {
+        val car = FakeCar().apply { readErrors[HudArming.SCREEN] = -10011 }
+        coEvery { car.helper.hudNaviStatus(any()) } throws IllegalStateException("helper gone")
+        assertTrue(runCatching { arming(car).arm() }.isFailure)
+        assertTrue(prefs.getBoolean(HudArming.KEY_ARMED, false))
+        assertFalse(prefs.contains(HudArming.KEY_AS_FOUND))
+    }
+
+    @Test fun `a status raised over an unreadable layout goes back after a kill, the layout untouched`() = runTest {
+        val car = FakeCar().apply { readErrors[HudArming.SCREEN] = -10011 }
+        arming(car).arm()                            // the process dies here, mid-route
+        assertFalse(prefs.contains(HudArming.KEY_AS_FOUND))
+        assertEquals(2, car.state[HudArming.NAVI])
+        car.calls.clear()
+        val lines = mutableListOf<String>()
+        val r = arming(car, lines).disarmLeftover(guided = false)   // the next start
+        assertEquals(listOf("sdk 4", "set 1014/1083203624=0", "set 1014/1262485592=0"), car.calls)
+        assertTrue(r!!.ok)
+        assertTrue(lines.single().startsWith("hud disarm: reason=leftover navi rc=0 screen=na rc=skipped ok=true "))
+        assertFalse(prefs.contains(HudArming.KEY_ARMED))
+        assertNull(arming(car).disarmLeftover(guided = false))   // nothing left the second time
+    }
+
+    @Test fun `a clean disarm clears the armed marker, a refused one keeps it`() = runTest {
+        val car = FakeCar()
+        val a = arming(car)
+        a.arm()
+        assertTrue(prefs.getBoolean(HudArming.KEY_ARMED, false))
+        a.disarm()
+        assertFalse(prefs.contains(HudArming.KEY_ARMED))
+
+        a.arm()
+        car.writeErrors[HudArming.ISA] = -10011
+        assertFalse(a.disarm().ok)
+        assertTrue(prefs.getBoolean(HudArming.KEY_ARMED, false))
+    }
+
     @Test fun `a guided route leaves the leftover to its own arm and disarm`() = runTest {
         val car = leftoverCar()
         assertNull(arming(car).disarmLeftover(guided = true))
@@ -447,5 +496,131 @@ class HudArmingTest {
         advanceTimeBy(6_000); runCurrent()
         assertTrue(car.calls.contains("set 1023/1276174357=3"))
         a.stop()
+    }
+
+    // --- the hook ways 2 and 3 clean up in ---
+
+    @Test fun `the hook runs before the route end's disarm, while the status is up`() = runTest {
+        val car = FakeCar()
+        var guided = true
+        val a = arming(car)
+        a.beforeDisarm = { car.calls += "hook navi=${car.state[HudArming.NAVI]}" }
+        a.start(backgroundScope) { guided }
+        runCurrent()
+        guided = false
+        advanceTimeBy(1_100); runCurrent()
+        assertEquals(listOf("hook navi=2", "sdk 4"), car.calls.takeLast(5).take(2))
+        a.stop()
+        assertEquals(1, car.calls.count { it.startsWith("hook") })
+    }
+
+    @Test fun `the hook runs before the disarm of a stop`() = runTest {
+        val car = FakeCar()
+        val a = arming(car)
+        a.beforeDisarm = { car.calls += "hook navi=${car.state[HudArming.NAVI]}" }
+        a.start(backgroundScope) { true }
+        runCurrent()
+        a.stop()
+        assertEquals(listOf("hook navi=2", "sdk 4"), car.calls.takeLast(5).take(2))
+    }
+
+    @Test fun `the after-arm hook runs once the status is up, and again on the arm after a disarm`() = runTest {
+        val car = FakeCar()
+        var guided = true
+        val a = arming(car)
+        a.afterArm = { car.calls += "after navi=${car.state[HudArming.NAVI]}" }
+        a.start(backgroundScope) { guided }
+        runCurrent()
+        assertTrue(car.calls.toString(), car.calls.indexOf("after navi=2") > car.calls.indexOf("sdk 2"))
+        guided = false
+        advanceTimeBy(1_100); runCurrent()
+        assertEquals(1, car.calls.count { it.startsWith("after") })
+        guided = true
+        advanceTimeBy(1_100); runCurrent()
+        assertEquals(2, car.calls.count { it.startsWith("after") })
+        a.stop()
+    }
+
+    @Test fun `the after-arm hook runs even when the arm throws after the session is armed`() = runTest {
+        val car = FakeCar()
+        val a = arming(car)
+        var hooks = 0
+        a.afterArm = { hooks++ }
+        coEvery { car.helper.writeStatus(HudArming.CAN_NAVI.first, HudArming.CAN_NAVI.second, any(), any()) } throws
+            IllegalStateException("helper gone")
+        assertTrue(runCatching { a.arm() }.isFailure)
+        assertTrue(a.armed)
+        assertEquals(1, hooks)
+    }
+
+    @Test fun `a failing hook still disarms`() = runTest {
+        val car = FakeCar()
+        val a = arming(car)
+        a.beforeDisarm = { error("helper gone") }
+        a.start(backgroundScope) { true }
+        runCurrent()
+        a.stop()
+        assertEquals(4, car.state[HudArming.NAVI])
+        assertFalse(a.armed)
+    }
+
+    // --- why it armed and disarmed (trace audit) ---
+
+    @Test fun `the product arm line carries the car's navigation gate, read once per arm`() = runTest {
+        val car = FakeCar()
+        car.state[1023 to 1276174394] = 1
+        car.state[1023 to 951058472] = 2
+        val lines = mutableListOf<String>()
+        val a = arming(car, lines)
+        a.start(backgroundScope) { true }
+        runCurrent()
+        advanceTimeBy(11_000); runCurrent()          // two re-checks: no gate read there
+        assertTrue(lines.first().startsWith("hud arm: ") && lines.first().endsWith(" gate=1/2"))
+        assertTrue(trace.events().single { it.contains(" arm ") }.contains(" gate=1/2 "))
+        coVerify(exactly = 1) { car.helper.readBatch(match { items -> items.any { it.fid == 951058472 } }) }
+        a.stop()
+    }
+
+    @Test fun `a route end disarm says guidance-off and links the hub's guidance-off line`() = runTest {
+        val car = FakeCar()
+        val lines = mutableListOf<String>()
+        var guided = true
+        val a = arming(car, lines)
+        a.start(backgroundScope) { guided }
+        runCurrent()
+        NavGuidanceHub.update(NavGuidance(2, 300, "Main St", 0, 0, 0), NavGuidanceHub.Source.A11Y, nowMs = 1_000)
+        NavGuidanceHub.snapshot(nowMs = 200_000)    // 90 s of silence: the hub ends the route
+        val offId = NavGuidanceHub.lastOffTraceId
+        assertTrue(offId > 0)
+        guided = false
+        advanceTimeBy(1_100); runCurrent()
+        assertTrue(lines.last().endsWith(" reason=guidance-off"))
+        assertTrue(trace.events().single { it.contains(" disarm ") }.let { it.contains(" reason=guidance-off ") && it.endsWith("by=#$offId") })
+        a.stop()
+    }
+
+    @Test fun `a disarm the HUD check's pause brought says paused`() = runTest {
+        val car = FakeCar()
+        val lines = mutableListOf<String>()
+        var paused = false
+        val a = arming(car, lines)
+        a.start(backgroundScope, layoutOwned = { !paused }) { !paused }
+        runCurrent()
+        paused = true
+        advanceTimeBy(1_100); runCurrent()
+        assertTrue(lines.last().endsWith(" reason=paused"))
+        assertFalse(trace.events().single { it.contains(" disarm ") }.contains("by=#"))
+        a.stop()
+    }
+
+    @Test fun `a stop's disarm carries the reason it was given`() = runTest {
+        val car = FakeCar()
+        val lines = mutableListOf<String>()
+        val a = arming(car, lines)
+        a.start(backgroundScope) { true }
+        runCurrent()
+        a.stop(HudArming.REASON_HUD_OFF)
+        assertTrue(lines.last().endsWith(" reason=hud-off"))
+        assertTrue(trace.events().single { it.contains(" disarm ") }.contains(" reason=hud-off "))
     }
 }

@@ -27,7 +27,7 @@ data class WelcomeUiState(
     val language: String = "ru",
     val batteryCapacity: String = SettingsRepository.DEFAULT_BATTERY_CAPACITY,
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
-    val currencySymbol: String = "BYN",
+    val currencySymbol: String = "֏",
     /** True once the user picked a currency; language changes stop overriding it. */
     val currencyTouched: Boolean = false,
     val homeTariff: String = SettingsRepository.DEFAULT_HOME_TARIFF,
@@ -145,7 +145,7 @@ class WelcomeViewModel @Inject constructor(
         private const val TAG = "Welcome"
 
         private fun currencyForLanguage(lang: String): String =
-            if (lang == "zh") "CNY" else SettingsRepository.DEFAULT_CURRENCY
+            SettingsRepository.DEFAULT_CURRENCY  // Kom-BYDMate: no zh UI, so no CNY switch
 
         private fun findCurrency(code: String): SettingsRepository.Currency =
             SettingsRepository.CURRENCIES.find { it.code == code } ?: SettingsRepository.CURRENCIES.first()

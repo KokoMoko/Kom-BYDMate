@@ -2,6 +2,7 @@ package com.bydmate.app.ui.automation
 
 import android.content.Context
 import com.bydmate.app.R
+import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.RouteNavigatorUris
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.SharedRule
@@ -32,6 +33,7 @@ internal object RuleImportSummary {
         "notification_silent" to R.string.automation_action_notification,
         "notification_sound" to R.string.automation_action_notification,
         "app_launch" to R.string.automation_action_app_launch,
+        "app_close" to R.string.automation_action_app_close,
         "call" to R.string.automation_action_call,
         "navigate" to R.string.automation_action_navigate,
         "url" to R.string.automation_action_url,
@@ -99,7 +101,9 @@ internal object RuleImportSummary {
     fun action(action: ActionDef, context: Context, autoGo: (JSONObject) -> Boolean = { false }): String {
         val lc = context.appLocalizedContext()
         if (action.kind == "toggle") return toggleDisplayName(context, action.payload.orEmpty())
-        val label = ACTION_KIND_LABELS[action.kind]?.let { lc.getString(it) } ?: action.kind
+        val labelRes = if (action.kind == "media_key") ActionDispatcher.mediaKeyNameRes(action.payload)
+        else ACTION_KIND_LABELS[action.kind]
+        val label = labelRes?.let { lc.getString(it) } ?: action.kind
         // Same default as the dispatcher: no flag, no minimize.
         val minimize = lc.getString(R.string.automation_import_minimize)
             .takeIf { action.kind in MINIMIZE_KINDS && payloadJson(action.payload).optBoolean("minimize", false) }
@@ -110,11 +114,10 @@ internal object RuleImportSummary {
     private fun actionDetail(action: ActionDef, lc: Context, autoGo: (JSONObject) -> Boolean): String? {
         val json = payloadJson(action.payload)
         return when (action.kind) {
-            "param" -> ACTION_COMMANDS.find { it.command == action.command }
-                ?.let { "${lc.getString(it.nameRes)} (${action.command})" } ?: action.command
+            "param" -> paramDetail(action.command, lc)
             "notification", "notification_silent", "notification_sound" ->
                 listOf(json.optString("title"), json.optString("text")).filter { it.isNotBlank() }.joinToString(" / ")
-            "app_launch" -> json.optString("packageName")
+            "app_launch", "app_close" -> json.optString("packageName")
             "call" -> callDetail(json, lc)
             "delay", "media_volume" -> action.payload
             "sentry", "hotspot", "cluster_projection" ->
@@ -235,3 +238,8 @@ private fun callDetail(json: JSONObject, lc: Context): String {
     val phone = json.optString("phone").ifBlank { lc.getString(R.string.automation_import_contact_missing) }
     return if (json.optBoolean("autoDial", false)) "$phone, ${lc.getString(R.string.automation_call_auto_dial_label)}" else phone
 }
+
+/** «Закрыть все окна (车窗关闭)», «Температура: 22 °C (设置温度22)»; an unknown command as it is. */
+private fun paramDetail(command: String, lc: Context): String =
+    (ACTION_COMMANDS.find { it.command == command }?.let { lc.getString(it.nameRes) } ?: levelActionName(command, lc))
+        ?.let { "$it ($command)" } ?: command

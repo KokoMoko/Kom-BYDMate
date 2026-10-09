@@ -13,6 +13,7 @@ import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl
 import com.bydmate.app.data.local.database.AppDatabase
+import com.bydmate.app.hud.HudAmapClusterLoop
 import com.bydmate.app.hud.HudController
 import com.bydmate.app.service.A11yRecoveryGate
 import com.bydmate.app.split.SplitPreferencesImpl
@@ -107,7 +108,7 @@ class BackupManager(
          * An entry ending in '*' excludes every key with that prefix.
          */
         val EXCLUDED_PREFS_KEYS: Map<String, Set<String>> = mapOf(
-            HudController.PREFS_NAME to setOf(HudController.KEY_SUPPORTED),
+            HudController.PREFS_NAME to setOf(HudController.KEY_SUPPORTED, HudAmapClusterLoop.KEY_AMAP_CLUSTER_LEFT),
             ClusterProjectionManager.PREFS_NAME to setOf(
                 ClusterProjectionManager.KEY_LAST_VD_ID,
                 ClusterProjectionManager.KEY_DIRECT_DISPLAY_ID,
@@ -138,6 +139,7 @@ class BackupManager(
                 AutomationEngine.KEY_SERVICE_START_LAST_SEEN_ELAPSED,
                 AutomationEngine.KEY_SERVICE_START_LAST_SEEN_UPTIME,
                 AutomationEngine.KEY_SERVICE_START_CAR_OFF,
+                AutomationEngine.KEY_SERVICE_START_SELF_RESTART_ELAPSED,
             ),
             // Media volume saved while the voice agent speaks: another car would get it raised
             // back to the source device's level.

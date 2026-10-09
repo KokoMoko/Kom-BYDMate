@@ -187,6 +187,47 @@ class ClusterDisplayDiagTest {
     }
 
     @Test
+    fun `parses the Android 12 field dump into the hidden cluster surface`() {
+        val devices = ClusterDisplayDiag.parseDisplayDevices(DisplayDumpFixtures.ANDROID12_FIELD)
+        assertEquals(listOf(2), devices.map { it.id })
+        val cluster = devices.single()
+        assertEquals("fission_bg_xdjaVirtualSurface", cluster.name)
+        assertEquals(1920, cluster.width)
+        assertEquals(720, cluster.height)
+        // Truncated like DILINK4: owner and flags are reported as absent, not invented.
+        assertEquals(-1, cluster.ownerUid)
+        assertTrue(cluster.flags.isEmpty())
+    }
+
+    @Test
+    fun `parses the untruncated Android 12 dump with the owner and flags of the device line`() {
+        val devices = ClusterDisplayDiag.parseDisplayDevices(DisplayDumpFixtures.ANDROID12_FULL)
+        assertEquals(listOf(0, 2), devices.map { it.id })
+        assertEquals("Built-in Screen", devices[0].name)
+        assertEquals(1920 to 1080, devices[0].width to devices[0].height)
+        val cluster = devices[1]
+        assertEquals("fission_bg_xdjaVirtualSurface", cluster.name)
+        assertEquals(1920 to 720, cluster.width to cluster.height)
+        assertEquals("com.xdja.containerservice", cluster.ownerPkg)
+        assertEquals(1000, cluster.ownerUid)
+        assertEquals(listOf("FLAG_PRESENTATION", "FLAG_OWN_CONTENT_ONLY"), cluster.flags)
+    }
+
+    @Test
+    fun `the reconstructed Android 12 device lines summarize to what the daemon logged on the car`() {
+        assertEquals(
+            listOf(
+                "dev: name=\"Built-in Screen\" 1920x1080 type=INTERNAL state=ON owner=? flags=FLAG_DEFAULT_DISPLAY," +
+                    "FLAG_ROTATES_WITH_CONTENT,FLAG_SECURE,FLAG_SUPPORTS_PROTECTED_BUFFERS uniqueId=local:4630946674560563842",
+                "dev: name=\"fission_bg_xdjaVirtualSurface\" 1920x720 type=VIRTUAL state=ON owner=com.xdja.containerservice " +
+                    "(uid 1000) flags=FLAG_PRESENTATION,FLAG_OWN_CONTENT_ONLY " +
+                    "uniqueId=virtual:com.xdja.containerservice,1000,fission_bg_xdjaVirtualSurface,0",
+            ),
+            ClusterDisplayDiag.displaySummaries(DisplayDumpFixtures.ANDROID12_FULL),
+        )
+    }
+
+    @Test
     fun `each logical display is reported once, not once per DisplayInfo field`() {
         // Every block carries mBaseDisplayInfo AND mOverrideDisplayInfo for the same display.
         val ids = ClusterDisplayDiag.parseDisplayDevices(DisplayDumpFixtures.DILINK4).map { it.id }
@@ -310,5 +351,58 @@ class ClusterDisplayDiagTest {
             ClusterDisplayDiag.MAX_TASK_CONFIGS,
             ClusterDisplayDiag.taskConfigLines(many, "ru.yandex.yandexnavi").size,
         )
+    }
+
+    /**
+     * NOT a device capture: hand-built from the AOSP 12 `ActivityRecord.dump` /
+     * `MergedConfiguration.dump` code, because the real output of an Android 12 head unit has never
+     * been seen (a tester's DiLink 5.0 dump gave `dpi=? raw="mLastReportedConfigurations:"`).
+     * A reference line comes first, then the history entry; the header is followed by the two
+     * configuration lines instead of the Android 10 blob.
+     */
+    private val aosp12FormatSample = """
+        Display #4 (activities from top to bottom):
+          * Task{8f1 #68 type=standard A=10123:ru.yandex.yandexnavi U=0 visible=true mode=freeform}
+            mResumedActivity: ActivityRecord{77aa u0 ru.yandex.yandexnavi/.core.NavigatorActivity t68}
+            * Hist #0: ActivityRecord{77aa u0 ru.yandex.yandexnavi/.core.NavigatorActivity t68}
+              packageName=ru.yandex.yandexnavi processName=ru.yandex.yandexnavi
+              intent={act=android.intent.action.MAIN cmp=ru.yandex.yandexnavi/.core.NavigatorActivity}
+              mLastReportedConfigurations:
+               mGlobalConfig={1.0 ?mcc?mnc [ru_RU] ldltr sw450dp w800dp h450dp 240dpi lrg land car finger}
+               mOverrideConfig={1.0 ?mcc?mnc [ru_RU] ldltr sw330dp w614dp h330dp 160dpi lrg land car finger winConfig={ mBounds=Rect(1306, 0 - 1920, 660) mWindowingMode=freeform mDisplayRotation=ROTATION_0}}
+              CurrentConfiguration={1.0 ?mcc?mnc [ru_RU] ldltr sw330dp w614dp h330dp 160dpi lrg land car finger}
+              taskDescription: label="Navigator" icon=null
+    """.trimIndent()
+
+    @Test
+    fun `nav task config reads the AOSP 12 layout and skips reference lines`() {
+        val lines = ClusterDisplayDiag.taskConfigLines(aosp12FormatSample, "ru.yandex.yandexnavi")
+        val records = lines.filter { !it.startsWith(ClusterDisplayDiag.RAW_PREFIX) }
+        assertEquals("only the history entry is a record: $lines", 1, records.size)
+        assertTrue(
+            "the override dpi is what the activity received: ${records[0]}",
+            records[0].startsWith("ru.yandex.yandexnavi/.core.NavigatorActivity dpi=160 "),
+        )
+        assertEquals(
+            listOf("mGlobalConfig=", "mOverrideConfig=", "CurrentConfiguration="),
+            lines.filter { it.startsWith(ClusterDisplayDiag.RAW_PREFIX) }
+                .map { it.removePrefix(ClusterDisplayDiag.RAW_PREFIX).substringBefore('{') },
+        )
+        assertFalse(
+            "only configuration lines may leave the car: $lines",
+            lines.any { "intent=" in it || "taskDescription" in it || "packageName=" in it },
+        )
+    }
+
+    @Test
+    fun `nav task config caps the raw block`() {
+        val long = "  mLastReportedConfigurations:\n" +
+            (1..10).joinToString("\n") { "   mGlobalConfig={1.0 ${"x".repeat(400)} 240dpi}" }
+        val lines = ClusterDisplayDiag.taskConfigLines(
+            "* Hist #0: ActivityRecord{1 u0 pkg/.A t1}\n$long", "pkg",
+        )
+        val raw = lines.filter { it.startsWith(ClusterDisplayDiag.RAW_PREFIX) }
+            .sumOf { it.length - ClusterDisplayDiag.RAW_PREFIX.length }
+        assertEquals(ClusterDisplayDiag.MAX_RAW_BLOCK, raw)
     }
 }

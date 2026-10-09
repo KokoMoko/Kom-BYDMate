@@ -61,7 +61,7 @@ data class ChargesUiState(
     val expandedMonths: Set<String> = emptySet(),
     val expandedDays: Set<String> = emptySet(),
     val periodSummary: ChargeSummary = ChargeSummary(0, 0.0, 0.0),
-    val currencySymbol: String = "BYN",
+    val currencySymbol: String = "֏",
     val initialAutoserviceCheckDone: Boolean = false,
     val autoserviceConnected: Boolean = false,
     val autoserviceAllSentinel: Boolean = false,

@@ -1,6 +1,7 @@
 package com.bydmate.app.hud
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import android.util.Log
 import com.bydmate.app.data.autoservice.SentinelDecoder
@@ -16,6 +17,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.ceil
+import kotlin.random.Random
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,10 +38,17 @@ import kotlinx.coroutines.withTimeoutOrNull
  * own distance marker:
  *  1. our SOME/IP frame, the car's navigation status not raised: 111 m, «BYDMATE 1»;
  *  2. the status raised the product's way ([HudArming]), same frame: 222 m, «BYDMATE 2»;
- *  3. the instrument's own CAN fields ([HudCanChannel]) while raised: 333 m, «BYDMATE 3».
- * Then the restore: CAN fields blanked, NAVI_STATUS = 4, the layout as found, our gateway service
- * stopped. The restore runs whatever happened before it, cancellation included. A layout the
- * fullscreen cluster holds back is retried every 5 s for up to a minute.
+ *  3. the instrument's own CAN fields ([HudCanChannel]) while raised: 333 m, «BYDMATE 3»;
+ *  4. OpenBYD's default SOME/IP family ([HudLauncherMapCnFrames]) on its six gateway services,
+ *     still raised, the CAN fields blanked first: a left turn, 444 m, no road name (the family
+ *     carries none). Skipped without a gateway binding.
+ * Then the restore: CAN fields still shown blanked (a clear the car refused before step 4 again),
+ * the family's off events and its services stopped, NAVI_STATUS = 4, the layout as found, our
+ * gateway service stopped. The restore runs whatever happened before it, cancellation included. A
+ * layout the fullscreen cluster holds back is retried every 5 s for up to a minute. Steps 3 and 4
+ * keep the product's leftover markers ([HudWayChannels.KEY_CAN_LEFT], [HudWayChannels.KEY_LMCN_LEFT])
+ * on disk from before their first write until a confirmed clear or stop, so a process death
+ * mid-check is cleaned at the next start like a route's.
  *
  * Refuses to start while a real route is guided, while the car moves faster than
  * [MAX_SPEED_KMH], or without the helper daemon (the speed cannot be known then). The speed is
@@ -79,6 +88,16 @@ class HudCheck @Inject constructor(
     private val _state = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> = _state.asStateFlow()
 
+    /** A check that ran through its steps asks which number the glass showed ([answer]); a refused,
+     *  cancelled or broken-off one does not. */
+    private val _askAnswer = MutableStateFlow(false)
+    val askAnswer: StateFlow<Boolean> = _askAnswer.asStateFlow()
+
+    /** A check that did not run through leaves its [State.Refused] or [State.RouteStarted] here once,
+     *  for the dialog; [dismissNotice] clears it, so the same [state] read again later is no new event. */
+    private val _notice = MutableStateFlow<State?>(null)
+    val notice: StateFlow<State?> = _notice.asStateFlow()
+
     internal var scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     internal var stepMs = STEP_MS
     internal var bridgeFactory: (Context) -> HudSomeIpBridge = { HudSomeIpBridge(it) }
@@ -86,20 +105,29 @@ class HudCheck @Inject constructor(
     internal var guidanceActive: () -> Boolean = { NavGuidanceHub.snapshot().active }
     internal var speedKmh: suspend () -> Int? = { readSpeed() }
     internal var fingerprint: String = Build.FINGERPRINT.orEmpty()
+    internal var random: Random = Random.Default
+    internal var nowMs: () -> Long = { System.currentTimeMillis() }
+    /** What step 4 sends as the car's position ([HudPosition]); never logged. */
+    internal var position: () -> HudLauncherMapCnFrames.Position = { HudPosition.lastKnown(context) }
     internal var log: (String) -> Unit = { Log.i(TAG, it) }
 
     private var job: Job? = null
 
     /** What one run holds from step to step, and what the restore has to undo. */
     private inner class Run {
-        val arming = HudArming(helperClient, context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE))
-            .also { it.log = log }
+        val prefs = context.getSharedPreferences(HudController.PREFS_NAME, Context.MODE_PRIVATE)
+        val arming = HudArming(helperClient, prefs).also { it.log = log }
         val can = HudCanChannel(helperClient)
         var sink: HudEventSink? = null
         var ownBridge: HudSomeIpBridge? = null
+        /** The bound gateway, ours or the product's: step 4 starts its services on it. */
+        var gateway: HudSomeIpBridge? = null
         var startRc = "none"
         var canShown = false
         var sinceSpeedMs = 0L
+        /** Step 4's services with their start rc, in start order; the restore stops each. */
+        val lmcnServices = LinkedHashMap<Long, Int>()
+        var lmcnRouteId = 0L
     }
 
     /** Starts a check unless one runs; the outcome lands in [state]. */
@@ -109,19 +137,23 @@ class HudCheck @Inject constructor(
     }
 
     internal suspend fun run() {
+        _askAnswer.value = false
+        _notice.value = null
         _state.value = State.Preparing
         refusal()?.let { reason ->
             log("hudprobe: refused reason=${reason.name.lowercase()}")
             Trace.event(TraceArea.HUD, "probe-refused", "reason" to reason)
             _state.value = State.Refused(reason)
+            _notice.value = State.Refused(reason)
             return
         }
         hudController.armingPaused = true
         val run = Run()
         var routeStep: Int? = null
         var movingStep: Int? = null
+        var completed = false
         try {
-            runCatching { steps(run) }.onFailure {
+            runCatching { steps(run); completed = true }.onFailure {
                 when (it) {
                     is CancellationException -> throw it
                     is RouteStartedException -> routeStep = it.step
@@ -132,6 +164,31 @@ class HudCheck @Inject constructor(
         } finally {
             withContext(NonCancellable) { restore(run, routeStep, movingStep) }
         }
+        _askAnswer.value = completed && _state.value == State.Done
+    }
+
+    /**
+     * The answer to the check's question: the smallest number [seen] on the glass (null = none).
+     * 111 is way 1, 222 and 333 way 2, 444 way 3; nothing seen keeps the way. Returns the way chosen.
+     */
+    fun answer(seen: Int?): Int? {
+        _askAnswer.value = false
+        val way = seen?.let(::wayFor)
+        way?.let(hudController::setMode)
+        val now = way ?: hudController.mode()
+        log("hudprobe: answer seen=${seen ?: "none"} way=$now")
+        Trace.event(TraceArea.HUD, "probe-answer", "seen" to (seen?.toString() ?: "none"), "way" to now)
+        return way
+    }
+
+    /** The question closed without an answer: nothing changes. */
+    fun dismissAnswer() {
+        _askAnswer.value = false
+    }
+
+    /** The notice was read: nothing starts, [state] keeps its hint. */
+    fun dismissNotice() {
+        _notice.value = null
     }
 
     /** Looked at before anything goes out, at least once a second through the steps. */
@@ -180,6 +237,7 @@ class HudCheck @Inject constructor(
 
         _state.value = State.Step(3)
         watchGuidance(3)
+        mark(run, "can") { putBoolean(HudWayChannels.KEY_CAN_LEFT, true) }
         run.canShown = true
         val sent = run.can.show(HudCanChannel.TURN_LEFT, MARKER_3, "BYDMATE 3")
         log("hudprobe: step=3 chan=can ${sent.describe()} marker=${MARKER_3}m")
@@ -199,6 +257,25 @@ class HudCheck @Inject constructor(
                 run.can.show(HudCanChannel.TURN_LEFT, MARKER_3, "BYDMATE 3")
             }
         }
+
+        val bridge = run.gateway
+        if (bridge == null) {
+            logLmcnStep(run, emptyMap())
+            return
+        }
+        // Step 4 must show the family alone on the glass; a clear that fails is tried again in the restore.
+        watchGuidance(3)
+        clearCan(run)
+        _state.value = State.Step(4)
+        watchGuidance(4)
+        run.lmcnRouteId = HudLauncherMapCnFrames.newRouteId(random)
+        mark(run, "lmcn") { putLong(HudWayChannels.KEY_LMCN_LEFT, run.lmcnRouteId) }
+        HudLauncherMapCnFrames.SERVICE_IDS.forEach { id ->
+            val rc = bridge.startService(id)
+            run.lmcnServices[id] = rc
+            traceService("start", id, rc)
+        }
+        logLmcnStep(run, lmcnFrames(run, bridge))
     }
 
     private suspend fun census(run: Run, gateway: Boolean) {
@@ -224,11 +301,13 @@ class HudCheck @Inject constructor(
     /** The product's bound gateway when the projection is on; otherwise a binding of our own. */
     private suspend fun openGateway(run: Run, gateway: Boolean) {
         if (!gateway) { run.startRc = "absent"; return }
-        hudController.boundBridge?.let { run.sink = it; run.startRc = "shared"; return }
+        hudController.boundBridge?.let { run.sink = it; run.gateway = it; run.startRc = "shared"; return }
         val bridge = bridgeFactory(context)
         run.ownBridge = bridge
         if (withTimeoutOrNull(BIND_TIMEOUT_MS) { bridge.bind() } != true) { run.startRc = "unbound"; return }
+        run.gateway = bridge
         val rc = bridge.startService(HudSomeIpBridge.SERVICE_ID_NAVI)
+        traceService("start", HudSomeIpBridge.SERVICE_ID_NAVI, rc)
         run.startRc = rc.toString()
         if (rc >= 0) run.sink = bridge
     }
@@ -261,6 +340,91 @@ class HudCheck @Inject constructor(
         return rcs
     }
 
+    /** Step 4: OpenBYD's keep-alive, the whole family set every 200 ms with a left turn at 444 m,
+     *  the status kept up like steps 2 and 3; returns each topic's fireEvent rcs with their counts. */
+    private suspend fun lmcnFrames(run: Run, gateway: HudSomeIpBridge): Map<Long, Map<Int, Int>> {
+        val rcs = LinkedHashMap<Long, MutableMap<Int, Int>>()
+        val position = position()
+        var counter = 0
+        var elapsedMs = 0L
+        var sinceCheckMs = 0L
+        while (elapsedMs < stepMs) {
+            watchGuidance(4)
+            HudLauncherMapCnFrames.update(
+                iconId = LMCN_LEFT, distanceM = MARKER_4, remainDistanceM = LMCN_REMAIN_M, remainTimeS = LMCN_REMAIN_S,
+                position = position, routeId = run.lmcnRouteId, counter = counter, nowMs = nowMs(),
+            ).forEach { e -> count(rcs, e.topic, fire(gateway, e)) }
+            counter = (counter + 1) and COUNTER_MASK
+            delay(HudLauncherMapCnFrames.PERIOD_MS)
+            elapsedMs += HudLauncherMapCnFrames.PERIOD_MS
+            sinceCheckMs += HudLauncherMapCnFrames.PERIOD_MS
+            watchSpeed(run, 4, HudLauncherMapCnFrames.PERIOD_MS)
+            if (sinceCheckMs >= HudArming.CHECK_PERIOD_MS) {
+                recheck(run)
+                sinceCheckMs = 0L
+            }
+        }
+        return rcs
+    }
+
+    private fun fire(gateway: HudSomeIpBridge, e: HudLauncherMapCnFrames.Event): Int =
+        runCatching { gateway.fireEvent(e.topic, e.payload) }.getOrDefault(FIRE_THREW)
+
+    private fun count(rcs: MutableMap<Long, MutableMap<Int, Int>>, topic: Long, rc: Int) {
+        val counts = rcs.getOrPut(topic) { sortedMapOf() }
+        counts[rc] = (counts[rc] ?: 0) + 1
+    }
+
+    /** Step 4's cleanup, whatever ended it: the off events, then every service it started. */
+    private fun stopLmcn(run: Run) {
+        val gateway = run.gateway ?: return
+        if (run.lmcnServices.isEmpty()) return
+        val rcs = LinkedHashMap<Long, MutableMap<Int, Int>>()
+        val off = HudLauncherMapCnFrames.stop(run.lmcnRouteId, nowMs()).map { e -> fire(gateway, e).also { count(rcs, e.topic, it) } }
+        val stopped = LinkedHashMap<Long, Int>()
+        run.lmcnServices.keys.forEach { id ->
+            val rc = runCatching { gateway.stopService(id) }.getOrDefault(FIRE_THREW)
+            stopped[id] = rc
+            traceService("stop", id, rc)
+        }
+        if (HudWayChannels.stopsAnswered(off + stopped.values)) run.prefs.edit().remove(HudWayChannels.KEY_LMCN_LEFT).apply()
+        val fired = HudSomeIpBridge.describeFires(rcs)
+        log("hudprobe: lmcn stop fire=$fired services=${HudSomeIpBridge.describeServices(stopped)}")
+        Trace.event(TraceArea.HUD, "probe-lmcn-stop", "fire" to fired, "stopped" to okCount(stopped))
+    }
+
+    /** Blanks step 3's CAN fields with its line and trace event; [Run.canShown] and the marker stay
+     *  set unless the car accepted all four writes. */
+    private suspend fun clearCan(run: Run) {
+        val cleared = runCatching { run.can.clear() }.fold(
+            onSuccess = { sent ->
+                val ok = HudWayChannels.cleared(sent)
+                if (ok) {
+                    run.canShown = false
+                    run.prefs.edit().remove(HudWayChannels.KEY_CAN_LEFT).apply()
+                }
+                Trace.event(
+                    TraceArea.HUD, "probe-can-clear", "icon" to HudArming.rc(sent.iconRc),
+                    "ahead" to HudArming.rc(sent.iconAheadRc), "dist" to HudArming.rc(sent.distRc), "road" to HudArming.rc(sent.roadRc),
+                    "rb-icon" to sent.icon.toString(), "rb-dist" to sent.dist.toString(), "ok" to ok,
+                )
+                sent.describe() + if (ok) "" else " ok=false"
+            },
+            onFailure = {
+                if (it is CancellationException) throw it
+                Trace.event(TraceArea.HUD, "probe-can-clear", "error" to it.javaClass.simpleName, "ok" to false)
+                "failed ${it.javaClass.simpleName}"
+            },
+        )
+        log("hudprobe: can clear $cleared")
+    }
+
+    /** Keeps a leftover marker on disk before the write it covers; a disk that refused is logged and
+     *  the step still runs (the check is watched, the restore still cleans up). */
+    private fun mark(run: Run, what: String, put: SharedPreferences.Editor.() -> Unit) {
+        if (!run.prefs.edit().apply(put).commit()) log("hudprobe: marker not saved what=$what")
+    }
+
     /** The product's 5 s look, so the check keeps the status up exactly like a route would. */
     private suspend fun recheck(run: Run) {
         val c = run.arming.recheck()
@@ -275,23 +439,10 @@ class HudCheck @Inject constructor(
         _state.value = State.Restoring
         logAborted("guidance", routeStep)
         logAborted("moving", movingStep)
-        if (run.canShown) {
-            val cleared = runCatching { run.can.clear() }.fold(
-                onSuccess = { sent ->
-                    Trace.event(
-                        TraceArea.HUD, "probe-can-clear", "icon" to HudArming.rc(sent.iconRc),
-                        "ahead" to HudArming.rc(sent.iconAheadRc), "dist" to HudArming.rc(sent.distRc), "road" to HudArming.rc(sent.roadRc),
-                        "rb-icon" to sent.icon.toString(), "rb-dist" to sent.dist.toString(),
-                    )
-                    sent.describe()
-                },
-                onFailure = {
-                    Trace.event(TraceArea.HUD, "probe-can-clear", "error" to it.javaClass.simpleName, "ok" to false)
-                    "failed ${it.javaClass.simpleName}"
-                },
-            )
-            log("hudprobe: can clear $cleared")
-        }
+        // CAN first, while the status is up, then the family: step 4 is the check's own on any
+        // binding, a route's hand-over included.
+        if (run.canShown) clearCan(run)
+        runCatching { stopLmcn(run) }.onFailure { log("hudprobe: lmcn stop failed ${it.javaClass.simpleName}") }
         // The route's frames and arming are the projection's now: no clear frame under them, no
         // closing of the status they hold; its first arm takes the kept as-found. Without a
         // running projection nobody would ever close them, so the full restore runs.
@@ -322,13 +473,18 @@ class HudCheck @Inject constructor(
         log("hudprobe: restore $restored")
         run.ownBridge?.let { bridge ->
             // A projection switched on meanwhile shares the gateway service: leave it running.
-            if (hudController.boundBridge == null) runCatching { bridge.stopService(HudSomeIpBridge.SERVICE_ID_NAVI) }
+            if (hudController.boundBridge == null) {
+                runCatching { bridge.stopService(HudSomeIpBridge.SERVICE_ID_NAVI) }
+                    .onSuccess { traceService("stop", HudSomeIpBridge.SERVICE_ID_NAVI, it) }
+            }
             runCatching { bridge.unbind() }
         }
         // Still the check's layout: the product's loop keeps off it until the retry is over.
         val routeInRetry = deferred && retryDeferredLayout(run)
         hudController.armingPaused = false
-        _state.value = outcome(routeStep != null || routeInRetry, movingStep)
+        val end = outcome(routeStep != null || routeInRetry, movingStep)
+        _state.value = end
+        if (end != State.Done) _notice.value = end
     }
 
     /** The check's last state: a route that started, in the steps or during the layout retry,
@@ -376,6 +532,28 @@ class HudCheck @Inject constructor(
         )
     }
 
+    /** Step 4's line: the services it started, or why it had none (the gateway absent, unbound). */
+    private fun logLmcnStep(run: Run, rcs: Map<Long, Map<Int, Int>>) {
+        val services = if (run.lmcnServices.isEmpty()) run.startRc else HudSomeIpBridge.describeServices(run.lmcnServices)
+        log("hudprobe: step=4 chan=someip-lmcn services=$services fire=${HudSomeIpBridge.describeFires(rcs)} marker=${MARKER_4}m")
+        // A trace value holds 80 characters: the step gets the summary, each topic its own line.
+        Trace.event(
+            TraceArea.HUD, "probe-step", "step" to 4, "chan" to "someip-lmcn",
+            "started" to if (run.lmcnServices.isEmpty()) run.startRc else okCount(run.lmcnServices),
+            "fired" to rcs.values.sumOf { it.values.sum() }, "marker" to MARKER_4,
+        )
+        rcs.forEach { (topic, counts) ->
+            Trace.event(TraceArea.HUD, "probe-fire", "topic" to HudSomeIpBridge.hex(topic), "rc" to histogram(counts))
+        }
+    }
+
+    private fun traceService(op: String, id: Long, rc: Int) {
+        Trace.event(TraceArea.HUD, "probe-service", "op" to op, "id" to HudSomeIpBridge.hex(id), "rc" to rc)
+    }
+
+    /** `5/6`: how many of [services] answered 0. */
+    private fun okCount(services: Map<Long, Int>): String = "${services.values.count { it == 0 }}/${services.size}"
+
     /** `{0:66,1:1}`: each fireEvent rc with its count, the form the log line promises. */
     private fun histogram(rcs: Map<Int, Int>): String =
         rcs.entries.joinToString(",", prefix = "{", postfix = "}") { "${it.key}:${it.value}" }
@@ -391,15 +569,23 @@ class HudCheck @Inject constructor(
 
     companion object {
         private const val TAG = "HudCheck"
-        const val STEPS = 3
+        const val STEPS = 4
         const val STEP_MS = 20_000L
         const val MAX_SPEED_KMH = 5
         const val MARKER_1 = 111
         const val MARKER_2 = 222
         const val MARKER_3 = 333
+        const val MARKER_4 = 444
+        /** OpenBYD's icon id for a left turn (its HUD Tester's «Turn Left 90°», a gaode code). */
+        private const val LMCN_LEFT = 1
+        /** What OpenBYD's HUD Tester sends as the rest of the route: 15 km, 15 min. */
+        private const val LMCN_REMAIN_M = 15_000
+        private const val LMCN_REMAIN_S = 900
+        /** SomeIpHudHelper's update counter wraps at 255. */
+        private const val COUNTER_MASK = 0xFF
         /** A plain turn arrow for the SOME/IP steps (gaode code, f28 draws its chevron). */
         private const val GAODE_TURN = 2
-        /** rc slot of a fireEvent that threw instead of answering. */
+        /** rc slot of a gateway call (fireEvent, stopService) that threw instead of answering. */
         private const val FIRE_THREW = -3
         /** Our own gateway binding may retry for over a minute; the check cannot wait that long. */
         private const val BIND_TIMEOUT_MS = 15_000L
@@ -411,5 +597,17 @@ class HudCheck @Inject constructor(
         private const val DEFERRED_RETRY_MS = 60_000L
         /** SET_HUD_CONFIG: 1 = W-HUD, 2 = AR-HUD (carsetting HudFuncVisibleUtils). */
         val HUD_TYPE = 1023 to 951058453
+
+        /** The numbers the question offers, smallest first. */
+        val MARKERS = listOf(MARKER_1, MARKER_2, MARKER_3, MARKER_4)
+
+        /** The way whose channel drew [marker]: step 1 is way 1, steps 2 and 3 (the raised status
+         *  with the frames, then the CAN fields) way 2, step 4 way 3. */
+        fun wayFor(marker: Int): Int = when (marker) {
+            MARKER_1 -> HudController.MODE_GLASS_ONLY
+            MARKER_2, MARKER_3 -> HudController.MODE_NAVI_STATUS
+            MARKER_4 -> HudController.MODE_LMCN
+            else -> throw IllegalArgumentException("not a check marker: $marker")
+        }
     }
 }

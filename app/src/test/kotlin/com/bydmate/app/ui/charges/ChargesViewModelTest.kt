@@ -63,7 +63,7 @@ class ChargesViewModelTest {
     ) : SettingsDao {
         val map = mutableMapOf(
             SettingsRepository.KEY_BATTERY_CAPACITY to batteryCapacity,
-            SettingsRepository.KEY_CURRENCY to "BYN"
+            SettingsRepository.KEY_CURRENCY to "AMD"
         )
         override suspend fun get(key: String): String? = map[key]
         override suspend fun getMany(keys: List<String>): List<SettingEntity> =

@@ -4,8 +4,11 @@ import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.bydmate.app.diagnostics.Trace
+import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.navdata.NavGuidanceHub
 import com.bydmate.app.navdata.NavPackages
+import com.bydmate.app.navdata.UnknownManeuverGate
 import java.util.concurrent.ConcurrentHashMap
 
 /** Listener with two narrow jobs: (1) its mere enabled existence lets
@@ -15,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap
  *  RemoteViews parser (donor port: cameras, maneuver PNGs, minimized-window guidance).
  *  No other package's notifications are read or stored. Listener access is self-granted
  *  through the helper daemon (see MediaSessionGrant). */
+@Suppress("TooManyFunctions") // framework callbacks plus the pure parsing helpers they share
 class MediaSessionListenerService : NotificationListenerService() {
 
     companion object {
@@ -33,9 +37,32 @@ class MediaSessionListenerService : NotificationListenerService() {
 
     internal var lane: NaviNotificationLane? = null
 
+    /** Where the unknown-maneuver lines go; logcat in production, a collector in tests. */
+    internal var unknownManeuverSink: (String) -> Unit = { Log.i(TAG, it) }
+    // Maneuver icon names this lane could not map, a line per name per 5 min (lane thread).
+    private val unknownManeuvers = UnknownManeuverGate(UnknownManeuverGate.MIN_INTERVAL_MS)
+
+    /** Where the notification trace goes (issue #199); logcat in production, a collector in tests. */
+    internal var naviNotifSink: (String) -> Unit = { Log.i(TAG, it) }
+    private val naviNotifGate = NaviNotifTraceGate()
+
     override fun onCreate() {
         super.onCreate()
         lane = NaviNotificationLane()
+    }
+
+    // Bound and live, or let go by the framework: without these a HUD with no notification
+    // guidance (#199) cannot tell a disconnected listener from a quiet navigator.
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        Log.i(TAG, "listener connected")
+        Trace.event(TraceArea.HUD, "notif-listener", "state" to "connected")
+    }
+
+    override fun onListenerDisconnected() {
+        Log.i(TAG, "listener disconnected")
+        Trace.event(TraceArea.HUD, "notif-listener", "state" to "disconnected")
+        super.onListenerDisconnected()
     }
 
     override fun onDestroy() {
@@ -54,6 +81,7 @@ class MediaSessionListenerService : NotificationListenerService() {
             if (sbn.packageName !in NavPackages.GUIDANCE_SOURCES) return
             val notification = sbn.notification
             val pkg = sbn.packageName
+            val id = sbn.id
             if (isMediaNotification(notification)) return
             // Enqueue-first (spec R3): the lane task enters the queue BEFORE the
             // legacy step so rich processing follows binder callback order.
@@ -62,7 +90,7 @@ class MediaSessionListenerService : NotificationListenerService() {
             val l = lane
             if (l != null) {
                 l.onPosted(
-                    richTask = Runnable { processRichPost(notification, pkg) },
+                    richTask = Runnable { processRichPost(notification, pkg, id) },
                     legacyStep = Runnable { legacyPost(notification, pkg) },
                 )
             } else {
@@ -79,9 +107,22 @@ class MediaSessionListenerService : NotificationListenerService() {
             // on the lane; the raw-text holder clears right away as before.
             // Null lane (onDestroy teardown race): still clear the holder.
             val l = lane
+            // Field trace (#199), gated here so a suppressed removal enqueues nothing; built in
+            // its own runCatching so a notification it cannot read only loses the line.
+            val trace = if (l == null) null else runCatching {
+                if (isMediaNotification(sbn.notification) ||
+                    !naviNotifGate.takeRemoval(System.currentTimeMillis())
+                ) return@runCatching null
+                val line = NaviNotifTraceGate.removedLine(sbn.packageName, sbn.id)
+                Runnable {
+                    naviNotifGate.removalWritten()
+                    naviNotifSink(line)
+                }
+            }.getOrNull()
             if (l != null) {
                 l.onRemoved(
                     legacyClear = Runnable { NaviRouteHolder.clear(sbn.packageName) },
+                    trace = trace,
                 )
             } else {
                 NaviRouteHolder.clear(sbn.packageName)
@@ -118,7 +159,7 @@ class MediaSessionListenerService : NotificationListenerService() {
 
     /** Rich channel, lane thread. Discriminated outcomes (spec §5): RICH (navi signal
      *  -> hub), STUB (parsed but no signal -> skip), EXTRAS_FALLBACK (no RemoteViews). */
-    private fun processRichPost(notification: Notification, pkg: String) {
+    private fun processRichPost(notification: Notification, pkg: String, id: Int) {
         val extras = notification.extras
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
@@ -132,24 +173,61 @@ class MediaSessionListenerService : NotificationListenerService() {
         if (rich != null) {
             if (!NaviRichNotificationParser.hasNaviSignal(rich)) {
                 Log.d(TAG, "rich parse: stub notification, skipped")
+                tracePost(notification, pkg, id, "stub", null)
+                NavGuidanceHub.countNotifEmpty()
                 return
             }
             lane?.markGuidancePosted()
-            NavGuidanceHub.updateFromNotification(
-                NaviRichPostProcessor.buildRichUpdate(rich, title, text, subText))
+            val update = NaviRichPostProcessor.buildRichUpdate(rich, title, text, subText)
+            NavGuidanceHub.updateFromNotification(update)
+            tracePost(notification, pkg, id, "rich", update)
+            logUnknownManeuver(update, "notification", "res=${UnknownManeuverGate.quote(rich.maneuverRes)}")
             return
         }
 
         // EXTRAS_FALLBACK: RemoteViews absent or reflection broke - donor extras path.
         val snap = NavGuidanceHub.snapshot(System.currentTimeMillis())
+        val iconName = smallIconName(notification, resolver)
+        val isMaps = pkg in NavPackages.YANDEX_MAPS
+        val hubHasKnownManeuver = snap.active && snap.maneuverGaode > 0
         val update = NaviRichPostProcessor.buildExtrasFallback(
             title, text, subText,
-            smallIconName = smallIconName(notification, resolver),
-            isMaps = pkg in NavPackages.YANDEX_MAPS,
-            hubHasKnownManeuver = snap.active && snap.maneuverGaode > 0,
-        ) ?: return
+            smallIconName = iconName,
+            isMaps = isMaps,
+            hubHasKnownManeuver = hubHasKnownManeuver,
+        ) ?: run {
+            tracePost(notification, pkg, id, "empty", null)
+            NavGuidanceHub.countNotifEmpty()
+            return
+        }
         lane?.markGuidancePosted()
         NavGuidanceHub.updateFromNotification(update)
+        tracePost(notification, pkg, id, "extras", update)
+        // Maps drops its own maneuver while the hub knows one (rule R2-1): that 0 is not unknown.
+        if (!(isMaps && hubHasKnownManeuver)) {
+            logUnknownManeuver(update, "notification extras", "icon=${UnknownManeuverGate.quote(iconName)}")
+        }
+    }
+
+    /** Field diagnostics: a guided post with a distance whose maneuver maps to 0 logs the
+     *  maneuver icon name once per distinct name per 5 min. The texts are never logged, they carry
+     *  streets. The route state is read only after the cheap checks. */
+    private fun logUnknownManeuver(update: NavGuidanceHub.RichUpdate, path: String, value: String) {
+        val nowMs = System.currentTimeMillis()
+        if (!UnknownManeuverGate.applies(update.distanceMeters, update.maneuverGaode) { NavGuidanceHub.snapshot(nowMs).active }) return
+        val line = "nav maneuver unknown [$path]: $value"
+        if (unknownManeuvers.take(line, nowMs)) unknownManeuverSink(line)
+    }
+
+    /** Field diagnostics (issue #199): what the navigator posted and which path took it, numbers
+     *  and ids only. [update] is what reached the hub, null for a post it did not take. */
+    private fun tracePost(n: Notification, pkg: String, id: Int, kind: String, update: NavGuidanceHub.RichUpdate?) {
+        val ongoing = (n.flags and Notification.FLAG_ONGOING_EVENT) != 0
+        val man = update?.maneuverGaode ?: 0
+        val skippedChanges = naviNotifGate.takePost(
+            NaviNotifTraceGate.postKey(id, ongoing, kind, man), System.currentTimeMillis()) ?: return
+        naviNotifSink(NaviNotifTraceGate.postLine(pkg, id, ongoing, n.channelId, kind, man,
+            update?.distanceMeters ?: 0, update?.road?.length ?: 0, skippedChanges))
     }
 
     private fun smallIconName(n: Notification, resolveName: (Int) -> String?): String =

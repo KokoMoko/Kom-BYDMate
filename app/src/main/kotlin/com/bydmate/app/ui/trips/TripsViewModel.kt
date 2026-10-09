@@ -63,7 +63,7 @@ data class TripsUiState(
     val selectedTripPoints: List<TripPointEntity> = emptyList(),
     val selectedTripForAction: TripEntity? = null,
     val deleteConfirmTrip: TripEntity? = null,
-    val currencySymbol: String = "BYN",
+    val currencySymbol: String = "֏",
     val chartMetric: ChartMetric = ChartMetric.PER_100,
     val chartBars: List<ChartBar> = emptyList(),
     val selectedBarIndex: Int? = null,

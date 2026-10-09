@@ -27,6 +27,8 @@
 #   ASK QUESTION        a question answered from the car's readings, nothing runs: outside_temp,
 #                       cabin_temp, soc, range, ac_temp; a value the car does not report sends
 #                       the phrase to the agent
+#   MUSIC               Yandex Music's personal mix («Моя волна»), as the agent's play_music
+#                       starts it with no query
 # Every template phrase has a row in app/src/test/resources/voice/ru_commands_golden.tsv.
 
 # ---- Verbs ---------------------------------------------------------------------------------
@@ -235,7 +237,7 @@ rule windshield: лобового [стекла]|переднего стекла
 <on> обдув <windshield> => 吹前挡
 <off> обдув <windshield> => 关闭吹前挡
 
-range temp: 16..30
+range temp: 16..33
 rule deg: градус|градуса|градусов
 <set> температуру [на] {temp} [<deg>] => 设置温度{temp}
 температура [на] {temp} [<deg>] => 设置温度{temp}
@@ -275,6 +277,13 @@ solo (тише|потише) => VOL -1
 <set> громкость [на] {vol} [<pct_word>] => VOL {vol}
 solo громкость [на] {vol} [<pct_word>] => VOL {vol}
 
+# ---- Yandex Music --------------------------------------------------------------------------
+# Only with "яндекс": a bare "включи музыку" names no app and stays with the agent.
+
+rule yandex_music: яндекс (музыку|музыка|мьюзик)
+(включи|запусти|открой|поставь) <yandex_music> => MUSIC
+solo <yandex_music> => MUSIC
+
 # ---- Locks and trunk -----------------------------------------------------------------------
 # "закрой дверь" said to a passenger is not addressed to the car: only "машину" and the lock
 # verbs lock and unlock.
@@ -296,6 +305,14 @@ rule ambient: подсветку|амбиент|амбиентную подсв�
 <off> свет [в салоне] => 关闭车内灯
 <on> (дхо|ходовые огни) => 打开日行灯
 <off> (дхо|ходовые огни) => 关闭日行灯
+
+# ---- HUD -----------------------------------------------------------------------------------
+# Only with a word that names the HUD or the windshield: a bare "проекцию" stays with the agent,
+# which also moves the navigator onto the cluster («проекция на приборку»).
+
+rule hud: hud|худ|проекцию на (стекле|лобовом [стекле])
+<on> <hud> => 打开抬头显示
+<off> <hud> => 关闭抬头显示
 
 # ---- Drive mode ----------------------------------------------------------------------------
 # Terrain modes (snow, sand, mud, mountain, smart) switch only up to 15 km/h: the dispatcher's

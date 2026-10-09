@@ -20,6 +20,7 @@ import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.data.automation.ActionValidationError
 import com.bydmate.app.data.automation.AutomationEngine
+import com.bydmate.app.data.automation.PowerStateRuleMigration
 import com.bydmate.app.data.automation.RuleDraftValidator
 import com.bydmate.app.data.automation.RuleInserts
 import com.bydmate.app.data.automation.RuleJournal
@@ -144,7 +145,6 @@ val TRIGGER_PARAMS = listOf(
         TriggerParamOption("TurnSignal", "转向灯", R.string.auto_param_turnsignal, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_turn_off, "2" to R.string.auto_enum_turn_left, "4" to R.string.auto_enum_turn_right, "6" to R.string.auto_enum_turn_hazard)),
         TriggerParamOption("SOC", "电量百分比", R.string.auto_param_soc, R.string.auto_cat_energy, R.string.auto_unit_percent),
         TriggerParamOption("ChargingStatus", "充电状态", R.string.auto_param_chargingstatus, R.string.auto_cat_energy, enumValues = listOf("0" to R.string.auto_enum_none, "1" to R.string.auto_enum_connected, "2" to R.string.auto_enum_charging)),
-        TriggerParamOption("PowerState", "电源状态", R.string.auto_param_powerstate, R.string.auto_cat_energy, enumValues = listOf("0" to R.string.auto_enum_code_off, "1" to R.string.auto_enum_code_on, "2" to R.string.auto_enum_code_drive)),
         TriggerParamOption("Voltage12V", "蓄电池电压", R.string.auto_param_voltage12v, R.string.auto_cat_energy, R.string.auto_unit_volt),
         TriggerParamOption("MinCellVoltage", "单体最低电压", R.string.auto_param_mincellvoltage, R.string.auto_cat_energy, R.string.auto_unit_volt),
         TriggerParamOption("MaxCellVoltage", "单体最高电压", R.string.auto_param_maxcellvoltage, R.string.auto_cat_energy, R.string.auto_unit_volt),
@@ -223,17 +223,6 @@ val ACTION_COMMANDS = listOf(
         ActionOption("后排车窗通风", R.string.auto_act_vent_rear_windows, R.string.auto_cat_windows),
         ActionOption("自动空调", R.string.auto_act_auto_ac, R.string.auto_cat_climate),
         ActionOption("打开空调通风", R.string.auto_act_ventilation_no_ac, R.string.auto_cat_climate),
-        ActionOption("设置温度18", R.string.auto_act_temp_18c, R.string.auto_cat_climate),
-        ActionOption("设置温度20", R.string.auto_act_temp_20c, R.string.auto_cat_climate),
-        ActionOption("设置温度22", R.string.auto_act_temp_22c, R.string.auto_cat_climate),
-        ActionOption("设置温度25", R.string.auto_act_temp_25c, R.string.auto_cat_climate),
-        ActionOption("风量1", R.string.auto_act_fan_1, R.string.auto_cat_climate),
-        ActionOption("风量2", R.string.auto_act_fan_2, R.string.auto_cat_climate),
-        ActionOption("风量3", R.string.auto_act_fan_3, R.string.auto_cat_climate),
-        ActionOption("风量4", R.string.auto_act_fan_4, R.string.auto_cat_climate),
-        ActionOption("风量5", R.string.auto_act_fan_5, R.string.auto_cat_climate),
-        ActionOption("风量6", R.string.auto_act_fan_6, R.string.auto_cat_climate),
-        ActionOption("风量7", R.string.auto_act_fan_7, R.string.auto_cat_climate),
         ActionOption("吹面", R.string.auto_act_wind_face, R.string.auto_cat_climate),
         ActionOption("吹面吹脚", R.string.auto_act_wind_face_feet, R.string.auto_cat_climate),
         ActionOption("吹脚", R.string.auto_act_wind_feet, R.string.auto_cat_climate),
@@ -247,33 +236,9 @@ val ACTION_COMMANDS = listOf(
         ActionOption("", R.string.toggle_target_climate, R.string.auto_cat_climate, toggleTarget = ActionDispatcher.TOGGLE_CLIMATE),
         ActionOption("空调自动", R.string.auto_act_ac_auto_on, R.string.auto_cat_climate),
         ActionOption("空调手动", R.string.auto_act_ac_auto_off, R.string.auto_cat_climate),
-        ActionOption("主驾座椅加热1档", R.string.auto_act_driver_heat_1, R.string.auto_cat_seats),
-        ActionOption("主驾座椅加热2档", R.string.auto_act_driver_heat_2, R.string.auto_cat_seats),
-        ActionOption("主驾座椅加热3档", R.string.auto_act_driver_heat_3, R.string.auto_cat_seats),
-        ActionOption("主驾座椅加热4档", R.string.auto_act_driver_heat_4, R.string.auto_cat_seats),
-        ActionOption("主驾座椅加热5档", R.string.auto_act_driver_heat_5, R.string.auto_cat_seats),
-        ActionOption("主驾座椅加热关闭", R.string.auto_act_driver_heat_off, R.string.auto_cat_seats),
         ActionOption("", R.string.toggle_target_seat_heat_driver, R.string.auto_cat_seats, toggleTarget = ActionDispatcher.TOGGLE_SEAT_HEAT_DRIVER),
-        ActionOption("副驾座椅加热1档", R.string.auto_act_passenger_heat_1, R.string.auto_cat_seats),
-        ActionOption("副驾座椅加热2档", R.string.auto_act_passenger_heat_2, R.string.auto_cat_seats),
-        ActionOption("副驾座椅加热3档", R.string.auto_act_passenger_heat_3, R.string.auto_cat_seats),
-        ActionOption("副驾座椅加热4档", R.string.auto_act_passenger_heat_4, R.string.auto_cat_seats),
-        ActionOption("副驾座椅加热5档", R.string.auto_act_passenger_heat_5, R.string.auto_cat_seats),
-        ActionOption("副驾座椅加热关闭", R.string.auto_act_passenger_heat_off, R.string.auto_cat_seats),
         ActionOption("", R.string.toggle_target_seat_heat_passenger, R.string.auto_cat_seats, toggleTarget = ActionDispatcher.TOGGLE_SEAT_HEAT_PASSENGER),
-        ActionOption("主驾座椅通风1档", R.string.auto_act_driver_vent_1, R.string.auto_cat_seats),
-        ActionOption("主驾座椅通风2档", R.string.auto_act_driver_vent_2, R.string.auto_cat_seats),
-        ActionOption("主驾座椅通风3档", R.string.auto_act_driver_vent_3, R.string.auto_cat_seats),
-        ActionOption("主驾座椅通风4档", R.string.auto_act_driver_vent_4, R.string.auto_cat_seats),
-        ActionOption("主驾座椅通风5档", R.string.auto_act_driver_vent_5, R.string.auto_cat_seats),
-        ActionOption("主驾座椅通风关闭", R.string.auto_act_driver_vent_off, R.string.auto_cat_seats),
         ActionOption("", R.string.toggle_target_seat_vent_driver, R.string.auto_cat_seats, toggleTarget = ActionDispatcher.TOGGLE_SEAT_VENT_DRIVER),
-        ActionOption("副驾座椅通风1档", R.string.auto_act_passenger_vent_1, R.string.auto_cat_seats),
-        ActionOption("副驾座椅通风2档", R.string.auto_act_passenger_vent_2, R.string.auto_cat_seats),
-        ActionOption("副驾座椅通风3档", R.string.auto_act_passenger_vent_3, R.string.auto_cat_seats),
-        ActionOption("副驾座椅通风4档", R.string.auto_act_passenger_vent_4, R.string.auto_cat_seats),
-        ActionOption("副驾座椅通风5档", R.string.auto_act_passenger_vent_5, R.string.auto_cat_seats),
-        ActionOption("副驾座椅通风关闭", R.string.auto_act_passenger_vent_off, R.string.auto_cat_seats),
         ActionOption("", R.string.toggle_target_seat_vent_passenger, R.string.auto_cat_seats, toggleTarget = ActionDispatcher.TOGGLE_SEAT_VENT_PASSENGER),
         ActionOption("后视镜加热", R.string.auto_act_mirror_heat_on, R.string.auto_cat_mirrors),
         ActionOption("关闭后视镜加热", R.string.auto_act_mirror_heat_off, R.string.auto_cat_mirrors),
@@ -298,6 +263,8 @@ val ACTION_COMMANDS = listOf(
         ActionOption("", R.string.toggle_target_hazard, R.string.auto_cat_light, toggleTarget = ActionDispatcher.TOGGLE_HAZARD),
         ActionOption("打开车内灯", R.string.auto_act_interior_light_on, R.string.auto_cat_light),
         ActionOption("关闭车内灯", R.string.auto_act_interior_light_off, R.string.auto_cat_light),
+        ActionOption("打开抬头显示", R.string.auto_act_hud_on, R.string.auto_cat_light),
+        ActionOption("关闭抬头显示", R.string.auto_act_hud_off, R.string.auto_cat_light),
         ActionOption("车门上锁", R.string.auto_act_lock_doors, R.string.auto_cat_locks),
         ActionOption("车门解锁", R.string.auto_act_unlock_doors, R.string.auto_cat_locks),
         ActionOption("", R.string.toggle_target_locks, R.string.auto_cat_locks, toggleTarget = ActionDispatcher.TOGGLE_LOCKS),
@@ -319,15 +286,6 @@ val ACTION_COMMANDS = listOf(
         ActionOption("冰箱制冷", R.string.auto_act_fridge_cool, R.string.auto_cat_fridge),
         ActionOption("冰箱制热", R.string.auto_act_fridge_heat, R.string.auto_cat_fridge),
         ActionOption("冰箱关闭", R.string.auto_act_fridge_off, R.string.auto_cat_fridge),
-        ActionOption("冰箱制冷-6度", R.string.auto_act_fridge_cool_minus6c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制冷-3度", R.string.auto_act_fridge_cool_minus3c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制冷0度", R.string.auto_act_fridge_cool_0c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制冷3度", R.string.auto_act_fridge_cool_plus_3c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制冷6度", R.string.auto_act_fridge_cool_plus_6c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制热35度", R.string.auto_act_fridge_heat_35c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制热40度", R.string.auto_act_fridge_heat_40c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制热45度", R.string.auto_act_fridge_heat_45c, R.string.auto_cat_fridge),
-        ActionOption("冰箱制热50度", R.string.auto_act_fridge_heat_50c, R.string.auto_cat_fridge),
 )
 
 val OPERATORS = listOf(">", "<", ">=", "<=", "==", "!=")
@@ -720,6 +678,7 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             is ActionValidationError.MediaVolumeMissing -> ctx.getString(R.string.auto_msg_media_volume_missing, err.index)
             is ActionValidationError.SentryInvalid -> ctx.getString(R.string.auto_msg_sentry_invalid, err.index)
             is ActionValidationError.HotspotInvalid -> ctx.getString(R.string.auto_msg_hotspot_invalid, err.index)
+            is ActionValidationError.MediaKeyInvalid -> ctx.getString(R.string.auto_msg_media_key_invalid, err.index)
             is ActionValidationError.SpeakTextEmpty -> ctx.getString(R.string.auto_msg_speak_text_empty, err.index)
             is ActionValidationError.AgentQueryPromptEmpty -> ctx.getString(R.string.auto_msg_agent_query_prompt_empty, err.index)
             is ActionValidationError.SplitScreenNarrowEmpty -> ctx.getString(R.string.auto_msg_split_narrow_empty, err.index)
@@ -1127,7 +1086,17 @@ class AutomationViewModel @Inject @Suppress("LongParameterList") constructor( //
             }
             when (parsed) {
                 is RuleParseResult.Ok -> {
-                    val draft = withContext(ioDispatcher) { importDraft(parsed.rule, places, lc) }.copy(token = ++draftToken)
+                    // A file from before the PowerState condition was removed: converted like a saved rule.
+                    val triggers = PowerStateRuleMigration.convert(
+                        parsed.rule.triggerLogic, parsed.rule.triggers, PowerStateRuleMigration.labels(context),
+                        driveIsGear = PowerStateRuleMigration.isSunshadeTemplate(parsed.rule.name),
+                    )
+                    if (triggers == null) {
+                        _uiState.update { it.copy(importError = lc.getString(R.string.automation_import_power_off_only)) }
+                        return@launch
+                    }
+                    val rule = parsed.rule.copy(triggers = triggers)
+                    val draft = withContext(ioDispatcher) { importDraft(rule, places, lc) }.copy(token = ++draftToken)
                     _uiState.update { it.copy(importFiles = null, importError = null, importDraft = draft) }
                 }
                 RuleParseResult.NewerVersion ->
@@ -1296,8 +1265,8 @@ internal fun starterTemplates(lang: String): List<RuleEntity> {
             triggers = TriggerDef.listToJson(listOf(
                 TriggerDef("ExtTemp", "车外温度", "<", "0",
                     tName("车外温度 < 0°C", "Outside Temp < 0°C", "Темп. снаружи < 0°C")),
-                TriggerDef("PowerState", "电源状态", "==", "2",
-                    tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
+                TriggerDef("ServiceStart", "服务启动", "==", "true",
+                    tName("BYDMate 启动", "BYDMate startup", "Запуск BYDMate"), kind = "service_start")
             )),
             actions = ActionDef.listToJson(listOf(
                 ActionDef("主驾座椅加热2档",
@@ -1326,8 +1295,8 @@ internal fun starterTemplates(lang: String): List<RuleEntity> {
             triggers = TriggerDef.listToJson(listOf(
                 TriggerDef("InsideTemp", "车内温度", ">", "30",
                     tName("车内温度 > 30°C", "Cabin Temp > 30°C", "Темп. салона > 30°C")),
-                TriggerDef("PowerState", "电源状态", "==", "2",
-                    tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
+                TriggerDef("ServiceStart", "服务启动", "==", "true",
+                    tName("BYDMate 启动", "BYDMate startup", "Запуск BYDMate"), kind = "service_start")
             )),
             actions = ActionDef.listToJson(listOf(
                 ActionDef("主驾座椅通风1档",
@@ -1342,8 +1311,8 @@ internal fun starterTemplates(lang: String): List<RuleEntity> {
             enabled = false,
             triggerLogic = "AND",
             triggers = TriggerDef.listToJson(listOf(
-                TriggerDef("PowerState", "电源状态", "==", "2",
-                    tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
+                TriggerDef("Gear", "档位", "==", "4",
+                    tName("档位 = D", "Gear = D", "Передача = D"))
             )),
             actions = ActionDef.listToJson(listOf(
                 ActionDef("遮阳帘打开",
@@ -1438,6 +1407,9 @@ private const val VALIDATION_URL = "https://localhost"
 /** Rules the user can have: the editor, the import and the voice agent stop at this many. */
 internal const val MAX_RULES = 50
 
+/** Actions one rule can hold: the editor stops offering «add» at this many. */
+internal const val MAX_RULE_ACTIONS = 20
+
 /** Set once the Telegram report templates were offered (3.19), on fresh and older installs alike. */
 private const val TG_TEMPLATES_KEY = "templates_tg_report_inserted"
 
@@ -1523,6 +1495,30 @@ fun ActionDef.withAppLaunch(packageName: String, appLabel: String, minimize: Boo
         put("appLabel", appLabel)
         put("minimize", minimize)
     }.toString()
+)
+
+// --- App close helpers (#280): same payload as app launch, without minimize ---
+
+fun newAppCloseAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = context.getString(R.string.automation_action_app_close),
+    kind = "app_close",
+    payload = """{"packageName":"","appLabel":""}"""
+)
+
+fun ActionDef.withAppClose(packageName: String, appLabel: String): ActionDef = copy(
+    payload = org.json.JSONObject().put("packageName", packageName).put("appLabel", appLabel).toString()
+)
+
+// --- Media key helpers (#212, #275): payload "play" or "pause" ---
+
+fun newMediaKeyAction(context: Context, key: String): ActionDef = ActionDef(
+    command = "",
+    displayName = context.getString(
+        if (key == "play") R.string.automation_action_media_play else R.string.automation_action_media_pause
+    ),
+    kind = "media_key",
+    payload = key
 )
 
 // --- Call helpers (v2.3.0) ---
@@ -1716,7 +1712,9 @@ internal fun withCatalogName(trigger: TriggerDef, context: Context): TriggerDef 
 internal fun withCatalogName(action: ActionDef, context: Context): ActionDef = when (action.kind) {
     "toggle" -> action.payload?.let { action.copy(displayName = toggleDisplayName(context, it)) } ?: action
     "param" -> ACTION_COMMANDS.firstOrNull { it.toggleTarget == null && it.command == action.command }
-        ?.let { action.copy(displayName = it.localizedName(context)) } ?: action
+        ?.let { action.copy(displayName = it.localizedName(context)) }
+        ?: levelActionName(action.command, context.appLocalizedContext())?.let { action.copy(displayName = it) }
+        ?: action
     else -> action
 }
 

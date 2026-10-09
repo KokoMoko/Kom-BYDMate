@@ -409,6 +409,9 @@ object AppModule {
     fun provideVehicleWriteLogDao(db: AppDatabase): VehicleWriteLogDao = db.vehicleWriteLogDao()
 
     @Provides
+    fun provideEndSnapshotSource(impl: com.bydmate.app.ui.settings.RecordingEndSnapshot): com.bydmate.app.diagnostics.EndSnapshotSource = impl
+
+    @Provides
     fun provideTripTombstoneDao(db: AppDatabase): TripTombstoneDao = db.tripTombstoneDao()
 
     @Provides
@@ -648,6 +651,19 @@ object AppModule {
     fun provideAdbRestoreSystem(
         impl: com.bydmate.app.data.autoservice.AndroidAdbRestoreSystem,
     ): com.bydmate.app.data.autoservice.AdbRestoreSystem = impl
+
+    @Provides
+    @Singleton
+    fun provideCloudOverWifiPreferences(
+        @ApplicationContext ctx: Context,
+    ): com.bydmate.app.data.autoservice.CloudOverWifiPreferences =
+        com.bydmate.app.data.autoservice.CloudOverWifiPreferencesImpl(ctx)
+
+    @Provides
+    @Singleton
+    fun provideCloudOverWifiSystem(
+        impl: com.bydmate.app.data.autoservice.AndroidCloudOverWifiSystem,
+    ): com.bydmate.app.data.autoservice.CloudOverWifiSystem = impl
 
     @Provides
     @Singleton
