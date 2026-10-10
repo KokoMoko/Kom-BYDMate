@@ -105,27 +105,11 @@ internal fun roadEdgeColor(soc: Int): Color {
            else androidx.compose.ui.graphics.lerp(red, yellow, f * 2f)
 }
 
-/** Ալիքի գույները՝ ըստ լիցքի, սահուն․ 100% կապտականաչ, 70% կանաչ, 50% դեղին, 30% նարնջագույն, 10% և ցածր՝ կարմիր։ */
-internal fun tideColors(soc: Int): Pair<Color, Color> {
-    val s = soc.coerceIn(0, 100).toFloat()
-    val top = TIDE_STOPS.first()
-    val bottom = TIDE_STOPS.last()
-    if (s >= top.first) return top.second to top.third
-    if (s <= bottom.first) return bottom.second to bottom.third
-    val i = TIDE_STOPS.indexOfFirst { it.first <= s }
-    val hi = TIDE_STOPS[i - 1]
-    val lo = TIDE_STOPS[i]
-    val f = (s - lo.first) / (hi.first - lo.first)
-    return androidx.compose.ui.graphics.lerp(lo.second, hi.second, f) to androidx.compose.ui.graphics.lerp(lo.third, hi.third, f)
+internal fun tideColors(soc: Int): Pair<Color, Color> = when {
+    soc >= 50 -> Color(0xFF1FD1C1) to Color(0xFF1B7FD6)
+    soc >= 20 -> Color(0xFFF5B32A) to Color(0xFFC2641A)
+    else -> Color(0xFFFF5A4A) to Color(0xFFA01A1A)
 }
-
-private val TIDE_STOPS = listOf(
-    Triple(100f, Color(0xFF1FD1C1), Color(0xFF1B7FD6)),
-    Triple(70f, Color(0xFF4ADE80), Color(0xFF1E9E5A)),
-    Triple(50f, Color(0xFFF5D02A), Color(0xFFC29A1A)),
-    Triple(30f, Color(0xFFF5932A), Color(0xFFC2641A)),
-    Triple(10f, Color(0xFFFF5A4A), Color(0xFFA01A1A)),
-)
 
 /** Եռաշերտ ալիք [x0]..[x1] միջակայքում, [level] բարձրության վրա, վերևում՝ լուսավոր գագաթի գիծ։ */
 internal fun DrawScope.drawWave(x0: Float, x1: Float, level: Float, t: Float, c1: Color, c2: Color, amp: Float) {
