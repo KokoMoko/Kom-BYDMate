@@ -86,14 +86,6 @@ object KomAutostart {
                 delay(10_000L)
                 startPlayback(restartIfPlaying = false)  // երկրորդ փորձ, եթե դեռ չի նվագում
             }
-            // Վիջեթներ, որոնք թարմանում են միայն հավելվածը բացելիս (AccuWeather)՝ ինտերնետից հետո մի պահ
-            val wake = KomWidgetRefresh.packagesToOpen(ctx)
-            if (wake.isNotEmpty() && KomWidgetRefresh.awaitInternet(ctx)) {
-                for (pkg in wake) {
-                    Log.i(TAG, "widget refresh: open $pkg")
-                    launchInBackground(ctx, pkg)
-                }
-            }
         }
     }
 
