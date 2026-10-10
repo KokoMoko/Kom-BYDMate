@@ -24,9 +24,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BatteryChargingFull
+import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -65,7 +64,6 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.diagnostics.Trace
 import com.bydmate.app.diagnostics.TraceArea
 import com.bydmate.app.service.UpdateChecker
-import com.bydmate.app.ui.charges.ChargesScreen
 import com.bydmate.app.ui.automation.AutomationScreen
 import com.bydmate.app.ui.dashboard.DashboardScreen
 import com.bydmate.app.ui.settings.DonateDialog
@@ -75,7 +73,6 @@ import com.bydmate.app.ui.settings.SettingsScreen
 import com.bydmate.app.ui.settings.UpdateDialog
 import com.bydmate.app.ui.settings.UpdateState
 import com.bydmate.app.ui.theme.*
-import com.bydmate.app.ui.trips.TripsScreen
 import com.bydmate.app.ui.welcome.WelcomeScreen
 
 // M3 NavigationBar only sets a default minimum of 80 dp, so an explicit height lowers it; each
@@ -87,8 +84,8 @@ private val NavBarItemChrome = 40.dp
 
 enum class Screen(val route: String, val labelRes: Int, val icon: ImageVector) {
     Dashboard("dashboard", R.string.nav_tab_dashboard, Icons.Outlined.Home),
-    Trips("trips", R.string.nav_tab_trips, Icons.Outlined.DirectionsCar),
-    Charges("charges", R.string.nav_tab_charges, Icons.Outlined.BatteryChargingFull),
+    // Kom-BYDMate: trips and charges in one «Reports» screen (two tabs)
+    Reports("reports", R.string.nav_tab_reports, Icons.Outlined.Assessment),
     Automation("automation", R.string.nav_tab_automation, Icons.Outlined.Bolt),
     Settings("settings", R.string.nav_tab_settings, Icons.Outlined.Settings)
 }
@@ -298,11 +295,11 @@ fun AppNavigation(
                     },
                 )
             }
-            composable(Screen.Trips.route) {
-                TripsScreen(onOpenTemperature = { navController.navigate("trip_temperature") })
-            }
-            composable(Screen.Charges.route) {
-                ChargesScreen(onNavigateSettings = { navController.navigate(Screen.Settings.route) })
+            composable(Screen.Reports.route) {
+                com.bydmate.app.ui.reports.ReportsScreen(
+                    onOpenTemperature = { navController.navigate("trip_temperature") },
+                    onNavigateSettings = { navController.navigate(Screen.Settings.route) },
+                )
             }
             composable(Screen.Automation.route) { AutomationScreen() }
             composable(Screen.Settings.route) {

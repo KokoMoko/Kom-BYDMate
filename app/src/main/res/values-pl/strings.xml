@@ -2106,4 +2106,5 @@
     <string name="auto_ui_test_park">Nie wykonano: reguła działa tylko na postoju. Włącz P.</string>
     <string name="auto_ui_confirm_rule">Reguła „%1$s”</string>
     <string name="auto_ui_confirm_countdown">Anulowanie za %1$d s</string>
+    <string name="nav_tab_reports">Raporty</string>
 </resources>

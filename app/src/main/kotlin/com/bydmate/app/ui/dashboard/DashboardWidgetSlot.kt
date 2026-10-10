@@ -124,7 +124,7 @@ object DashboardWidgets {
         if (parentSlot != null && !p.contains(slot)) {
             val inherited = get(ctx, parentSlot)
             p.edit()
-                .putInt(slot, if (inherited > 0) inherited else EMPTY)
+                .putInt(slot, if (inherited > 0 || inherited == BUILTIN_TRIP) inherited else EMPTY)
                 .putInt("${slot}_scale", getScale(ctx, parentSlot))
                 .commit()
         }
@@ -155,6 +155,9 @@ object DashboardWidgets {
     }
 
     private const val EMPTY = -2
+
+    /** Our own «TRIP 1 / TRIP 2» card in place of an Android widget (stored as the slot's id). */
+    const val BUILTIN_TRIP = -10
 
     private fun isUsedElsewhere(ctx: Context, id: Int): Boolean =
         prefs(ctx).all.any { (k, v) -> v == id && !k.endsWith("_scale") && !k.startsWith("speedo_") }
@@ -294,8 +297,20 @@ fun DashboardWidgetSlot(
             .background(CardSurface)
             .border(1.dp, CardBorder, shape)
     ) {
-        val info = if (widgetId != -1) awm.getAppWidgetInfo(widgetId) else null
-        if (info != null) {
+        val info = if (widgetId > 0) awm.getAppWidgetInfo(widgetId) else null
+        if (widgetId == DashboardWidgets.BUILTIN_TRIP) {
+            com.bydmate.app.ui.reports.TripCountersCard(Modifier.fillMaxSize())
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(2.dp)
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(NavyDark.copy(alpha = 0.6f))
+                    .clickable { showMenu = true },
+                contentAlignment = Alignment.Center,
+            ) { Text("⋮", color = TextSecondary, fontSize = 15.sp) }
+        } else if (info != null) {
             key(widgetId, viewKey) {
                 // Մասշտաբ․ widget-ին տալիս ենք «վիրտուալ» չափ (գոտի / s) և View-ն փոքրացնում/մեծացնում ենք s-ով։
                 // Փոքր s → widget-ը կարծում է, որ տեղը մեծ է, և ցույց է տալիս ավելի շատ բովանդակություն։
@@ -389,6 +404,18 @@ fun DashboardWidgetSlot(
             title = { Text(stringResource(R.string.kom_widget_pick_title), color = TextPrimary) },
             text = {
                 LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                    item {
+                        // our own card first: TRIP 1 / TRIP 2, details and reset after charging on tap
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showPicker = false; finishAdd(DashboardWidgets.BUILTIN_TRIP) }
+                                .padding(vertical = 10.dp)
+                        ) {
+                            Text(stringResource(R.string.kom_widget_trip), color = AccentGreen, fontSize = 16.sp)
+                            Text(stringResource(R.string.kom_widget_trip_desc), color = TextMuted, fontSize = 12.sp)
+                        }
+                    }
                     items(providers) { p ->
                         val app = runCatching {
                             pm.getApplicationLabel(pm.getApplicationInfo(p.provider.packageName, 0)).toString()
@@ -416,14 +443,15 @@ fun DashboardWidgetSlot(
             title = { Text(stringResource(R.string.kom_widget_menu_title), color = TextPrimary) },
             text = {
                 Column {
-                    if (awm.getAppWidgetInfo(widgetId)?.configure != null) {
+                    val builtIn = widgetId == DashboardWidgets.BUILTIN_TRIP
+                    if (!builtIn && awm.getAppWidgetInfo(widgetId)?.configure != null) {
                         Text(stringResource(R.string.kom_widget_configure), color = AccentGreen, fontSize = 16.sp,
                             modifier = Modifier.fillMaxWidth().clickable {
                                 showMenu = false
                                 if (startHostConfigure(widgetId)) reconfigId = widgetId
                             }.padding(vertical = 12.dp))
                     }
-                    Text(stringResource(R.string.kom_widget_size), color = AccentGreen, fontSize = 16.sp,
+                    if (!builtIn) Text(stringResource(R.string.kom_widget_size), color = AccentGreen, fontSize = 16.sp,
                         modifier = Modifier.fillMaxWidth().clickable { showMenu = false; showSize = true }
                             .padding(vertical = 12.dp))
                     Text(stringResource(R.string.kom_widget_change), color = AccentGreen, fontSize = 16.sp,

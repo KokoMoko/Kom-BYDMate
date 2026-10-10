@@ -2333,4 +2333,7 @@
     <string name="kom_rated_range_desc">Запас хода машины на 100%. Оценка запаса никогда не превышает его с учётом текущего заряда. Пусто — без ограничения.</string>
     <string name="kom_police_title">Полицейский на дороге</string>
     <string name="kom_police_hint">Если скорость превышает ограничение дороги дольше 30 секунд, у края дороги появляется полицейский со свистком (короткое превышение — только звуковой сигнал). Три нажатия на полицейского в разные появления выключают его, включить снова можно здесь.</string>
+    <string name="nav_tab_reports">Отчёты</string>
+    <string name="kom_widget_trip">TRIP 1 / TRIP 2 · Kom-BYDMate</string>
+    <string name="kom_widget_trip_desc">Счётчики пробега; нажатие — подробности и сброс после зарядки</string>
 </resources>

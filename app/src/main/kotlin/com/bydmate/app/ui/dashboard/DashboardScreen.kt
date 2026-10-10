@@ -593,7 +593,7 @@ internal fun InsightCard(  // Kom-BYDMate: internal՝ B քարտում օգտա�
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TripCounterButton(
+internal fun TripCounterButton(
     label: String,
     ui: TripCounterUi?,
     modifier: Modifier,
@@ -679,7 +679,7 @@ private fun BatteryCell(value: String, label: String, color: Color) {
 // ============================================================================
 
 @Composable
-private fun TripDetailRow(
+internal fun TripDetailRow(
     label: String,
     value: String,
     valueColor: Color = TextPrimary,
@@ -698,7 +698,7 @@ private fun TripDetailRow(
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun TripCounterDialog(
+internal fun TripCounterDialog(
     label: String,
     ui: TripCounterUi,
     currencySymbol: String,
@@ -920,7 +920,7 @@ private fun DashboardPeriodChip(label: String, selected: Boolean, onClick: () ->
 
 // DashboardPeriodChip on an elevated container: the TRIP popup itself is CardSurface.
 @Composable
-private fun TripAutoResetChip(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun TripAutoResetChip(label: String, selected: Boolean, onClick: () -> Unit) {
     androidx.compose.material3.FilterChip(
         selected = selected,
         onClick = onClick,

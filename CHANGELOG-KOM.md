@@ -9,12 +9,18 @@ Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարվա�
 ### English
 
 - HUD and driver's display: the navigator's turns no longer disappear after a minute or two while the navigator is on the driver's display. Since 3.20.0-kom.1 the navigator was read only while BYDMate's own HUD connection was up; Kom's HUD output now reads it on its own.
-- AccuWeather on the dashboard shows today's weather after the car is switched on, without a tap: once the internet is up, Kom opens AccuWeather for about 3 seconds and comes back (the head unit blocks AccuWeather's own background refresh).
+- Reports: Trips and Charging are now one «Reports» screen with two tabs. The Trips tab shows TRIP 1 and TRIP 2 again: a tap opens the details with «reset after charging» (off / any / AC / DC / to 100 %), a long press resets the counter.
+- TRIP 1 / TRIP 2 card for the dashboard: pick it first in any widget slot's «+» list.
+- Widgets on the dashboard (AccuWeather and others) no longer switch to another layout (for example the 7-day «Daily» one) by themselves: the slot's size is reported to the widget only once it has settled.
+- Lagoon dashboard: the water's colour follows the charge as in Tide (teal from 50 %, orange from 20 %, red below).
 
 ### Հայերեն
 
 - HUD և վարորդի էկրան. նավիգատորի մանևրները այլևս չեն անհետանում մեկ-երկու րոպե անց, երբ նավիգատորը վարորդի էկրանին է։ 3.20.0-kom.1-ում նավիգատորը կարդացվում էր միայն BYDMate-ի սեփական HUD կապի ժամանակ. Kom-ի HUD-ը հիմա այն կարդում է ինքնուրույն։
-- Դաշբորդի AccuWeather-ը մեքենան միացնելուց հետո ցույց է տալիս այսօրվա եղանակը, առանց սեղմելու. ինտերնետը միանալուց հետո Kom-ը մոտ 3 վայրկյանով բացում է AccuWeather-ը և վերադառնում (մեքենայի համակարգը արգելափակում է AccuWeather-ի ֆոնային թարմացումը)։
+- Հաշվետվություններ. «Ուղևորություններ»-ը և «Լիցքավորում»-ը հիմա մեկ «Հաշվետվություններ» էկրան են՝ երկու tab-ով։ Ուղևորությունների tab-ում նորից կան TRIP 1-ը և TRIP 2-ը. սեղմելիս բացվում են մանրամասները «զրոյացնել լիցքավորումից հետո» ընտրությամբ (անջատված / ցանկացած / AC / DC / մինչև 100 %), երկար սեղմելիս հաշվիչը զրոյանում է։
+- TRIP 1 / TRIP 2 քարտ դաշբորդի համար. ընտրիր այն ցանկացած վիջեթի «+» ցանկի առաջին տողից։
+- Դաշբորդի վիջեթները (AccuWeather և այլն) այլևս ինքնուրույն չեն անցնում այլ դասավորության (օրինակ 7 օրվա «Daily»)։ Սլոտի չափը վիջեթին հայտնվում է միայն այն կայունանալուց հետո։
+- «Լիճ» դաշբորդ. ջրի գույնը հետևում է լիցքին, ինչպես «Մակընթացություն»-ում (կապտականաչ՝ 50 %-ից, նարնջագույն՝ 20 %-ից, կարմիր՝ ավելի ցածր)։
 
 ## 3.20.0-kom.1 — 2026-10-09
 

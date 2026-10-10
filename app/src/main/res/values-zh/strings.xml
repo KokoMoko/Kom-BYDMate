@@ -2068,4 +2068,5 @@
     <string name="auto_ui_test_park">未执行：此规则仅在驻车时生效，请挂入 P 挡。</string>
     <string name="auto_ui_confirm_rule">规则「%1$s」</string>
     <string name="auto_ui_confirm_countdown">%1$d 秒后取消</string>
+    <string name="nav_tab_reports">报告</string>
 </resources>

@@ -1950,4 +1950,5 @@
     <string name="auto_ui_test_park">Não executada: a regra só funciona estacionado. Engate o P.</string>
     <string name="auto_ui_confirm_rule">Regra «%1$s»</string>
     <string name="auto_ui_confirm_countdown">Cancela em %1$d s</string>
+    <string name="nav_tab_reports">Relatórios</string>
 </resources>

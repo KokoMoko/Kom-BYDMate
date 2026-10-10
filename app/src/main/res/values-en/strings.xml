@@ -2166,4 +2166,7 @@
     <string name="kom_rated_range_desc">Range of the car on a full battery. The range estimate never exceeds it at the current charge. Leave empty for no limit.</string>
     <string name="kom_police_title">Officer on the road</string>
     <string name="kom_police_hint">When the speed stays over the road limit for more than 30 seconds, a traffic officer with a whistle steps onto the road edge (a short overspeed only beeps). Tapping him on three separate appearances turns him off; turn him back on here.</string>
+    <string name="nav_tab_reports">Reports</string>
+    <string name="kom_widget_trip">TRIP 1 / TRIP 2 · Kom-BYDMate</string>
+    <string name="kom_widget_trip_desc">Trip counters; tap for details and reset after charging</string>
 </resources>
