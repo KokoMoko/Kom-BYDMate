@@ -381,7 +381,9 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
                     radius = (x1 - x0) * 0.6f))
                 val top = padY + 64.dp.toPx(); val bot = size.height - padY - 30.dp.toPx()
                 val level = bot - (bot - top) * soc / 100f
-                drawWave(0f, size.width, level, waveT, Color(0xFF35E0FF), Color(0xFF0A5FB4), 14.dp.toPx())
+                // ալիքի գույնը՝ ըստ լիցքի, ինչպես «Մակընթացություն»-ում
+                val (lc1, lc2) = tideColors(soc)
+                drawWave(0f, size.width, level, waveT, lc1, lc2, 14.dp.toPx())
                 val w = size.width
                 drawRect(Brush.horizontalGradient(0f to Color.Transparent, xL / w to Color.Transparent, x0 / w to Color.Black,
                     x1 / w to Color.Black, xR / w to Color.Transparent, 1f to Color.Transparent), blendMode = BlendMode.DstIn)

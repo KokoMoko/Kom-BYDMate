@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kom-BYDMate: the pending widget size report of a dashboard widget frame -->
+    <item name="kom_widget_size_job" type="id" />
+</resources>

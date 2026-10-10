@@ -330,7 +330,24 @@ fun DashboardWidgetSlot(
                             hv.pivotY = 0f
                             hv.scaleX = s
                             hv.scaleY = s
-                            runCatching { hv.updateAppWidgetSize(null, vwDp, vhDp, vwDp, vhDp) }
+                            // Չափը հայտնում ենք միայն 1.5 վրկ կայուն մնալուց հետո և միայն փոխվելու դեպքում։
+                            // AccuWeather-ը (Glance) դասավորությունը ընտրում է այս չափով և վերագծվում է միայն
+                            // հաջորդ անգամ գործարկվելիս (մեքենան հետին պլանում արգելափակում է չափի փոփոխության
+                            // ազդանշանը), ուստի անցողիկ չափը (էջի փոխում, անիմացիա) որոշում էր դասավորությունը՝
+                            // երբեմն Daily (7 օր) տեսքը։
+                            val reportHv = hv
+                            (frame.getTag(R.id.kom_widget_size_job) as? Runnable)?.let { frame.removeCallbacks(it) }
+                            val job = Runnable {
+                                val p = frame.context.getSharedPreferences("kom_widget_sizes", android.content.Context.MODE_PRIVATE)
+                                val key = "w_${reportHv.appWidgetId}"
+                                val now = "${vwDp}x$vhDp"
+                                if (p.getString(key, null) != now) {
+                                    runCatching { reportHv.updateAppWidgetSize(null, vwDp, vhDp, vwDp, vhDp) }
+                                    p.edit().putString(key, now).apply()
+                                }
+                            }
+                            frame.setTag(R.id.kom_widget_size_job, job)
+                            frame.postDelayed(job, 1_500L)
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
