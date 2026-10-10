@@ -71,8 +71,6 @@ object KomAutostart {
         val now = System.currentTimeMillis()
         if (now - lastRunMs < MIN_INTERVAL_MS) return
         lastRunMs = now
-        // վիջեթները (եղանակը)՝ թարմ տվյալներով, առանց սեղմելու
-        KomWidgetRefresh.afterSwitchOn(ctx, scope)
         scope.launch {
             Log.i(TAG, "car on -> autostart (music=${KomPrefs.autostartMusic(ctx)}, navi=${KomPrefs.autostartNavi(ctx)})")
             if (KomPrefs.autostartMusic(ctx)) connectMusic(ctx)
@@ -87,6 +85,14 @@ object KomAutostart {
                 startPlayback(restartIfPlaying = true)
                 delay(10_000L)
                 startPlayback(restartIfPlaying = false)  // երկրորդ փորձ, եթե դեռ չի նվագում
+            }
+            // Վիջեթներ, որոնք թարմանում են միայն հավելվածը բացելիս (AccuWeather)՝ ինտերնետից հետո մի պահ
+            val wake = KomWidgetRefresh.packagesToOpen(ctx)
+            if (wake.isNotEmpty() && KomWidgetRefresh.awaitInternet(ctx)) {
+                for (pkg in wake) {
+                    Log.i(TAG, "widget refresh: open $pkg")
+                    launchInBackground(ctx, pkg)
+                }
             }
         }
     }

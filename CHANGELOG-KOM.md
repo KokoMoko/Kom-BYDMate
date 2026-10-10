@@ -4,6 +4,18 @@ What changed in each Kom-BYDMate release, in English and Armenian. Changes inher
 
 Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարված փոփոխությունները՝ անգլերեն և հայերեն։ Upstream BYDMate-ից եկած փոփոխությունները՝ [CHANGELOG.md](CHANGELOG.md)-ում։
 
+## 3.20.0-kom.2 — 2026-10-10
+
+### English
+
+- HUD and driver's display: the navigator's turns no longer disappear after a minute or two while the navigator is on the driver's display. Since 3.20.0-kom.1 the navigator was read only while BYDMate's own HUD connection was up; Kom's HUD output now reads it on its own.
+- Widgets on the dashboard (e.g. AccuWeather) refresh by themselves when the car is switched on, without a tap.
+
+### Հայերեն
+
+- HUD և վարորդի էկրան. նավիգատորի մանևրները այլևս չեն անհետանում մեկ-երկու րոպե անց, երբ նավիգատորը վարորդի էկրանին է։ 3.20.0-kom.1-ում նավիգատորը կարդացվում էր միայն BYDMate-ի սեփական HUD կապի ժամանակ. Kom-ի HUD-ը հիմա այն կարդում է ինքնուրույն։
+- Դաշբորդի վիջեթները (օր․ AccuWeather) մեքենան միացնելիս թարմանում են ինքնաբերաբար, առանց սեղմելու։
+
 ## 3.20.0-kom.1 — 2026-10-09
 
 ### English
