@@ -4,7 +4,7 @@ What changed in each Kom-BYDMate release, in English and Armenian. Changes inher
 
 Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարված փոփոխությունները՝ անգլերեն և հայերեն։ Upstream BYDMate-ից եկած փոփոխությունները՝ [CHANGELOG.md](CHANGELOG.md)-ում։
 
-## 3.20.0-kom.2 — 2026-10-10
+## 3.20.0-kom.2 — 2026-10-11
 
 ### English
 
@@ -13,6 +13,9 @@ Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարվա�
 - TRIP 1 / TRIP 2 card for the dashboard: pick it first in any widget slot's «+» list.
 - Widgets on the dashboard (AccuWeather and others) no longer switch to another layout (for example the 7-day «Daily» one) by themselves: the slot's size is reported to the widget only once it has settled.
 - Lagoon dashboard: the water's colour follows the charge as in Tide (teal from 50 %, orange from 20 %, red below).
+- Second dashboard: the two small widget places under the charge card are now one wide place (the TRIP card fits it).
+- Faster tab switching: the dashboard stays ready while another screen is open, so coming back to it is instant (it used to take about 1.5 s), and screens change without the fade.
+- Armenian: the HUD settings (mode 3, «trial», the HUD check), BYD cloud over Wi-Fi, the new automation actions and levels and the remaining messages are translated (they were shown in Russian).
 
 ### Հայերեն
 
@@ -21,6 +24,9 @@ Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարվա�
 - TRIP 1 / TRIP 2 քարտ դաշբորդի համար. ընտրիր այն ցանկացած վիջեթի «+» ցանկի առաջին տողից։
 - Դաշբորդի վիջեթները (AccuWeather և այլն) այլևս ինքնուրույն չեն անցնում այլ դասավորության (օրինակ 7 օրվա «Daily»)։ Սլոտի չափը վիջեթին հայտնվում է միայն այն կայունանալուց հետո։
 - «Լիճ» դաշբորդ. ջրի գույնը հետևում է լիցքին, ինչպես «Մակընթացություն»-ում (կապտականաչ՝ 50 %-ից, նարնջագույն՝ 20 %-ից, կարմիր՝ ավելի ցածր)։
+- Երկրորդ դաշբորդ. լիցքի քարտի տակի վիջեթների երկու փոքր տեղը հիմա մեկ լայն տեղ է (TRIP քարտը տեղավորվում է)։
+- Էկրանների ավելի արագ փոխում. դաշբորդը պատրաստ է մնում, երբ այլ էկրան է բաց, ուստի վերադարձը ակնթարթային է (առաջ մոտ 1.5 վրկ էր տևում), իսկ էկրանները փոխվում են առանց մարման անիմացիայի։
+- Հայերեն. թարգմանված են HUD-ի կարգավորումները (ռեժիմ 3, «փորձնական», HUD-ի ստուգում), BYD ամպը Wi-Fi-ով, ավտոմատացումների նոր գործողություններն ու մակարդակները և մնացած հաղորդագրությունները (ցույց էին տրվում ռուսերեն)։
 
 ## 3.20.0-kom.1 — 2026-10-09
 

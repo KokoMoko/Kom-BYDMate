@@ -48,6 +48,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -265,10 +266,42 @@ fun AppNavigation(
             }
         }
     ) { paddingValues ->
+      // Kom-BYDMate: the dashboard stays composed under the other screens once it has been shown, so
+      // coming back to it is instant (rebuilding it, its Android widgets included, took ~1.5 s).
+      // Off screen it is left unplaced: not drawn and not touchable.
+      val onDashboard = currentDestination?.route == Screen.Dashboard.route
+      var dashboardShown by remember { mutableStateOf(false) }
+      if (onDashboard) dashboardShown = true
+      Box(Modifier.fillMaxSize().padding(paddingValues)) {
+        if (dashboardShown) Box(
+            Modifier.fillMaxSize().layout { m, c ->
+                val p = m.measure(c)
+                layout(p.width, p.height) { if (onDashboard) p.place(0, 0) }
+            }
+        ) {
+            com.bydmate.app.ui.dashboard.DashboardHost(
+                onOpenTechPanel = { navController.navigate("tech_panel") },
+                // Same tab switch as the bottom bar's Settings item.
+                onOpenSettings = {
+                    navController.navigate(Screen.Settings.route) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+            )
+        }
         NavHost(
             navController = navController,
             startDestination = startDestination!!,
-            modifier = Modifier.padding(paddingValues)
+            modifier = Modifier.fillMaxSize(),
+            // Kom-BYDMate: no 0.7 s cross-fade between screens; a tab switch shows the new screen at once
+            enterTransition = { androidx.compose.animation.EnterTransition.None },
+            exitTransition = { androidx.compose.animation.ExitTransition.None },
+            popEnterTransition = { androidx.compose.animation.EnterTransition.None },
+            popExitTransition = { androidx.compose.animation.ExitTransition.None },
         ) {
             composable("welcome") {
                 WelcomeScreen(
@@ -279,22 +312,8 @@ fun AppNavigation(
                     }
                 )
             }
-            composable(Screen.Dashboard.route) {
-                // Kom-BYDMate: My Dashboard (լռելյայն) ↔ Classic՝ swipe-ով
-                com.bydmate.app.ui.dashboard.DashboardHost(
-                    onOpenTechPanel = { navController.navigate("tech_panel") },
-                    // Same tab switch as the bottom bar's Settings item.
-                    onOpenSettings = {
-                        navController.navigate(Screen.Settings.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                )
-            }
+            // Kom-BYDMate: drawn above, outside the NavHost (kept alive between tab switches)
+            composable(Screen.Dashboard.route) { }
             composable(Screen.Reports.route) {
                 com.bydmate.app.ui.reports.ReportsScreen(
                     onOpenTemperature = { navController.navigate("trip_temperature") },
@@ -335,6 +354,7 @@ fun AppNavigation(
                 com.bydmate.app.ui.settings.VoiceUserPhrasesScreen(onBack = { navController.popBackStack() })
             }
         }
+      }
     }
 }
 
