@@ -180,25 +180,14 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth().weight(0.64f),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Երկու սլոտ մեկ տողում՝ Phone | երկրորդ widget
-                        Row(
+                        // One full-width slot under the top row (it was two; one wide place fits TRIP 1 / TRIP 2)
+                        DashboardWidgetSlot(
+                            slot = DashboardWidgets.SLOT_PHONE,
+                            emptyHint = stringResource(R.string.kom_widget_hint_generic),
+                            suggestion = stringResource(R.string.kom_widget_suggest_phone),
+                            requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
                             modifier = Modifier.fillMaxWidth().height(88.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            DashboardWidgetSlot(
-                                slot = DashboardWidgets.SLOT_PHONE,
-                                emptyHint = stringResource(R.string.kom_widget_hint_generic),
-                                suggestion = stringResource(R.string.kom_widget_suggest_phone),
-                                requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
-                            )
-                            DashboardWidgetSlot(
-                                slot = DashboardWidgets.SLOT_PHONE2,
-                                emptyHint = stringResource(R.string.kom_widget_hint_generic),
-                                requestGrant = { cb -> viewModel.grantWidgetBind(cb) },
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
-                            )
-                        }
+                        )
                         DashboardWidgetSlot(
                             slot = DashboardWidgets.SLOT_LEFT,
                             emptyHint = stringResource(R.string.kom_widget_hint_generic),
