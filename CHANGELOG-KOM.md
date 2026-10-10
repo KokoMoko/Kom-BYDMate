@@ -9,12 +9,12 @@ Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարվա�
 ### English
 
 - HUD and driver's display: the navigator's turns no longer disappear after a minute or two while the navigator is on the driver's display. Since 3.20.0-kom.1 the navigator was read only while BYDMate's own HUD connection was up; Kom's HUD output now reads it on its own.
-- Widgets on the dashboard (e.g. AccuWeather) refresh by themselves when the car is switched on, without a tap.
+- AccuWeather on the dashboard shows today's weather after the car is switched on, without a tap: once the internet is up, Kom opens AccuWeather for about 3 seconds and comes back (the head unit blocks AccuWeather's own background refresh).
 
 ### Հայերեն
 
 - HUD և վարորդի էկրան. նավիգատորի մանևրները այլևս չեն անհետանում մեկ-երկու րոպե անց, երբ նավիգատորը վարորդի էկրանին է։ 3.20.0-kom.1-ում նավիգատորը կարդացվում էր միայն BYDMate-ի սեփական HUD կապի ժամանակ. Kom-ի HUD-ը հիմա այն կարդում է ինքնուրույն։
-- Դաշբորդի վիջեթները (օր․ AccuWeather) մեքենան միացնելիս թարմանում են ինքնաբերաբար, առանց սեղմելու։
+- Դաշբորդի AccuWeather-ը մեքենան միացնելուց հետո ցույց է տալիս այսօրվա եղանակը, առանց սեղմելու. ինտերնետը միանալուց հետո Kom-ը մոտ 3 վայրկյանով բացում է AccuWeather-ը և վերադառնում (մեքենայի համակարգը արգելափակում է AccuWeather-ի ֆոնային թարմացումը)։
 
 ## 3.20.0-kom.1 — 2026-10-09
 
