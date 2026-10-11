@@ -350,7 +350,7 @@ private fun ClusterTop(state: DashboardUiState, swap: Boolean, look: ClusterLook
     val waves = theme == ClusterTheme.LAGOON || theme == ClusterTheme.TIDE
     val waveT = rememberWavePhase(waves, speed)
     val soc = state.soc ?: 0
-    val rangeText = state.estimatedRangeKm?.let { "~${"%.0f".format(it)} km" } ?: "~— km"
+    val rangeText = state.shownRangeKm?.let { "~${"%.0f".format(it)} km" } ?: "~— km"
     val (gearText, gearColor) = when (state.gear) {
         1 -> "P" to TextSecondary
         2 -> "R" to Amber
@@ -511,7 +511,7 @@ private fun ClusterHeader(state: DashboardUiState, extras: KomClusterExtras.Extr
         }
         Text(g, color = gc, fontSize = 40.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.CenterStart))
         BatteryBar(state.soc ?: 0, state.isCharging,
-            state.estimatedRangeKm?.let { "~ ${"%.0f".format(it)} km" } ?: "~ — km")
+            state.shownRangeKm?.let { "~ ${"%.0f".format(it)} km" } ?: "~ — km")
         // Առաջին տողում բարձրությունը, երկրորդում ջերմաստիճանները՝ «մեքենա | դրսում» (ձախից հավասարեցված)
         CornerInfo(InfoRows.TWO, withAlt = false, state.insideTemp?.let { "$it°" } ?: "—", state.exteriorTemp?.let { "$it°" } ?: "—",
             extras.altitudeM?.let { "$it m" } ?: "— m", Modifier.align(Alignment.CenterEnd))

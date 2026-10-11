@@ -85,7 +85,7 @@ fun MyDashboardTileContent(
         TileType.RANGE -> TileCard(modifier) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text(state.estimatedRangeKm?.let { "~${"%.0f".format(it)}" } ?: "—", color = AccentGreen,
+                    Text(state.shownRangeKm?.let { "~${"%.0f".format(it)}" } ?: "—", color = AccentGreen,
                         fontSize = 34.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                     Spacer(Modifier.width(4.dp))
                     Text(stringResource(R.string.dashboard_unit_km), color = AccentGreen.copy(alpha = 0.7f),

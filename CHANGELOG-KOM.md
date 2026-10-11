@@ -4,14 +4,28 @@ What changed in each Kom-BYDMate release, in English and Armenian. Changes inher
 
 Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարված փոփոխությունները՝ անգլերեն և հայերեն։ Upstream BYDMate-ից եկած փոփոխությունները՝ [CHANGELOG.md](CHANGELOG.md)-ում։
 
-## 3.20.0-kom.3 — unreleased
+## 4.0.0-kom.1 — unreleased
 
 ### English
 
+**From BYDMate 4.0.0**
+- DM-i and DM-o hybrids are recognised by the car's own counters: the range on battery comes from the car, a «Fuel» card shows the tank and the range on fuel, trips get a litres column and the litre price joins the tariffs. Kom's dashboards show the car's battery range on a hybrid too.
+- Automations and the voice assistant: battery heating on/off, screen off/on.
+- ABRP can send the car's location again (off by default); BYD cloud over Wi-Fi says when the BYD server refuses the car.
+- HUD and driver's display: the maneuver arrow no longer lingers after a turn, distances on DiLink 3.0 instead of «-1».
+
+**Kom-BYDMate**
 - Trips: each trip shows how long the car was moving (green) and standing (amber), as two times and a bar. Worked out from the trip's GPS points, so older trips get it too.
 
 ### Հայերեն
 
+**BYDMate 4.0.0-ից**
+- DM-i և DM-o հիբրիդները ճանաչվում են մեքենայի սեփական հաշվիչներով. մարտկոցային պաշարը վերցվում է մեքենայից, «Վառելիք» քարտը ցույց է տալիս բաքը և վառելիքի պաշարը, ուղևորություններում ավելանում է լիտրերի սյունակ, սակագներում՝ լիտրի գինը։ Kom-ի դաշբորդներն էլ հիբրիդի վրա ցույց են տալիս մեքենայի մարտկոցային պաշարը։
+- Ավտոմատացումներ և ձայնային օգնական. մարտկոցի տաքացում միացնել/անջատել, էկրանը անջատել/միացնել։
+- ABRP-ն կրկին կարող է ուղարկել մեքենայի դիրքը (լռելյայն անջատված է), BYD ամպը Wi-Fi-ով ասում է, երբ BYD սերվերը մերժում է մեքենային։
+- HUD և վարորդի էկրան. մանևրի սլաքը այլևս չի մնում շրջադարձից հետո, DiLink 3.0-ում «-1»-ի փոխարեն հեռավորություններ են։
+
+**Kom-BYDMate**
 - Ուղևորություններ. ամեն ուղևորության մոտ երևում է, թե որքան է մեքենան շարժվել (կանաչ) և կանգնած եղել (դեղին)՝ երկու ժամով և գծով։ Հաշվվում է ուղևորության GPS կետերից, ուստի հին ուղևորությունների համար էլ է երևում։
 
 ## 3.20.0-kom.2 — 2026-10-11
