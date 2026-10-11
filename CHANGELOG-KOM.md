@@ -4,6 +4,16 @@ What changed in each Kom-BYDMate release, in English and Armenian. Changes inher
 
 Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարված փոփոխությունները՝ անգլերեն և հայերեն։ Upstream BYDMate-ից եկած փոփոխությունները՝ [CHANGELOG.md](CHANGELOG.md)-ում։
 
+## 3.20.0-kom.3 — unreleased
+
+### English
+
+- Trips: each trip shows how long the car was moving (green) and standing (amber), as two times and a bar. Worked out from the trip's GPS points, so older trips get it too.
+
+### Հայերեն
+
+- Ուղևորություններ. ամեն ուղևորության մոտ երևում է, թե որքան է մեքենան շարժվել (կանաչ) և կանգնած եղել (դեղին)՝ երկու ժամով և գծով։ Հաշվվում է ուղևորության GPS կետերից, ուստի հին ուղևորությունների համար էլ է երևում։
+
 ## 3.20.0-kom.2 — 2026-10-11
 
 ### English

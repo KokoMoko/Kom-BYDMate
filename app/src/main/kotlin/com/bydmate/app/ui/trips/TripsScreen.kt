@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -145,6 +146,7 @@ fun TripsScreen(
                                         item(key = "trip_${trip.id}") {
                                             TripRow(
                                                 trip = trip,
+                                                movingMs = state.movingMs[trip.id],
                                                 currencySymbol = state.currencySymbol,
                                                 timeColWidth = timeColWidth,
                                                 onClick = { viewModel.selectTrip(trip) },
@@ -338,7 +340,7 @@ private fun ColumnHeaders(currencySymbol: String, timeColWidth: Dp) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(stringResource(R.string.trips_col_time), color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(timeColWidth))
-        Text(stringResource(R.string.trips_col_duration), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
+        Text(stringResource(R.string.trips_col_duration), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(72.dp))
         Text(stringResource(R.string.trips_col_km), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
         Text(stringResource(R.string.trips_col_soc), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(58.dp))
         Text(stringResource(R.string.trips_col_kwh), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
@@ -353,6 +355,7 @@ private fun ColumnHeaders(currencySymbol: String, timeColWidth: Dp) {
 @Composable
 private fun TripRow(
     trip: TripEntity,
+    movingMs: Long?,
     currencySymbol: String,
     timeColWidth: Dp,
     onClick: () -> Unit,
@@ -387,11 +390,26 @@ private fun TripRow(
                 maxLines = 1,
                 modifier = Modifier.width(timeColWidth)
             )
-            // Duration (compact H:MM, language-neutral so it never wraps the cell)
-            Text(dur, color = if (isStop) TextMuted else TextSecondary,
+            // Kom-BYDMate: duration split into moving (green) and standing (amber) time with a bar,
+            // from the trip's GPS points; the whole length while they are not there (or for a stop)
+            val totalMs = trip.endTs?.let { it - trip.startTs } ?: 0L
+            if (!isStop && movingMs != null && totalMs > 0) {
+                val moving = movingMs.coerceIn(0L, totalMs)
+                Column(modifier = Modifier.width(72.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(formatDurationHm(0, moving), color = AccentGreen, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
+                        Text(formatDurationHm(0, totalMs - moving), color = SocYellow, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
+                    }
+                    val f = moving.toFloat() / totalMs
+                    Row(Modifier.fillMaxWidth().padding(top = 2.dp).height(4.dp).clip(RoundedCornerShape(2.dp))) {
+                        if (f > 0f) Box(Modifier.weight(f).fillMaxHeight().background(AccentGreen))
+                        if (f < 1f) Box(Modifier.weight(1f - f).fillMaxHeight().background(SocYellow))
+                    }
+                }
+            } else Text(dur, color = if (isStop) TextMuted else TextSecondary,
                 fontSize = 12.sp, fontFamily = FontFamily.Monospace,
                 maxLines = 1,
-                textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
+                textAlign = TextAlign.End, modifier = Modifier.width(72.dp))
             // Distance
             Text(
                 if (isStop) "0.0" else dist,

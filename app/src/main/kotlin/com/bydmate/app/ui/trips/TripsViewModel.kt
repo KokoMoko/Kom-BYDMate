@@ -59,6 +59,8 @@ data class TripsUiState(
     val hasTripsBeforeFilter: Boolean = false,
     val expandedMonths: Set<String> = emptySet(),
     val expandedDays: Set<String> = emptySet(),
+    // Kom-BYDMate: moving time per trip id (from its GPS points), for the trips of the open days
+    val movingMs: Map<Long, Long> = emptyMap(),
     val selectedTrip: TripEntity? = null,
     val selectedTripPoints: List<TripPointEntity> = emptyList(),
     val selectedTripForAction: TripEntity? = null,
@@ -135,6 +137,24 @@ class TripsViewModel @Inject constructor(
             val expanded = state.expandedDays.toMutableSet()
             if (date in expanded) expanded.remove(date) else expanded.add(date)
             state.copy(expandedDays = expanded)
+        }
+        loadMovingTimes()
+    }
+
+    /** Kom-BYDMate: moving time for the trips of the open days that do not have it yet. */
+    private fun loadMovingTimes() {
+        viewModelScope.launch {
+            val s = _uiState.value
+            val ids = s.months.flatMap { it.days }.filter { it.date in s.expandedDays }.flatMap { it.trips }
+                .filter { (it.distanceKm ?: 0.0) > 0.0 && it.id !in s.movingMs }.map { it.id }
+            if (ids.isEmpty()) return@launch
+            val found = ids.chunked(200).flatMap { chunk ->
+                runCatching { tripPointDao.getByTripIds(chunk) }.getOrDefault(emptyList())
+                    .groupBy { it.tripId }.mapNotNull { (id, pts) ->
+                        com.bydmate.app.data.trips.TripMovingTime.movingMs(pts)?.let { id to it }
+                    }
+            }.toMap()
+            if (found.isNotEmpty()) _uiState.update { it.copy(movingMs = it.movingMs + found) }
         }
     }
 
@@ -229,6 +249,7 @@ class TripsViewModel @Inject constructor(
                     )
                 }
                 rebuildChart()
+                loadMovingTimes()
             }
         }
     }
