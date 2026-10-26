@@ -6,7 +6,7 @@
 
 Один адрес для всех сетей EVM:
 
-`0x24919d8a46357D83fe935F02BEbE55b1b7c360B8`
+`0xBca867Ae608428ac869D4B44C875446C6137b803`
 
 <img src="docs/donations/usdt-evm.png" alt="USDT EVM QR" width="200">
 

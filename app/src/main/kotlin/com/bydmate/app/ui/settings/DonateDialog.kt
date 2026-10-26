@@ -60,7 +60,7 @@ import com.bydmate.app.ui.theme.ScaledDialogContent
 /** One 0x address that receives USDT on every supported EVM chain. Kept in code rather
  *  than a string resource because it is identical in every locale and must never be
  *  accidentally translated, re-formatted, or line-wrapped by a localization pass. */
-const val DONATION_ADDRESS = "0x24919d8a46357D83fe935F02BEbE55b1b7c360B8"
+const val DONATION_ADDRESS = "0xBca867Ae608428ac869D4B44C875446C6137b803"
 
 /** ЮMoney fundraise page: card / SberPay / ЮMoney wallet payment. Kept in code for the
  *  same reasons as [DONATION_ADDRESS] -- identical in every locale, must not be translated. */
