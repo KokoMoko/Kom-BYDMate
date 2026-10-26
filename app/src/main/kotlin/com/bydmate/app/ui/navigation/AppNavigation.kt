@@ -279,17 +279,25 @@ fun AppNavigation(
                 layout(p.width, p.height) { if (onDashboard) p.place(0, 0) }
             }
         ) {
+            // Same tab switch as the bottom bar's Settings item.
+            val openSettingsTab = {
+                navController.navigate(Screen.Settings.route) {
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
             com.bydmate.app.ui.dashboard.DashboardHost(
                 onOpenTechPanel = { navController.navigate("tech_panel") },
-                // Same tab switch as the bottom bar's Settings item.
-                onOpenSettings = {
-                    navController.navigate(Screen.Settings.route) {
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
-                        }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
+                onOpenSettings = openSettingsTab,
+                // Settings first: the periods screen takes its view model from that entry,
+                // and Back lands on Settings.
+                onOpenTariffPeriods = {
+                    openSettingsTab()
+                    // The restored Settings stack may already end on the periods screen.
+                    navController.navigate("tariff_periods") { launchSingleTop = true }
                 },
             )
         }

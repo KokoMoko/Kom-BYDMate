@@ -4,9 +4,20 @@ What changed in each Kom-BYDMate release, in English and Armenian. Changes inher
 
 Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարված փոփոխությունները՝ անգլերեն և հայերեն։ Upstream BYDMate-ից եկած փոփոխությունները՝ [CHANGELOG.md](CHANGELOG.md)-ում։
 
-## 4.0.0-kom.1 — unreleased
+## 4.0.2-kom.1 — 2026-10-26
 
 ### English
+
+**From BYDMate 4.0.1 and 4.0.2**
+- Tech, «Battery · history»: when the battery last reached 100 %, how long ago, and the last calibration (from 9 % or lower up to 100 %); the lines turn yellow and red when it is time again.
+- Telegram report: optional trip start/end time, kWh used and cost by your tariff. A finished log can be sent to your Telegram bot (by hand or automatically).
+- Split screen: a «How to launch» block — a steering-wheel key toggles split screen, a switch for the widget's left-third tap; the last pair of apps is remembered until the car is switched off.
+- Automations and voice: sunshade open 50 % and stop.
+- Fixes: trips are saved again after the head unit's clock once ran ahead; the trip map is written when the head unit woke up by itself; the app no longer restarts and stays running on a parked car; no false «car switched off» report when starting the car; heated driver seat level 3 on cars with the backup channel; voice assistant keeps the start of a phrase on Android 10 and opens the navigator chosen for routes; «edit» next to the fuel price opens the tariffs; Android 14 head units understand all of the car's answers.
+
+**Kom-BYDMate**
+- Dashboard widgets (Yandex Music and others) that stay blank after the car is switched off and on (seen on a Sealion 07): Kom-BYDMate now asks the widgets' apps for a fresh view at start, as re-adding the widget did. A first try, not yet checked on that car.
+- All the new texts are translated into Armenian.
 
 **From BYDMate 4.0.0**
 - DM-i and DM-o hybrids are recognised by the car's own counters: the range on battery comes from the car, a «Fuel» card shows the tank and the range on fuel, trips get a litres column and the litre price joins the tariffs. Kom's dashboards show the car's battery range on a hybrid too.
@@ -18,6 +29,17 @@ Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարվա�
 - Trips: each trip shows how long the car was moving (green) and standing (amber), as two times and a bar. Worked out from the trip's GPS points, so older trips get it too.
 
 ### Հայերեն
+
+**BYDMate 4.0.1-ից և 4.0.2-ից**
+- «Տեխնիկա», «Մարտկոց · պատմություն». երբ է մարտկոցը վերջին անգամ հասել 100 %-ի, որքան ժամանակ է անցել, և վերջին չափաճշտումը (9 %-ից կամ ավելի ցածրից մինչև 100 %)։ Տողերը դեղնում և կարմրում են, երբ կրկին ժամանակն է։
+- Telegram հաշվետվություն. ըստ ցանկության՝ ուղևորության սկզբի և ավարտի ժամը, ծախսված կՎտ·ժ-ը և արժեքը ձեր սակագնով։ Գրանցված log-ը կարելի է ուղարկել ձեր Telegram բոտին (ձեռքով կամ ինքնաբերաբար)։
+- Կիսված էկրան. «Ինչպես գործարկել» բաժին՝ ղեկի կոճակը միացնում և անջատում է կիսված էկրանը, անջատիչ վիջեթի ձախ երրորդին սեղմելու համար. հավելվածների վերջին զույգը հիշվում է մինչև մեքենան անջատելը։
+- Ավտոմատացումներ և ձայն. վարագույրը բացել 50 % և կանգնեցնել։
+- Ուղղումներ. ուղևորությունները կրկին պահպանվում են, եթե մագնիտոլայի ժամացույցը մի անգամ առաջ էր ընկել. ուղևորության քարտեզը գրվում է, երբ մագնիտոլան ինքն էր արթնացել. հավելվածն այլևս չի վերագործարկվում և չի մնում աշխատելիս կայանված մեքենայում. մեքենան միացնելիս կեղծ «մեքենան անջատվեց» հաշվետվություն չկա. վարորդի նստատեղի տաքացման 3-րդ մակարդակը պահեստային կապով մեքենաներում. ձայնային օգնականը Android 10-ում չի կորցնում արտահայտության սկիզբը և բացում է երթուղիների համար ընտրված նավիգատորը. վառելիքի գնի կողքի «փոխել»-ը բացում է սակագները. Android 14 մագնիտոլաները հասկանում են մեքենայի բոլոր պատասխանները։
+
+**Kom-BYDMate**
+- Դաշբորդի վիջեթները (Yandex Music և այլն), որոնք մեքենան անջատել-միացնելուց հետո դատարկ էին մնում (նկատվել է Sealion 07-ում). գործարկվելիս Kom-BYDMate-ը հիմա վիջեթների հավելվածներից թարմ տեսք է խնդրում, ինչպես վիջեթը հեռացնել-նորից ավելացնելն էր անում։ Առաջին փորձ է, այդ մեքենայում դեռ ստուգված չէ։
+- Բոլոր նոր տեքստերը թարգմանված են հայերեն։
 
 **BYDMate 4.0.0-ից**
 - DM-i և DM-o հիբրիդները ճանաչվում են մեքենայի սեփական հաշվիչներով. մարտկոցային պաշարը վերցվում է մեքենայից, «Վառելիք» քարտը ցույց է տալիս բաքը և վառելիքի պաշարը, ուղևորություններում ավելանում է լիտրերի սյունակ, սակագներում՝ լիտրի գինը։ Kom-ի դաշբորդներն էլ հիբրիդի վրա ցույց են տալիս մեքենայի մարտկոցային պաշարը։

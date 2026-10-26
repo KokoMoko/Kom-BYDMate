@@ -505,6 +505,7 @@
     <string name="automation_steering_key_occupied_projection">Гэтая клавіша ўключае навігацыю на прыборнай панэлі. Вызваліце яе ў Наладах, раздзел Дысплей, або выберыце іншую.</string>
     <string name="automation_steering_key_occupied_voice">Гэтая клавіша выклікае галасавога памочніка BYDMate. Змяніце клавішу ў Наладах, раздзел Голас-агент, або выберыце іншую.</string>
     <string name="automation_steering_key_occupied_knob">Націсканне кола занята функцыяй play/pause. Выключыце яе ў Наладах, раздзел Дысплей, або выберыце іншую клавішу.</string>
+    <string name="automation_steering_key_occupied_split">Гэтая клавіша пераключае падзел экрана. Вызваліце яе ў Наладах, раздзел Падзел экрана, або выберыце іншую.</string>
     <string name="automation_trigger_type_voice">Голас</string>
     <string name="automation_trigger_voice_phrase_label">Фраза-трыгер</string>
     <string name="automation_voice_phrase_empty">Галасавая фраза пустая</string>
@@ -853,6 +854,14 @@
     <!-- %1$s = file path, %2$d = size KB -->
     <string name="settings_log_saved">Захавана: %1$s (%2$d КБ)</string>
     <string name="settings_log_error_no_fs_access">Памылка: няма доступу да файлавай сістэмы</string>
+    <string name="settings_log_tg_send">Адправіць у Telegram</string>
+    <string name="settings_log_tg_sending">Адпраўляю ў Telegram…</string>
+    <string name="settings_log_tg_sent">Файл адпраўлены ў Telegram</string>
+    <string name="settings_log_tg_failed">Не ўдалося адправіць: %1$s</string>
+    <string name="settings_log_tg_too_big">Файл занадта вялікі для Telegram. Ён ляжыць у папцы Download.</string>
+    <string name="settings_log_tg_missing">Файл не знойдзены. Магчыма, яго выдалілі з папкі Download.</string>
+    <string name="settings_tg_log_auto_title">Адпраўляць запісаны лог у Telegram</string>
+    <string name="settings_tg_log_auto_hint">Калі запіс лога скончыцца, файл сам прыйдзе ў ваш бот.</string>
     <string name="settings_update_check_in_progress">Праверка...</string>
     <!-- %1$s = version string -->
     <string name="settings_update_available_short">Даступна v%1$s</string>
@@ -1254,6 +1263,8 @@
     <string name="auto_act_sunroof_close">Люк зачыніць</string>
     <string name="auto_act_sunshade_open">Шторка адкрыць</string>
     <string name="auto_act_sunshade_close">Шторка зачыніць</string>
+    <string name="auto_act_sunshade_open_50">Шторка адкрыць 50%</string>
+    <string name="auto_act_sunshade_stop">Шторка спыніць</string>
     <string name="auto_act_sunroof_stop">Люк спыніць</string>
     <string name="auto_act_sunroof_updip">Люк нахіл</string>
     <string name="auto_act_sunroof_comfort">Люк камфорт</string>
@@ -1698,13 +1709,30 @@
     <string name="settings_split_wide_app_title">Шырокая частка (2/3)</string>
     <string name="settings_split_narrow_app_title">Вузкая частка (1/3)</string>
     <string name="settings_split_app_not_selected">не выбрана</string>
-    <string name="settings_split_howto_body">Падзел экрана можна ўключыць трыма спосабамі.\nСамы просты: тап па левай трэці плаваючага віджэта. Для гэтага ў раздзеле «Тап па віджэце» уключыце «Занаванне тапаў», а ў пункце «Дзеянне левага тапа» выберыце «Запускаць падзел экрана».\nПраз аўтаматызацыі: дадайце ў правіла дзеянне «Падзел экрана». Побач ёсць «Закрыць падзел экрана» і «Пераключыць падзел экрана».\nГоласам: проста папрасіце голас-агента ўключыць падзел экрана.</string>
+    <string name="settings_split_howto_body">Выберыце дзве праграмы і спосаб запуску ў блоку «Як запускаць».</string>
     <string name="settings_split_mechanism_title">Механізм падзелу</string>
     <string name="settings_split_mechanism_freeform">Вокны BYDMate</string>
     <string name="settings_split_mechanism_native">Родны падзел</string>
     <string name="settings_split_mechanism_native_hint">Падзел выконвае прашыўка машыны. Выгляд залежыць ад прашыўкі: дзве панэлі 1/3 і 2/3 або папалам з выбарам другой праграмы на экране.</string>
     <string name="settings_split_mechanism_platformized_hint">На гэтай прашыўцы экран дзеліць сама машына: панэлі 1/3 і 2/3, падзяляльнік і жэст абмену родныя. BYDMate толькі запускае абраную пару і вяртае праграму ў яе панэль.</string>
     <string name="settings_split_try_native_hint">Паспрабуйце рэжым Родны падзел.</string>
+    <string name="settings_split_launch_header">Як запускаць</string>
+    <string name="settings_split_key_title">Кнопка на рулі</string>
+    <string name="settings_split_key_none">не прызначана</string>
+    <string name="settings_split_key_assign">Прызначыць</string>
+    <string name="settings_split_key_remove">Прыбраць</string>
+    <string name="settings_split_key_occupied_rule">Гэтая клавіша запускае правіла «%1$s». Выберыце іншую клавішу або змяніце яе ў правіле.</string>
+    <string name="settings_split_key_rule_conflict_one">На гэтай кнопцы ўжо ёсць правіла «%1$s». Цяпер кнопка сама пераключае падзел экрана, і правіла перастане спрацоўваць. Адключыць яго?</string>
+    <string name="settings_split_key_rule_conflict_many">На гэтай кнопцы ўжо ёсць правілы: %1$s. Цяпер кнопка сама пераключае падзел экрана, і правілы перастануць спрацоўваць. Адключыць іх?</string>
+    <string name="settings_split_key_rule_disable">Адключыць</string>
+    <string name="settings_split_key_rule_keep">Пакінуць</string>
+    <string name="settings_split_tap_title">Тап па левай трэці віджэта</string>
+    <string name="settings_split_tap_replace_text">Зараз левы тап адкрывае «%1$s». Замяніць на падзел экрана?</string>
+    <string name="settings_split_tap_replace_confirm">Замяніць</string>
+    <string name="settings_split_tap_replace_cancel">Скасаваць</string>
+    <string name="settings_split_tap_widget_off_hint">Уключыце віджэт у раздзеле «Віджэт»</string>
+    <string name="settings_split_voice_line">Голасам: папрасіце голас-агента ўключыць падзел экрана.</string>
+    <string name="settings_split_automation_line">Аўтаматызацыяй: дзеянне «Пераключыць падзел экрана» запускае праграмы з гэтага меню, а калі вы мянялі іх пасля ўключэння машыны, апошнія выбраныя.</string>
     <string name="split_feature_disabled">Падзел экрана выключаны ў наладах</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">ізаляцыя</string>
@@ -1725,6 +1753,16 @@
     <string name="tech_label_full_cycles">поўных цыклаў</string>
     <string name="tech_caption_full_cycles">%1$s кВт·г ÷ %2$s</string>
     <string name="tech_caption_full_cycles_empty">з\'явіцца пасля першай зарадкі</string>
+    <string name="tech_label_full_charge" formatted="false">Поўная зарадка да 100 %</string>
+    <string name="tech_label_since_full_charge">Пасля поўнай зарадкі</string>
+    <string name="tech_label_calibration">Каліброўка</string>
+    <string name="tech_value_date_days_ago">%1$s · %2$d дз таму</string>
+    <string name="tech_value_date_today">%1$s · сёння</string>
+    <string name="tech_value_days_hours">%1$d дз %2$d г</string>
+    <string name="tech_value_hours">%d г</string>
+    <string name="tech_value_no_data">няма даных</string>
+    <string name="tech_hint_full_charge" formatted="false">BYD у кіраўніцтвах да сваіх машын раіць зараджаць батарэю да 100 % не радзей за раз на тыдзень. У канцы поўнай зарадкі машына выраўноўвае зарад ячэек, гэта падаўжае тэрмін службы батарэі.</string>
+    <string name="tech_hint_calibration" formatted="false">Каліброўка: разрадзіць батарэю ніжэй за 10 % і зарадзіць да 100 %. BYD раіць рабіць гэта раз на 3–6 месяцаў, не радзей за раз на паўгода, каб машына дакладней паказвала зарад і ёмістасць. Уладальнікі раяць не перарываць зарадку. Дата паводле даных праграмы, з дакладнасцю да дня.</string>
     <string name="tech_label_battery_power">магутнасць батарэі</string>
     <string name="tech_label_max_charge">макс. магутнасць зарадкі</string>
     <string name="tech_label_max_discharge_allow">макс. магутнасць разрадкі</string>
@@ -1937,6 +1975,9 @@
     <string name="tg_report_field_range">Запас ходу</string>
     <string name="tg_report_field_odometer">Прабег</string>
     <string name="tg_report_field_trip">Паездка</string>
+    <string name="tg_report_field_trip_time">Час паездкі</string>
+    <string name="tg_report_field_trip_kwh">Энергія паездкі</string>
+    <string name="tg_report_field_trip_cost">Кошт паездкі</string>
     <string name="tg_report_field_temps">Тэмпература</string>
     <string name="tg_report_field_openings">Што адчынена</string>
     <string name="tg_report_field_tires">Ціск у шынах</string>
@@ -1954,6 +1995,9 @@
     <string name="tg_report_trip_km_whole">%1$d км</string>
     <string name="tg_report_odometer">Прабег %1$,d км</string>
     <string name="tg_report_trip_consumption">Расход %1$.1f кВт·г/100 км</string>
+    <string name="tg_report_trip_time">Час з %1$s да %2$s</string>
+    <string name="tg_report_trip_energy">Энергія %1$.1f кВт·г</string>
+    <string name="tg_report_trip_cost">Кошт %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">звонку %1$+d°</string>
     <string name="tg_report_temp_inside">у салоне %1$+d°</string>
     <string name="tg_report_open_list">Адчынена: %1$s</string>
@@ -1982,6 +2026,9 @@
     <string name="tg_report_field_range_desc">Кіламетры, як на Галоўнай</string>
     <string name="tg_report_field_odometer_desc">Агульны прабег машыны</string>
     <string name="tg_report_field_trip_desc">Кіламетры, расход і час у дарозе</string>
+    <string name="tg_report_field_trip_time_desc">Калі пачалася і скончылася</string>
+    <string name="tg_report_field_trip_kwh_desc">Колькі кВт·г выдаткавана за паездку</string>
+    <string name="tg_report_field_trip_cost_desc">Колькі каштавала паездка па вашым тарыфе</string>
     <string name="tg_report_field_trip1_desc">Лічыльнік TRIP 1 з Галоўнай: кіламетры, час у дарозе і расход</string>
     <string name="tg_report_field_trip2_desc">Лічыльнік TRIP 2 з Галоўнай: кіламетры, час у дарозе і расход</string>
     <string name="tg_report_field_temps_desc">Звонку і ў салоне</string>

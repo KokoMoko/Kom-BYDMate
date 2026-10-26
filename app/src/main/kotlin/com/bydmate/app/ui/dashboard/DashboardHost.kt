@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
  * Վերնագրի տողից ներքև swipe-ը app-ը թաքցնում է (տակի քարտեզը երևում է)։
  */
 @Composable
-fun DashboardHost(onOpenTechPanel: () -> Unit, onOpenSettings: () -> Unit) {
+fun DashboardHost(onOpenTechPanel: () -> Unit, onOpenSettings: () -> Unit, onOpenTariffPeriods: () -> Unit) {
     var editing by remember { mutableStateOf(false) }
     val pager = rememberPagerState(initialPage = 0) { 2 }
     val scope = rememberCoroutineScope()
@@ -46,7 +46,7 @@ fun DashboardHost(onOpenTechPanel: () -> Unit, onOpenSettings: () -> Unit) {
         HorizontalPager(state = pager, userScrollEnabled = !editing && !inSplit, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
                 0 -> ClusterScreen()
-                else -> DashboardScreen(onOpenTechPanel = onOpenTechPanel, onOpenSettings = onOpenSettings)
+                else -> DashboardScreen(onOpenTechPanel = onOpenTechPanel, onOpenSettings = onOpenSettings, onOpenTariffPeriods = onOpenTariffPeriods)
             }
         }
         // Վերևի կենտրոնում (վերնագիրը «Welcome <անուն>» կարող է երկար լինել)

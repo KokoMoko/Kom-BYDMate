@@ -505,6 +505,7 @@
     <string name="automation_steering_key_occupied_projection">Ten klawisz włącza nawigację na zestawie wskaźników. Zwolnij go w Ustawieniach, sekcja Ekran, albo wybierz inny.</string>
     <string name="automation_steering_key_occupied_voice">Ten klawisz wywołuje asystenta głosowego BYDMate. Zmień klawisz w Ustawieniach, sekcja Asystent głosowy, albo wybierz inny.</string>
     <string name="automation_steering_key_occupied_knob">Naciśnięcie pokrętła jest zajęte przez funkcję play/pause. Wyłącz ją w Ustawieniach, sekcja Ekran, albo wybierz inny klawisz.</string>
+    <string name="automation_steering_key_occupied_split">Ten klawisz przełącza podział ekranu. Zwolnij go w Ustawieniach, sekcja Podział ekranu, albo wybierz inny.</string>
     <string name="automation_trigger_type_voice">Głos</string>
     <string name="automation_trigger_voice_phrase_label">Fraza wyzwalająca</string>
     <string name="automation_voice_phrase_empty">Fraza głosowa jest pusta</string>
@@ -853,6 +854,14 @@
     <!-- %1$s = file path, %2$d = size KB -->
     <string name="settings_log_saved">Zapisano: %1$s (%2$d KB)</string>
     <string name="settings_log_error_no_fs_access">Błąd: brak dostępu do systemu plików</string>
+    <string name="settings_log_tg_send">Wyślij do Telegrama</string>
+    <string name="settings_log_tg_sending">Wysyłam do Telegrama…</string>
+    <string name="settings_log_tg_sent">Plik wysłany do Telegrama</string>
+    <string name="settings_log_tg_failed">Nie udało się wysłać: %1$s</string>
+    <string name="settings_log_tg_too_big">Plik jest za duży dla Telegrama. Leży w folderze Download.</string>
+    <string name="settings_log_tg_missing">Nie znaleziono pliku. Mógł zostać usunięty z folderu Download.</string>
+    <string name="settings_tg_log_auto_title">Wysyłaj nagrany log do Telegrama</string>
+    <string name="settings_tg_log_auto_hint">Gdy nagrywanie logu się skończy, plik sam trafi do Twojego bota.</string>
     <string name="settings_update_check_in_progress">Sprawdzanie...</string>
     <!-- %1$s = version string -->
     <string name="settings_update_available_short">Dostępna v%1$s</string>
@@ -1254,6 +1263,8 @@
     <string name="auto_act_sunroof_close">Szyberdach zamknij</string>
     <string name="auto_act_sunshade_open">Roleta otwórz</string>
     <string name="auto_act_sunshade_close">Roleta zamknij</string>
+    <string name="auto_act_sunshade_open_50">Roleta otwórz 50%</string>
+    <string name="auto_act_sunshade_stop">Roleta zatrzymaj</string>
     <string name="auto_act_sunroof_stop">Szyberdach zatrzymaj</string>
     <string name="auto_act_sunroof_updip">Szyberdach uchyl</string>
     <string name="auto_act_sunroof_comfort">Szyberdach komfort</string>
@@ -1698,13 +1709,30 @@
     <string name="settings_split_wide_app_title">Szeroka część (2/3)</string>
     <string name="settings_split_narrow_app_title">Wąska część (1/3)</string>
     <string name="settings_split_app_not_selected">nie wybrano</string>
-    <string name="settings_split_howto_body">Podział ekranu można włączyć na trzy sposoby.\nNajprościej: dotknięcie lewej jednej trzeciej pływającego widżetu. W tym celu w sekcji „Dotknięcie widżetu” włącz „Strefy dotknięć”, a w pozycji „Akcja lewego dotknięcia” wybierz „Uruchamiaj podział ekranu”.\nPrzez automatyzacje: dodaj do reguły akcję „Podział ekranu”. Obok są „Zamknij podział ekranu” i „Przełącz podział ekranu”.\nGłosem: po prostu poproś asystenta głosowego o włączenie podziału ekranu.</string>
+    <string name="settings_split_howto_body">Wybierz dwie aplikacje i sposób uruchamiania w bloku „Jak uruchamiać”.</string>
     <string name="settings_split_mechanism_title">Mechanizm podziału</string>
     <string name="settings_split_mechanism_freeform">Okna BYDMate</string>
     <string name="settings_split_mechanism_native">Podział systemowy</string>
     <string name="settings_split_mechanism_native_hint">Podziałem zajmuje się oprogramowanie auta. Wygląd zależy od oprogramowania: dwa panele 1/3 i 2/3 albo pół na pół z wyborem drugiej aplikacji na ekranie.</string>
     <string name="settings_split_mechanism_platformized_hint">Na tym oprogramowaniu ekran dzieli samo auto: panele 1/3 i 2/3, separator oraz gest zamiany są systemowe. BYDMate tylko uruchamia wybraną parę i przywraca aplikację do jej panelu.</string>
     <string name="settings_split_try_native_hint">Spróbuj trybu Podział systemowy.</string>
+    <string name="settings_split_launch_header">Jak uruchamiać</string>
+    <string name="settings_split_key_title">Przycisk na kierownicy</string>
+    <string name="settings_split_key_none">nie przypisano</string>
+    <string name="settings_split_key_assign">Przypisz</string>
+    <string name="settings_split_key_remove">Usuń</string>
+    <string name="settings_split_key_occupied_rule">Ten klawisz uruchamia regułę „%1$s”. Wybierz inny klawisz albo zmień go w regule.</string>
+    <string name="settings_split_key_rule_conflict_one">Na tym przycisku jest już reguła „%1$s”. Teraz przycisk sam przełącza podział ekranu i reguła przestanie działać. Wyłączyć ją?</string>
+    <string name="settings_split_key_rule_conflict_many">Na tym przycisku są już reguły: %1$s. Teraz przycisk sam przełącza podział ekranu i reguły przestaną działać. Wyłączyć je?</string>
+    <string name="settings_split_key_rule_disable">Wyłącz</string>
+    <string name="settings_split_key_rule_keep">Zostaw</string>
+    <string name="settings_split_tap_title">Dotknięcie lewej jednej trzeciej widżetu</string>
+    <string name="settings_split_tap_replace_text">Teraz lewe dotknięcie otwiera „%1$s”. Zastąpić podziałem ekranu?</string>
+    <string name="settings_split_tap_replace_confirm">Zastąp</string>
+    <string name="settings_split_tap_replace_cancel">Anuluj</string>
+    <string name="settings_split_tap_widget_off_hint">Włącz widżet w sekcji „Widżet”</string>
+    <string name="settings_split_voice_line">Głosem: poproś asystenta głosowego o włączenie podziału ekranu.</string>
+    <string name="settings_split_automation_line">Przez automatyzacje: akcja „Przełącz podział ekranu” uruchamia aplikacje z tego menu, a jeśli zmieniłeś je po włączeniu auta, ostatnio wybrane.</string>
     <string name="split_feature_disabled">Podział ekranu jest wyłączony w ustawieniach</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">izolacja</string>
@@ -1725,6 +1753,16 @@
     <string name="tech_label_full_cycles">pełne cykle</string>
     <string name="tech_caption_full_cycles">%1$s kWh ÷ %2$s</string>
     <string name="tech_caption_full_cycles_empty">pojawi się po pierwszym ładowaniu</string>
+    <string name="tech_label_full_charge" formatted="false">Pełne ładowanie do 100 %</string>
+    <string name="tech_label_since_full_charge">Od pełnego ładowania</string>
+    <string name="tech_label_calibration">Kalibracja</string>
+    <string name="tech_value_date_days_ago">%1$s · %2$d d temu</string>
+    <string name="tech_value_date_today">%1$s · dziś</string>
+    <string name="tech_value_days_hours">%1$d d %2$d h</string>
+    <string name="tech_value_hours">%d h</string>
+    <string name="tech_value_no_data">brak danych</string>
+    <string name="tech_hint_full_charge" formatted="false">BYD w instrukcjach swoich samochodów zaleca ładowanie akumulatora do 100 % co najmniej raz w tygodniu. Pod koniec pełnego ładowania samochód wyrównuje naładowanie ogniw, co wydłuża żywotność akumulatora.</string>
+    <string name="tech_hint_calibration" formatted="false">Kalibracja: rozładuj akumulator poniżej 10 % i naładuj do 100 %. BYD zaleca robić to co 3–6 miesięcy, nie rzadziej niż raz na pół roku, aby samochód dokładniej pokazywał naładowanie i pojemność. Właściciele radzą nie przerywać ładowania. Data według danych aplikacji, z dokładnością do dnia.</string>
     <string name="tech_label_battery_power">moc akumulatora</string>
     <string name="tech_label_max_charge">maks. moc ładowania</string>
     <string name="tech_label_max_discharge_allow">maks. moc rozładowania</string>
@@ -1937,6 +1975,9 @@
     <string name="tg_report_field_range">Zasięg</string>
     <string name="tg_report_field_odometer">Przebieg</string>
     <string name="tg_report_field_trip">Podróż</string>
+    <string name="tg_report_field_trip_time">Czas podróży</string>
+    <string name="tg_report_field_trip_kwh">Energia podróży</string>
+    <string name="tg_report_field_trip_cost">Koszt podróży</string>
     <string name="tg_report_field_temps">Temperatura</string>
     <string name="tg_report_field_openings">Co jest otwarte</string>
     <string name="tg_report_field_tires">Ciśnienie w oponach</string>
@@ -1954,6 +1995,9 @@
     <string name="tg_report_trip_km_whole">%1$d km</string>
     <string name="tg_report_odometer">Przebieg %1$,d km</string>
     <string name="tg_report_trip_consumption">Zużycie %1$.1f kWh/100 km</string>
+    <string name="tg_report_trip_time">Czas od %1$s do %2$s</string>
+    <string name="tg_report_trip_energy">Energia %1$.1f kWh</string>
+    <string name="tg_report_trip_cost">Koszt %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">na zewnątrz %1$+d°</string>
     <string name="tg_report_temp_inside">w kabinie %1$+d°</string>
     <string name="tg_report_open_list">Otwarte: %1$s</string>
@@ -1982,6 +2026,9 @@
     <string name="tg_report_field_range_desc">Kilometry, jak na ekranie głównym</string>
     <string name="tg_report_field_odometer_desc">Całkowity przebieg auta</string>
     <string name="tg_report_field_trip_desc">Kilometry, zużycie i czas jazdy</string>
+    <string name="tg_report_field_trip_time_desc">Godzina rozpoczęcia i zakończenia</string>
+    <string name="tg_report_field_trip_kwh_desc">Ile kWh zużyto w podróży</string>
+    <string name="tg_report_field_trip_cost_desc">Ile kosztowała podróż według Twojej taryfy</string>
     <string name="tg_report_field_trip1_desc">Licznik TRIP 1 z ekranu Główna: kilometry, czas jazdy i zużycie</string>
     <string name="tg_report_field_trip2_desc">Licznik TRIP 2 z ekranu Główna: kilometry, czas jazdy i zużycie</string>
     <string name="tg_report_field_temps_desc">Na zewnątrz i w kabinie</string>

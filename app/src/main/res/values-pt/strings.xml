@@ -449,6 +449,7 @@
     <string name="automation_steering_key_occupied_projection">Esta tecla liga a navegação no painel de instrumentos. Libere-a em Configurações, seção Tela, ou escolha outra.</string>
     <string name="automation_steering_key_occupied_voice">Esta tecla chama o assistente de voz do BYDMate. Altere a tecla em Configurações, seção Agente de voz, ou escolha outra.</string>
     <string name="automation_steering_key_occupied_knob">O toque no botão giratório está ocupado pela função play/pause. Desative-a em Configurações, seção Tela, ou escolha outra tecla.</string>
+    <string name="automation_steering_key_occupied_split">Esta tecla alterna a tela dividida. Libere-a em Configurações, seção Tela dividida, ou escolha outra.</string>
 
     <!-- Schedule trigger (exact time / range + days of week) -->
     <string name="automation_schedule_mode_exact">Exato</string>
@@ -703,6 +704,14 @@
     <string name="settings_log_recording_started">Gravando (parada automática após 2h)... - %1$s</string>
     <string name="settings_log_saved">Salvo: %1$s (%2$d KB)</string>
     <string name="settings_log_error_no_fs_access">Erro: sem acesso ao sistema de arquivos</string>
+    <string name="settings_log_tg_send">Enviar ao Telegram</string>
+    <string name="settings_log_tg_sending">Enviando ao Telegram…</string>
+    <string name="settings_log_tg_sent">Arquivo enviado ao Telegram</string>
+    <string name="settings_log_tg_failed">Não foi possível enviar: %1$s</string>
+    <string name="settings_log_tg_too_big">O arquivo é grande demais para o Telegram. Ele está na pasta Download.</string>
+    <string name="settings_log_tg_missing">Arquivo não encontrado. Talvez tenha sido apagado da pasta Download.</string>
+    <string name="settings_tg_log_auto_title">Enviar o log gravado ao Telegram</string>
+    <string name="settings_tg_log_auto_hint">Quando a gravação do log terminar, o arquivo chega sozinho ao seu bot.</string>
     <string name="settings_update_check_in_progress">Verificando...</string>
     <string name="settings_update_available_short">v%1$s disponível</string>
     <string name="update_downloading_progress">Baixando: %1$d%%</string>
@@ -1095,6 +1104,8 @@
     <string name="auto_act_sunroof_close">Fechar teto solar</string>
     <string name="auto_act_sunshade_open">Abrir cortina</string>
     <string name="auto_act_sunshade_close">Fechar cortina</string>
+    <string name="auto_act_sunshade_open_50">Abrir cortina 50%</string>
+    <string name="auto_act_sunshade_stop">Parar cortina</string>
     <string name="auto_act_sunroof_stop">Parar teto solar</string>
     <string name="auto_act_sunroof_updip">Inclinar teto solar</string>
     <string name="auto_act_sunroof_comfort">Teto solar conforto</string>
@@ -1542,13 +1553,30 @@
     <string name="settings_split_wide_app_title">Painel largo (2/3)</string>
     <string name="settings_split_narrow_app_title">Painel estreito (1/3)</string>
     <string name="settings_split_app_not_selected">não selecionado</string>
-    <string name="settings_split_howto_body">Há três maneiras de ligar a tela dividida.\nA mais simples: toque no terço esquerdo do widget flutuante. Para isso, ative Zonas de toque na seção Toque no widget e escolha Iniciar tela dividida em Ação do toque esquerdo.\nPelas automações: adicione a ação Tela dividida a uma regra. Ao lado ficam Fechar tela dividida e Alternar tela dividida.\nPor voz: basta pedir ao Agente de voz para ligar a tela dividida.</string>
+    <string name="settings_split_howto_body">Escolha dois apps e como iniciar no bloco Como iniciar.</string>
     <string name="settings_split_mechanism_title">Mecanismo de divisão</string>
     <string name="settings_split_mechanism_freeform">Janelas do BYDMate</string>
     <string name="settings_split_mechanism_native">Divisão nativa</string>
     <string name="settings_split_mechanism_native_hint">A divisão é feita pelo firmware do carro. O resultado depende do firmware: dois painéis de 1/3 e 2/3 ou metade a metade, escolhendo o segundo aplicativo na tela.</string>
     <string name="settings_split_mechanism_platformized_hint">Neste firmware o próprio carro divide a tela: os painéis de 1/3 e 2/3, o divisor e o gesto de troca são nativos. O BYDMate apenas inicia o par escolhido e devolve o aplicativo ao seu painel.</string>
     <string name="settings_split_try_native_hint">Experimente o modo Divisão nativa.</string>
+    <string name="settings_split_launch_header">Como iniciar</string>
+    <string name="settings_split_key_title">Botão do volante</string>
+    <string name="settings_split_key_none">não atribuído</string>
+    <string name="settings_split_key_assign">Atribuir</string>
+    <string name="settings_split_key_remove">Remover</string>
+    <string name="settings_split_key_occupied_rule">Esta tecla executa a regra “%1$s”. Escolha outra tecla ou altere-a na regra.</string>
+    <string name="settings_split_key_rule_conflict_one">Já existe a regra “%1$s” neste botão. Agora o botão alterna a tela dividida sozinho e a regra deixará de disparar. Desativar a regra?</string>
+    <string name="settings_split_key_rule_conflict_many">Já existem regras neste botão: %1$s. Agora o botão alterna a tela dividida sozinho e as regras deixarão de disparar. Desativá-las?</string>
+    <string name="settings_split_key_rule_disable">Desativar</string>
+    <string name="settings_split_key_rule_keep">Manter</string>
+    <string name="settings_split_tap_title">Toque no terço esquerdo do widget</string>
+    <string name="settings_split_tap_replace_text">Agora o toque esquerdo abre “%1$s”. Substituir pela tela dividida?</string>
+    <string name="settings_split_tap_replace_confirm">Substituir</string>
+    <string name="settings_split_tap_replace_cancel">Cancelar</string>
+    <string name="settings_split_tap_widget_off_hint">Ative o widget na seção Widget</string>
+    <string name="settings_split_voice_line">Por voz: peça ao Agente de voz para ligar a tela dividida.</string>
+    <string name="settings_split_automation_line">Pelas automações: a ação Alternar tela dividida inicia os apps deste menu ou, se você os trocou depois de ligar o carro, os últimos escolhidos.</string>
     <string name="split_feature_disabled">Tela dividida desativada nas configurações</string>
     <!-- Tech panel: compact card cell + full screen -->
     <string name="dashboard_battery_insulation_label">isolamento</string>
@@ -1569,6 +1597,16 @@
     <string name="tech_label_full_cycles">ciclos completos</string>
     <string name="tech_caption_full_cycles">%1$s kWh ÷ %2$s</string>
     <string name="tech_caption_full_cycles_empty">aparece após o primeiro carregamento</string>
+    <string name="tech_label_full_charge" formatted="false">Carga completa até 100 %</string>
+    <string name="tech_label_since_full_charge">Desde a carga completa</string>
+    <string name="tech_label_calibration">Calibração</string>
+    <string name="tech_value_date_days_ago">%1$s · há %2$d d</string>
+    <string name="tech_value_date_today">%1$s · hoje</string>
+    <string name="tech_value_days_hours">%1$d d %2$d h</string>
+    <string name="tech_value_hours">%d h</string>
+    <string name="tech_value_no_data">sem dados</string>
+    <string name="tech_hint_full_charge" formatted="false">Nos manuais dos seus carros, a BYD recomenda carregar a bateria até 100 % pelo menos uma vez por semana. No fim de uma carga completa o carro equilibra a carga das células, o que prolonga a vida útil da bateria.</string>
+    <string name="tech_hint_calibration" formatted="false">Calibração: descarregar a bateria abaixo de 10 % e carregá-la até 100 %. A BYD recomenda fazê-lo a cada 3–6 meses, pelo menos uma vez a cada seis meses, para que o carro mostre a carga e a capacidade com mais precisão. Os proprietários aconselham não interromper o carregamento. Data segundo os dados da aplicação, com precisão ao dia.</string>
     <string name="tech_label_battery_power">potência da bateria</string>
     <string name="tech_label_max_charge">potência máx. de carga</string>
     <string name="tech_label_max_discharge_allow">potência máx. de descarga</string>
@@ -1781,6 +1819,9 @@
     <string name="tg_report_field_range">Autonomia</string>
     <string name="tg_report_field_odometer">Hodômetro</string>
     <string name="tg_report_field_trip">Viagem</string>
+    <string name="tg_report_field_trip_time">Horário da viagem</string>
+    <string name="tg_report_field_trip_kwh">Energia da viagem</string>
+    <string name="tg_report_field_trip_cost">Custo da viagem</string>
     <string name="tg_report_field_temps">Temperatura</string>
     <string name="tg_report_field_openings">O que está aberto</string>
     <string name="tg_report_field_tires">Pressão dos pneus</string>
@@ -1798,6 +1839,9 @@
     <string name="tg_report_trip_km_whole">%1$d km</string>
     <string name="tg_report_odometer">Hodômetro %1$,d km</string>
     <string name="tg_report_trip_consumption">Consumo %1$.1f kWh/100 km</string>
+    <string name="tg_report_trip_time">Horário das %1$s às %2$s</string>
+    <string name="tg_report_trip_energy">Energia %1$.1f kWh</string>
+    <string name="tg_report_trip_cost">Custo %1$.2f %2$s</string>
     <string name="tg_report_temp_outside">lado de fora %1$+d°</string>
     <string name="tg_report_temp_inside">cabine %1$+d°</string>
     <string name="tg_report_open_list">Aberto: %1$s</string>
@@ -1826,6 +1870,9 @@
     <string name="tg_report_field_range_desc">Quilômetros, como na tela inicial</string>
     <string name="tg_report_field_odometer_desc">Quilometragem total do carro</string>
     <string name="tg_report_field_trip_desc">Quilômetros, consumo e tempo de viagem</string>
+    <string name="tg_report_field_trip_time_desc">Quando a viagem começou e terminou</string>
+    <string name="tg_report_field_trip_kwh_desc">Quantos kWh a viagem gastou</string>
+    <string name="tg_report_field_trip_cost_desc">Quanto a viagem custou na sua tarifa</string>
     <string name="tg_report_field_trip1_desc">Contador TRIP 1 do Painel: quilômetros, tempo de viagem e consumo</string>
     <string name="tg_report_field_trip2_desc">Contador TRIP 2 do Painel: quilômetros, tempo de viagem e consumo</string>
     <string name="tg_report_field_temps_desc">Lado de fora e na cabine</string>

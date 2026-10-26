@@ -103,6 +103,7 @@ import kotlin.math.ceil
 fun DashboardScreen(
     onOpenTechPanel: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenTariffPeriods: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -212,7 +213,7 @@ fun DashboardScreen(
                     if (fuelExpanded) {
                         FuelDetailDialog(
                             state = state,
-                            onEditPrice = { fuelExpanded = false; onOpenSettings() },
+                            onEditPrice = { fuelExpanded = false; onOpenTariffPeriods() },
                             onDismiss = { fuelExpanded = false },
                         )
                     }

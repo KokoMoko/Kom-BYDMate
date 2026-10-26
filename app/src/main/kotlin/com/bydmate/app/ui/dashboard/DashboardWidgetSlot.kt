@@ -82,7 +82,36 @@ object DashboardWidgets {
 
     @Synchronized
     fun acquireListening(ctx: Context) {
-        if (listeners++ == 0) runCatching { host(ctx).startListening() }
+        if (listeners++ == 0) {
+            runCatching { host(ctx).startListening() }
+            if (!kicked) { kicked = true; kickProviders(ctx.applicationContext) }
+        }
+    }
+
+    /** Once per process: the widgets' apps were asked for fresh views ([kickProviders]). */
+    private var kicked = false
+
+    /**
+     * After the car is switched off DiLink's quickboot force-stops the widgets' apps (Yandex Music
+     * among them); at the next start the slot shows the old, often empty view and stays so, since
+     * a stopped app sends nothing. Removing and re-adding the widget "fixed" it only because the
+     * system then asks the provider for an update. Ask the same here, for every widget in a slot:
+     * once now and once a few seconds later, when the head unit has settled after the start.
+     */
+    private fun kickProviders(app: Context) {
+        fun kick() = runCatching {
+            val mgr = android.appwidget.AppWidgetManager.getInstance(app)
+            val ids = prefs(app).all.filter { (k, v) -> v is Int && v > 0 && !k.endsWith("_scale") && !k.startsWith("speedo_") }
+                .values.map { it as Int }.distinct()
+            ids.groupBy { id -> mgr.getAppWidgetInfo(id)?.provider }.forEach { (provider, group) ->
+                provider ?: return@forEach
+                app.sendBroadcast(android.content.Intent(android.appwidget.AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                    .setComponent(provider)
+                    .putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, group.toIntArray()))
+            }
+        }
+        kick()
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ kick() }, 5_000L)
     }
 
     @Synchronized
