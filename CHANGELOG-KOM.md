@@ -4,6 +4,24 @@ What changed in each Kom-BYDMate release, in English and Armenian. Changes inher
 
 Kom-BYDMate-ի յուրաքանչյուր տարբերակում կատարված փոփոխությունները՝ անգլերեն և հայերեն։ Upstream BYDMate-ից եկած փոփոխությունները՝ [CHANGELOG.md](CHANGELOG.md)-ում։
 
+## 4.0.3-kom.1 — 2026-10-27
+
+### English
+
+**From BYDMate 4.0.3**
+- Tech, «Battery · history»: the last full charge and calibration lines update by themselves as soon as the charge is recorded.
+- Music card on the driver's display (Song L and other cars without UI7): after switching apps on the screen the card comes back in under a second (it used to vanish for up to 10 s).
+- Trips are recorded again after a head-unit reset or firmware update when BYDMate was restored from a backup (the car numbers trips anew after such a reset); missed trips are picked up at the next sync. A deleted trip now hides only itself.
+- Voice assistant: the answer is heard on cars with an external amplifier; the car lowers the music during the conversation, as with the stock assistant.
+
+### Հայերեն
+
+**BYDMate 4.0.3-ից**
+- «Տեխնիկա», «Մարտկոց · պատմություն». վերջին լրիվ լիցքավորման և չափաճշտման տողերը թարմանում են ինքնուրույն, հենց որ լիցքավորումը գրանցվում է։
+- Երաժշտության քարտը վարորդի էկրանին (Song L և UI7 չունեցող այլ մեքենաներ). էկրանին հավելվածը փոխելուց հետո քարտը վերադառնում է մեկ վայրկյանից պակաս ժամանակում (առաջ անհետանում էր մինչև 10 վրկ)։
+- Ուղևորությունները կրկին գրանցվում են մագնիտոլան զրոյացնելուց կամ firmware-ը թարմացնելուց հետո, եթե BYDMate-ը վերականգնվել էր backup-ից (այդպիսի զրոյացումից հետո մեքենան ուղևորությունները նորից է համարակալում). բաց թողնված ուղևորությունները կբեռնվեն հաջորդ համաժամացման ժամանակ։ Ջնջված ուղևորությունը հիմա թաքցնում է միայն իրեն։
+- Ձայնային օգնական. պատասխանը լսելի է արտաքին ուժեղացուցիչով մեքենաներում. զրույցի ընթացքում մեքենան ինքն է իջեցնում երաժշտության ձայնը, ինչպես գործարանային օգնականի դեպքում։
+
 ## 4.0.2-kom.1 — 2026-10-26
 
 ### English
